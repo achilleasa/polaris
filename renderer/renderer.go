@@ -29,6 +29,15 @@ type Renderer struct {
 	// A frame buffer used as each tracer's render target.
 	frameBuffer []float32
 
+	// An accumulation buffer where each frame's output is blended with
+	// the previous frames' output. This enables progressive scene rendering.
+	accumBuffer []float32
+
+	// A weight defining how to blend the contents of the accumulation
+	// buffer with the contents of the frame buffer. A value of 0 means
+	// that the frameBuffer always overwrites the contents of the accumBuffer.
+	blendWeight float32
+
 	// A list of assigned block height for each tracer
 	blockAssignment []int
 
@@ -44,6 +53,8 @@ func NewRenderer(frameW, frameH int, sc *scene.Scene) *Renderer {
 		tracerDoneChan:  make(chan int, frameH),
 		tracerErrChan:   make(chan error, 0),
 		frameBuffer:     make([]float32, frameW*frameH*4),
+		accumBuffer:     make([]float32, frameW*frameH*4),
+		blendWeight:     0,
 		blockAssignment: make([]int, 0),
 		Tracers:         make([]tracer.Tracer, 0),
 		scene:           sc,
@@ -81,10 +92,12 @@ func (r *Renderer) ClearFrame() {
 
 	for i := range r.frameBuffer {
 		r.frameBuffer[i] = 0
+		r.accumBuffer[i] = 0
 	}
+	r.blendWeight = 0
 }
 
-// Generate a RGBA image for the current frame buffer contents. If the
+// Generate a RGBA image for the current accumulation buffer contents. If the
 // rendering has completed then this function will return the final frame;
 // otherwise it will return the currently rendered frame bits. This function will
 // lock the renderer while it copies out frame data it shouldn't be called too
@@ -95,11 +108,11 @@ func (r *Renderer) Frame() *image.RGBA {
 
 	img := image.NewRGBA(image.Rect(0, 0, r.frameW, r.frameH))
 	pixelCount := r.frameW * r.frameH
-	var offset int = 0
+	offset := 0
 	for i := 0; i < pixelCount; i++ {
-		img.Pix[offset] = uint8(r.frameBuffer[offset]*255.0 + 0.5)
-		img.Pix[offset+1] = uint8(r.frameBuffer[offset+1]*255.0 + 0.5)
-		img.Pix[offset+2] = uint8(r.frameBuffer[offset+2]*255.0 + 0.5)
+		img.Pix[offset] = uint8(r.accumBuffer[offset]*255.0 + 0.5)
+		img.Pix[offset+1] = uint8(r.accumBuffer[offset+1]*255.0 + 0.5)
+		img.Pix[offset+2] = uint8(r.accumBuffer[offset+2]*255.0 + 0.5)
 		img.Pix[offset+3] = 255 // alpha channel
 		offset += 4
 	}
@@ -118,6 +131,20 @@ func (r *Renderer) assignTracerBlocks() {
 
 	for idx, tr := range r.Tracers {
 		r.blockAssignment[idx] = int(math.Ceil(float64(tr.SpeedEstimate() * scaler)))
+	}
+}
+
+// Blend contents of the frame buffer into the accumulation buffer.
+func (r *Renderer) updateAccumulationBuffer() {
+	pixelCount := r.frameW * r.frameH
+	offset := 0
+	oneMinusWeight := 1.0 - r.blendWeight
+	weight := r.blendWeight
+	for i := 0; i < pixelCount; i++ {
+		r.accumBuffer[offset] = oneMinusWeight*r.frameBuffer[offset] + weight*r.accumBuffer[offset]
+		r.accumBuffer[offset+1] = oneMinusWeight*r.frameBuffer[offset+1] + weight*r.accumBuffer[offset+1]
+		r.accumBuffer[offset+2] = oneMinusWeight*r.frameBuffer[offset+2] + weight*r.accumBuffer[offset+2]
+		offset += 4
 	}
 }
 
@@ -164,6 +191,7 @@ func (r *Renderer) RenderFrame() error {
 		case completedRows := <-r.tracerDoneChan:
 			pendingRows -= completedRows
 			if pendingRows == 0 {
+				r.updateAccumulationBuffer()
 				return nil
 			}
 		case err := <-r.tracerErrChan:

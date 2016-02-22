@@ -116,7 +116,7 @@ func (tr *clTracer) Close() {
 }
 
 // Attach tracer to render target and start processing incoming block requests.
-func (tr *clTracer) Attach(sc *scene.Scene, renderTarget []float32) error {
+func (tr *clTracer) Attach(sc *scene.Scene, renderTarget []float32, frameW, frameH uint) error {
 	tr.Lock()
 	defer tr.Unlock()
 

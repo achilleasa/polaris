@@ -14,14 +14,14 @@ type Renderer struct {
 	sync.Mutex
 
 	// Renderer frame dims.
-	frameW int
-	frameH int
+	frameW uint
+	frameH uint
 
 	// The scene to be rendered.
 	scene *scene.Scene
 
 	// A buffered channel for receiving block completions.
-	tracerDoneChan chan int
+	tracerDoneChan chan uint
 
 	// A channel for receiving tracer errors.
 	tracerErrChan chan error
@@ -39,23 +39,23 @@ type Renderer struct {
 	blendWeight float32
 
 	// A list of assigned block height for each tracer
-	blockAssignment []int
+	blockAssignment []uint
 
 	// The list of attached tracers
 	Tracers []tracer.Tracer
 }
 
 // Create a new renderer
-func NewRenderer(frameW, frameH int, sc *scene.Scene) *Renderer {
+func NewRenderer(frameW, frameH uint, sc *scene.Scene) *Renderer {
 	return &Renderer{
 		frameW:          frameW,
 		frameH:          frameH,
-		tracerDoneChan:  make(chan int, frameH),
+		tracerDoneChan:  make(chan uint, frameH),
 		tracerErrChan:   make(chan error, 0),
 		frameBuffer:     make([]float32, frameW*frameH*4),
 		accumBuffer:     make([]float32, frameW*frameH*4),
 		blendWeight:     0,
-		blockAssignment: make([]int, 0),
+		blockAssignment: make([]uint, 0),
 		Tracers:         make([]tracer.Tracer, 0),
 		scene:           sc,
 	}
@@ -75,7 +75,7 @@ func (r *Renderer) Close() {
 
 // Add a tracer to the renderer's tracer pool.
 func (r *Renderer) AddTracer(tr tracer.Tracer) error {
-	err := tr.Attach(r.scene, r.frameBuffer)
+	err := tr.Attach(r.scene, r.frameBuffer, r.frameW, r.frameH)
 	if err != nil {
 		return err
 	}
@@ -106,8 +106,8 @@ func (r *Renderer) Frame() *image.RGBA {
 	r.Lock()
 	defer r.Unlock()
 
-	img := image.NewRGBA(image.Rect(0, 0, r.frameW, r.frameH))
-	pixelCount := r.frameW * r.frameH
+	img := image.NewRGBA(image.Rect(0, 0, int(r.frameW), int(r.frameH)))
+	pixelCount := int(r.frameW * r.frameH)
 	offset := 0
 	for i := 0; i < pixelCount; i++ {
 		img.Pix[offset] = uint8(r.accumBuffer[offset]*255.0 + 0.5)
@@ -130,13 +130,13 @@ func (r *Renderer) assignTracerBlocks() {
 	scaler := float32(r.frameH) / totalSpeedEstimate
 
 	for idx, tr := range r.Tracers {
-		r.blockAssignment[idx] = int(math.Ceil(float64(tr.SpeedEstimate() * scaler)))
+		r.blockAssignment[idx] = uint(math.Ceil(float64(tr.SpeedEstimate() * scaler)))
 	}
 }
 
 // Blend contents of the frame buffer into the accumulation buffer.
 func (r *Renderer) updateAccumulationBuffer() {
-	pixelCount := r.frameW * r.frameH
+	pixelCount := int(r.frameW * r.frameH)
 	offset := 0
 	oneMinusWeight := 1.0 - r.blendWeight
 	weight := r.blendWeight
@@ -176,7 +176,7 @@ func (r *Renderer) RenderFrame() error {
 	blockReq.Exposure = r.scene.Camera.Exposure
 
 	// Enqueue work units
-	pendingRows := 0
+	var pendingRows uint = 0
 	for idx, tr := range r.Tracers {
 		blockReq.BlockY = pendingRows
 		blockReq.BlockH = r.blockAssignment[idx]

@@ -49,9 +49,6 @@ type clTracer struct {
 
 	// A channel for signaling the worker to exit.
 	closeChan chan struct{}
-
-	// A 4-component float32 buffer assigned to the tracer by the renderer.
-	renderTarget []float32
 }
 
 // Create a new opencl tracer.
@@ -107,20 +104,30 @@ func (tr *clTracer) Close() {
 	close(tr.closeChan)
 	tr.wg.Wait()
 
-	cl.ReleaseKernel(tr.traceKernel)
-	cl.ReleaseProgram(tr.traceProgram)
-	cl.ReleaseCommandQueue(tr.cmdQueue)
-	cl.ReleaseContext(tr.ctx)
-	tr.ctx = nil
-	tr.renderTarget = nil
+	if tr.traceKernel != nil {
+		cl.ReleaseKernel(tr.traceKernel)
+		tr.traceKernel = nil
+	}
+	if tr.traceProgram != nil {
+		cl.ReleaseProgram(tr.traceProgram)
+		tr.traceProgram = nil
+	}
+	if tr.cmdQueue != nil {
+		cl.ReleaseCommandQueue(tr.cmdQueue)
+		tr.cmdQueue = nil
+	}
+	if tr.ctx != nil {
+		cl.ReleaseContext(tr.ctx)
+		tr.ctx = nil
+	}
 }
 
 // Attach tracer to render target and start processing incoming block requests.
-func (tr *clTracer) Attach(sc *scene.Scene, renderTarget []float32, frameW, frameH uint) error {
+func (tr *clTracer) Setup(sc *scene.Scene, frameW, frameH uint) error {
 	tr.Lock()
 	defer tr.Unlock()
 
-	if tr.renderTarget != nil {
+	if tr.traceKernel != nil {
 		return ErrAlreadyAttached
 	}
 
@@ -131,7 +138,6 @@ func (tr *clTracer) Attach(sc *scene.Scene, renderTarget []float32, frameW, fram
 
 	readyChan := make(chan struct{}, 0)
 
-	tr.renderTarget = renderTarget
 	tr.wg.Add(1)
 	go func() {
 		defer tr.wg.Done()
@@ -202,6 +208,7 @@ func (tr *clTracer) setupKernel(sc *scene.Scene) error {
 		cl.GetProgramBuildInfo(tr.traceProgram, tr.device.Id, cl.PROGRAM_BUILD_LOG, uint64(len(data)), unsafe.Pointer(&data[0]), &dataLen)
 		tr.logger.Printf("Error building kernel (log follows):\n%s\n", string(data[0:dataLen-1]))
 		cl.ReleaseProgram(tr.traceProgram)
+		tr.traceProgram = nil
 		return ErrProgramBuildFailed
 	}
 
@@ -209,13 +216,16 @@ func (tr *clTracer) setupKernel(sc *scene.Scene) error {
 	tr.traceKernel = cl.CreateKernel(tr.traceProgram, cl.Str("tracePixel"+"\x00"), errPtr)
 	if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
 		cl.ReleaseProgram(tr.traceProgram)
+		tr.traceProgram = nil
 		return ErrKernelCreationFailed
 	}
 
 	errCode = cl.GetKernelWorkGroupInfo(tr.traceKernel, tr.device.Id, cl.KERNEL_WORK_GROUP_SIZE, 8, unsafe.Pointer(&tr.localWorkgroupSize), nil)
 	if errCode != cl.SUCCESS {
 		cl.ReleaseKernel(tr.traceKernel)
+		tr.traceKernel = nil
 		cl.ReleaseProgram(tr.traceProgram)
+		tr.traceProgram = nil
 		return ErrGettingWorkgroupInfo
 	}
 	return nil

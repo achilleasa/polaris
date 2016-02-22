@@ -75,7 +75,7 @@ func (r *Renderer) Close() {
 
 // Add a tracer to the renderer's tracer pool.
 func (r *Renderer) AddTracer(tr tracer.Tracer) error {
-	err := tr.Attach(r.scene, r.frameBuffer, r.frameW, r.frameH)
+	err := tr.Setup(r.scene, r.frameW, r.frameH)
 	if err != nil {
 		return err
 	}
@@ -168,8 +168,7 @@ func (r *Renderer) RenderFrame() error {
 
 	// Setup common block request values
 	var blockReq tracer.BlockRequest
-	blockReq.FrameW = r.frameW
-	blockReq.FrameH = r.frameH
+	blockReq.RenderTarget = r.frameBuffer
 	blockReq.DoneChan = r.tracerDoneChan
 	blockReq.ErrChan = r.tracerErrChan
 	blockReq.SamplesPerPixel = 1

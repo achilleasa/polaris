@@ -10,15 +10,14 @@ type BlockRequest struct {
 	BlockY uint
 	BlockH uint
 
-	// Dimensions of the rendered frame.
-	FrameW uint
-	FrameH uint
-
 	// The number of emitted rays per traced pixel.
 	SamplesPerPixel uint
 
 	// The exposure value controls HDR -> LDR mapping.
 	Exposure float32
+
+	// A framebuffer where the rendered block is to be copied.
+	RenderTarget []float32
 
 	// A channel to signal on block completion with the number of completed rows.
 	DoneChan chan<- uint
@@ -38,9 +37,9 @@ type Tracer interface {
 	// baseline (cpu) impelemntation.
 	SpeedEstimate() float32
 
-	// Attach tracer to render target and start processing incoming block requests.
-	Attach(sc *scene.Scene, renderTarget []float32, frameW, frameH uint) error
+	// Attach tracer to scene and start processing incoming block requests.
+	Setup(sc *scene.Scene, frameW, frameH uint) error
 
-	// Enqueue blcok request.
+	// Enqueue block request.
 	Enqueue(blockReq BlockRequest)
 }

@@ -8,8 +8,9 @@ import (
 
 // Stores the ray directions at the for corners of our camera frustrum. It is
 // used as a shortcut for generating per pixel rays via interpolation of the
-// corner rays.
-type Frustrum [4]types.Vec3
+// corner rays. While we don't care about the W coordinate we use Vec4 since
+// opencl provides a vectorized float4 type
+type Frustrum [4]types.Vec4
 
 func (fr Frustrum) String() string {
 	return fmt.Sprintf(
@@ -63,17 +64,17 @@ func (c *Camera) updateFrustrum() {
 
 	v = invProjViewMat.Mul4x1(types.XYZW(-1, 1, -1, 1))
 	v = v.Mul(1.0 / v[3])
-	c.Frustrum[0] = v.Vec3().Sub(eyePos).Normalize()
+	c.Frustrum[0] = v.Vec3().Sub(eyePos).Normalize().Vec4(0)
 
 	v = invProjViewMat.Mul4x1(types.XYZW(1, 1, -1, 1))
 	v = v.Mul(1.0 / v[3])
-	c.Frustrum[1] = v.Vec3().Sub(eyePos).Normalize()
+	c.Frustrum[1] = v.Vec3().Sub(eyePos).Normalize().Vec4(0)
 
 	v = invProjViewMat.Mul4x1(types.XYZW(-1, -1, -1, 1))
 	v = v.Mul(1.0 / v[3])
-	c.Frustrum[2] = v.Vec3().Sub(eyePos).Normalize()
+	c.Frustrum[2] = v.Vec3().Sub(eyePos).Normalize().Vec4(0)
 
 	v = invProjViewMat.Mul4x1(types.XYZW(1, -1, -1, 1))
 	v = v.Mul(1.0 / v[3])
-	c.Frustrum[3] = v.Vec3().Sub(eyePos).Normalize()
+	c.Frustrum[3] = v.Vec3().Sub(eyePos).Normalize().Vec4(0)
 }

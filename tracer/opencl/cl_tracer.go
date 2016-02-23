@@ -204,6 +204,8 @@ func (tr *clTracer) cleanup(useLock bool) {
 
 // Process block request.
 func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
+	eyePos := tr.scene.Camera.Position()
+
 	// Copy camera frustrum corners to allocated buffer.
 	errCode := cl.EnqueueWriteBuffer(
 		tr.cmdQueue,
@@ -232,19 +234,24 @@ func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 		tr.logger.Printf("Failed to write kernel arg 1")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 2, 4, unsafe.Pointer(&blockReq.BlockY))
+	errCode = cl.SetKernelArg(tr.traceKernel, 2, 16, unsafe.Pointer(&eyePos[0]))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 2")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 3, 4, unsafe.Pointer(&blockReq.SamplesPerPixel))
+	errCode = cl.SetKernelArg(tr.traceKernel, 3, 4, unsafe.Pointer(&blockReq.BlockY))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 3")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 4, 4, unsafe.Pointer(&blockReq.Exposure))
+	errCode = cl.SetKernelArg(tr.traceKernel, 4, 4, unsafe.Pointer(&blockReq.SamplesPerPixel))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 4")
+		return ErrSettingKernelArguments
+	}
+	errCode = cl.SetKernelArg(tr.traceKernel, 5, 4, unsafe.Pointer(&blockReq.Exposure))
+	if errCode != cl.SUCCESS {
+		tr.logger.Printf("Failed to write kernel arg 5")
 		return ErrSettingKernelArguments
 	}
 
@@ -317,7 +324,7 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint) error {
 	errCode := cl.BuildProgram(tr.traceProgram, 1, &tr.device.Id, nil, nil, nil)
 	if errCode != cl.SUCCESS {
 		var dataLen uint64
-		data := make([]byte, 1024)
+		data := make([]byte, 120000)
 
 		cl.GetProgramBuildInfo(tr.traceProgram, tr.device.Id, cl.PROGRAM_BUILD_LOG, uint64(len(data)), unsafe.Pointer(&data[0]), &dataLen)
 		tr.logger.Printf("Error building kernel (log follows):\n%s\n", string(data[0:dataLen-1]))

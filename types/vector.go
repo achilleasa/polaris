@@ -69,9 +69,28 @@ func (v Vec4) Vec3() Vec3 {
 	return Vec3{v[0], v[1], v[2]}
 }
 
+// Subtract a vector.
+func (v Vec4) Sub(v2 Vec4) Vec4 {
+	return Vec4{v[0] - v2[0], v[1] - v2[1], v[2] - v2[2], v[3] - v2[3]}
+}
+
 // Multiply 4 component vector with scalar.
 func (v Vec4) Mul(s float32) Vec4 {
 	return Vec4{v[0] * s, v[1] * s, v[2] * s, v[3] * s}
+}
+
+// Get 4 component vector length.
+func (v Vec4) Len() float32 {
+	return float32(math.Sqrt(float64(v[0]*v[0] + v[1]*v[1] + v[2]*v[2] + v[3]*v[3])))
+}
+
+// Normalize 4 component vector.
+func (v Vec4) Normalize() Vec4 {
+	l := 1.0 / v.Len()
+	if l < floatCmpEpsilon {
+		return Vec4{}
+	}
+	return Vec4{v[0] * l, v[1] * l, v[2] * l, v[3] * l}
 }
 
 // Extract the top-left 3x3 matrix from a 4x4 matrix.

@@ -50,8 +50,8 @@ func (c *Camera) InvViewProjMat() types.Mat4 {
 	return c.ProjMat.Mul4(c.ViewMat).Inv()
 }
 
-func (c *Camera) Position() types.Vec3 {
-	return c.ViewMat.Mat3().Mul3x1(c.ViewMat.Col(3).Vec3().Mul(-1))
+func (c *Camera) Position() types.Vec4 {
+	return c.ViewMat.Mat3().Mul3x1(c.ViewMat.Col(3).Vec3().Mul(-1)).Vec4(0)
 }
 
 // Generate a ray vector for each corner of the camera frustrum by
@@ -63,18 +63,14 @@ func (c *Camera) updateFrustrum() {
 	invProjViewMat := c.InvViewProjMat()
 
 	v = invProjViewMat.Mul4x1(types.XYZW(-1, 1, -1, 1))
-	v = v.Mul(1.0 / v[3])
-	c.Frustrum[0] = v.Vec3().Sub(eyePos).Normalize().Vec4(0)
+	c.Frustrum[0] = v.Mul(1.0 / v[3]).Sub(eyePos).Vec3().Vec4(0)
 
 	v = invProjViewMat.Mul4x1(types.XYZW(1, 1, -1, 1))
-	v = v.Mul(1.0 / v[3])
-	c.Frustrum[1] = v.Vec3().Sub(eyePos).Normalize().Vec4(0)
+	c.Frustrum[1] = v.Mul(1.0 / v[3]).Sub(eyePos).Vec3().Vec4(0)
 
 	v = invProjViewMat.Mul4x1(types.XYZW(-1, -1, -1, 1))
-	v = v.Mul(1.0 / v[3])
-	c.Frustrum[2] = v.Vec3().Sub(eyePos).Normalize().Vec4(0)
+	c.Frustrum[2] = v.Mul(1.0 / v[3]).Sub(eyePos).Vec3().Vec4(0)
 
 	v = invProjViewMat.Mul4x1(types.XYZW(1, -1, -1, 1))
-	v = v.Mul(1.0 / v[3])
-	c.Frustrum[3] = v.Vec3().Sub(eyePos).Normalize().Vec4(0)
+	c.Frustrum[3] = v.Mul(1.0 / v[3]).Sub(eyePos).Vec3().Vec4(0)
 }

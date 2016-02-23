@@ -1,7 +1,10 @@
 package types
 
 import (
+	"bytes"
+	"fmt"
 	"math"
+	"text/tabwriter"
 
 	"golang.org/x/image/math/f32"
 )
@@ -9,6 +12,9 @@ import (
 const (
 	floatCmpEpsilon = 1e-10
 )
+
+// Matrix functions copied from mathgl
+// https://github.com/go-gl/mathgl
 
 type Mat3 f32.Mat3
 type Mat4 f32.Mat4
@@ -74,6 +80,11 @@ func (m Mat4) Col(col int) Vec4 {
 	return Vec4{m[col*4+0], m[col*4+1], m[col*4+2], m[col*4+3]}
 }
 
+// Extract matrix row as a Vector
+func (m Mat4) Row(row int) Vec4 {
+	return Vec4{m[row+0], m[row+4], m[row+8], m[row+12]}
+}
+
 // Invert matrix
 func (m Mat4) Inv() Mat4 {
 	det := m[0]*m[5]*m[10]*m[15] - m[0]*m[5]*m[11]*m[14] - m[0]*m[6]*m[9]*m[15] + m[0]*m[6]*m[11]*m[13] + m[0]*m[7]*m[9]*m[14] - m[0]*m[7]*m[10]*m[13] - m[1]*m[4]*m[10]*m[15] + m[1]*m[4]*m[11]*m[14] + m[1]*m[6]*m[8]*m[15] - m[1]*m[6]*m[11]*m[12] - m[1]*m[7]*m[8]*m[14] + m[1]*m[7]*m[10]*m[12] + m[2]*m[4]*m[9]*m[15] - m[2]*m[4]*m[11]*m[13] - m[2]*m[5]*m[8]*m[15] + m[2]*m[5]*m[11]*m[12] + m[2]*m[7]*m[8]*m[13] - m[2]*m[7]*m[9]*m[12] - m[3]*m[4]*m[9]*m[14] + m[3]*m[4]*m[10]*m[13] + m[3]*m[5]*m[8]*m[14] - m[3]*m[5]*m[10]*m[12] - m[3]*m[6]*m[8]*m[13] + m[3]*m[6]*m[9]*m[12]
@@ -107,6 +118,21 @@ func (m Mat4) Inv() Mat4 {
 	return retMat.Mul(1 / det)
 }
 
+func (m Mat4) String() string {
+	buf := new(bytes.Buffer)
+	w := tabwriter.NewWriter(buf, 4, 4, 1, ' ', tabwriter.AlignRight)
+	for i := 0; i < 4; i++ {
+		for _, col := range m.Row(i) {
+			fmt.Fprintf(w, "%f\t", col)
+		}
+
+		fmt.Fprintln(w, "")
+	}
+	w.Flush()
+
+	return buf.String()
+}
+
 // Create a perspective projection 4x4 matrix
 func Perspective4(fovy, aspect, near, far float32) Mat4 {
 	// fovy = (fovy * math.Pi) / 180.0 // convert from degrees to radians
@@ -121,10 +147,12 @@ func LookAtV(eye, center, up Vec3) Mat4 {
 	s := f.Cross(up.Normalize()).Normalize()
 	u := s.Cross(f)
 
-	return Mat4{
-		s[0], u[0], -f[0], -eye[0],
-		s[1], u[1], -f[1], -eye[1],
-		s[2], u[2], -f[2], -eye[2],
+	rotMat := Mat4{
+		s[0], u[0], -f[0], 0,
+		s[1], u[1], -f[1], 0,
+		s[2], u[2], -f[2], 0,
 		0, 0, 0, 1,
 	}
+	transMat := Mat4{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -eye[0], -eye[1], -eye[2], 1}
+	return rotMat.Mul4(transMat)
 }

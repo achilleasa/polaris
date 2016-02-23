@@ -14,11 +14,13 @@ __kernel void tracePixel(
 ){
 	// Get pixel coordinates
 	unsigned int x = get_global_id(0);
-	unsigned int y = blockY + get_global_id(1);
+	unsigned int y = get_global_id(1);
 	if ( x > frameW || y > frameH ) {
 		return;
 	}
 
-	// Just set target to white
-	frameBuffer[y * frameW + x] = 1.0;
+	// Just interpolate the x,y coordinates
+	float tx = (float)(x) * texelStepX;
+	float ty = (float)(y) * texelStepY;
+	frameBuffer[y * frameW + x] = (float4)(tx, ty, 0, 0.0);
 }

@@ -57,6 +57,24 @@
 		) \
 	)
 
+// Random number generator
+// -----------------------
+float2 clRand(uint2 *state)
+{
+    const float2 invMaxInt = (float2) (1.0f/4294967296.0f, 1.0f/4294967296.0f);
+    uint x = (*state).x * 17 + (*state).y * 13123;
+    (*state).x = (x<<13) ^ x;
+    (*state).y ^= (x<<7);
+
+    uint2 tmp = (uint2)
+    (
+		(x * (x * x * 15731 + 74323) + 871483),
+		(x * (x * x * 13734 + 37828) + 234234)
+	);
+
+    return convert_float2(tmp) * invMaxInt;
+}
+
 // Tracer implementation
 // ---------------------
 
@@ -258,13 +276,24 @@ __kernel void tracePixel(
 		return;
 	}
 
+	// Setup seed for random numbers
+	uint2 rndSeed = (uint2)(x, y);
+
 	// Calculate texel coordinates [0,1] range
-	float tx = (float)(x) * TEXEL_STEP_X;
-	float ty = (float)(y) * TEXEL_STEP_Y;
 	float accumScaler = 1.0f / (float)samplesPerPixel;
 	float4 accum = (float4)(0,0,0,0);
 
 	for( uint sample=0;sample<samplesPerPixel;sample++){
+		// Apply stratified sampling using a tent filter. This will wrap our
+		// random numbers in the [-1, 1] range. X and Y point to the top corner
+		// of the current texel so we need to add a bit of offset to get the coords
+		// into the [-0.5, 1.5] range.
+		float2 random = clRand(&rndSeed);
+		float offX = random.x < 0.5f ? sqrt(2.0f * random.x) - 0.5f : 1.5f - sqrt(2.0f - 2.0f * random.x);
+		float offY = random.y < 0.5f ? sqrt(2.0f * random.y) - 0.5f : 1.5f - sqrt(2.0f - 2.0f * random.y);
+		float tx = ((float)x + offX) * TEXEL_STEP_X;
+		float ty = ((float)y + offY) * TEXEL_STEP_Y;
+
 		// Get ray direction using trilinear interpolation; trace ray and
 		// add result to accumulation buffer
 		float4 lVec = frustrumCorners[0] * (1 - ty) + frustrumCorners[2] * ty;

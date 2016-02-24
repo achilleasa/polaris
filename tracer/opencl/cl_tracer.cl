@@ -40,5 +40,12 @@ __kernel void tracePixel(
 		accum += traceRay(eyePos, normalize(lVec * (1 - tx) + rVec * tx));
 	}
 
-	frameBuffer[y * frameW + x] = accum * accumScaler;
+	//
+	// Average samples
+	accum *= accumScaler;
+
+	// Apply tone-mapping and gamma correction using:
+	// 1 - exp(-hdrColor * exposure)) [tone mapping HDR -> LDR]
+	// pow(ldr, 0.45)) [gamma correction]
+	frameBuffer[y * frameW + x] = pow(-expm1(-accum*exposure), 0.45f);
 }

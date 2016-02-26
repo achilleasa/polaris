@@ -1,9 +1,12 @@
 package renderer
 
 import (
+	"fmt"
 	"image"
 	"math"
+	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/go-pathtrace/tracer"
@@ -14,14 +17,14 @@ type Renderer struct {
 	sync.Mutex
 
 	// Renderer frame dims.
-	frameW uint
-	frameH uint
+	frameW uint32
+	frameH uint32
 
 	// The scene to be rendered.
 	scene *scene.Scene
 
 	// A buffered channel for receiving block completions.
-	tracerDoneChan chan uint
+	tracerDoneChan chan uint32
 
 	// A channel for receiving tracer errors.
 	tracerErrChan chan error
@@ -39,23 +42,23 @@ type Renderer struct {
 	blendWeight float32
 
 	// A list of assigned block height for each tracer
-	blockAssignment []uint
+	blockAssignment []uint32
 
 	// The list of attached tracers
 	Tracers []tracer.Tracer
 }
 
 // Create a new renderer
-func NewRenderer(frameW, frameH uint, sc *scene.Scene) *Renderer {
+func NewRenderer(frameW, frameH uint32, sc *scene.Scene) *Renderer {
 	return &Renderer{
 		frameW:          frameW,
 		frameH:          frameH,
-		tracerDoneChan:  make(chan uint, frameH),
+		tracerDoneChan:  make(chan uint32, frameH),
 		tracerErrChan:   make(chan error, 0),
 		frameBuffer:     make([]float32, frameW*frameH*4),
 		accumBuffer:     make([]float32, frameW*frameH*4),
 		blendWeight:     0,
-		blockAssignment: make([]uint, 0),
+		blockAssignment: make([]uint32, 0),
 		Tracers:         make([]tracer.Tracer, 0),
 		scene:           sc,
 	}
@@ -130,7 +133,7 @@ func (r *Renderer) assignTracerBlocks() {
 	scaler := float32(r.frameH) / totalSpeedEstimate
 
 	for idx, tr := range r.Tracers {
-		r.blockAssignment[idx] = uint(math.Ceil(float64(tr.SpeedEstimate() * scaler)))
+		r.blockAssignment[idx] = uint32(math.Ceil(float64(tr.SpeedEstimate() * scaler)))
 	}
 }
 
@@ -146,12 +149,19 @@ func (r *Renderer) updateAccumulationBuffer() {
 		r.accumBuffer[offset+2] = oneMinusWeight*r.frameBuffer[offset+2] + weight*r.accumBuffer[offset+2]
 		offset += 4
 	}
+	r.blendWeight = 0.2
 }
 
 // Render scene.
 func (r *Renderer) RenderFrame() error {
 	r.Lock()
 	defer r.Unlock()
+
+	// Time frmae
+	start := time.Now()
+	defer func() {
+		fmt.Printf("Frame time: %d ms\n", time.Since(start).Nanoseconds()/1000000)
+	}()
 
 	if r.scene == nil {
 		return ErrSceneNotDefined
@@ -171,14 +181,18 @@ func (r *Renderer) RenderFrame() error {
 	blockReq.RenderTarget = r.frameBuffer
 	blockReq.DoneChan = r.tracerDoneChan
 	blockReq.ErrChan = r.tracerErrChan
-	blockReq.SamplesPerPixel = 1
+	blockReq.SamplesPerPixel = 16
 	blockReq.Exposure = r.scene.Camera.Exposure
+	blockReq.Seed = rand.Uint32()
 
 	// Enqueue work units
-	var pendingRows uint = 0
+	var pendingRows uint32 = 0
 	for idx, tr := range r.Tracers {
 		blockReq.BlockY = pendingRows
 		blockReq.BlockH = r.blockAssignment[idx]
+		if blockReq.BlockY+blockReq.BlockH > r.frameH {
+			blockReq.BlockH = r.frameH - blockReq.BlockY
+		}
 		tr.Enqueue(blockReq)
 
 		pendingRows += blockReq.BlockH

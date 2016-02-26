@@ -49,8 +49,8 @@ type clTracer struct {
 	scene *scene.Scene
 
 	// The output frame dimensions.
-	frameW uint
-	frameH uint
+	frameW uint32
+	frameH uint32
 
 	// A channel for receiving block requests from the renderer.
 	blockReqChan chan tracer.BlockRequest
@@ -106,7 +106,7 @@ func (tr *clTracer) Close() {
 }
 
 // Attach tracer to render target and start processing incoming block requests.
-func (tr *clTracer) Setup(sc *scene.Scene, frameW, frameH uint) error {
+func (tr *clTracer) Setup(sc *scene.Scene, frameW, frameH uint32) error {
 	tr.Lock()
 	defer tr.Unlock()
 
@@ -254,6 +254,11 @@ func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 		tr.logger.Printf("Failed to write kernel arg 5")
 		return ErrSettingKernelArguments
 	}
+	errCode = cl.SetKernelArg(tr.traceKernel, 6, 4, unsafe.Pointer(&blockReq.Seed))
+	if errCode != cl.SUCCESS {
+		tr.logger.Printf("Failed to write kernel arg 6")
+		return ErrSettingKernelArguments
+	}
 
 	// Execute kernel
 	workOffset := []uint64{0, uint64(blockReq.BlockY)}
@@ -274,7 +279,10 @@ func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 	}
 
 	// Wait for the kernel to finish executing
-	cl.Finish(tr.cmdQueue)
+	errCode = cl.Finish(tr.cmdQueue)
+	if errCode != cl.SUCCESS {
+		return ErrKernelExecutionFailed
+	}
 
 	// Copy the rendered block from device buffer to the render target
 	readOffset := uint64(tr.frameW * 4 * 4 * blockReq.BlockY)
@@ -285,19 +293,22 @@ func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 		cl.TRUE,
 		readOffset,     // start at beginning of block
 		blockSizeBytes, // read just the block data
-		unsafe.Pointer(&blockReq.RenderTarget[readOffset]),
+		// target is []float32 so we need to divide offset by 4
+		unsafe.Pointer(&blockReq.RenderTarget[readOffset>>2]),
 		0,
 		nil,
 		nil,
 	)
 	if errCode != cl.SUCCESS {
+		tr.logger.Printf("Error copying data to host: (blockY: %d, blockH: %d, readOffset: %d, bytes: %d, code %d)", blockReq.BlockY, blockReq.BlockH, readOffset, blockSizeBytes, errCode)
 		return ErrCopyingDataToHost
 	}
+
 	return nil
 }
 
 // Generate and compile the opencl kernel to be used by this tracer.
-func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint) error {
+func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 	// Load kernel template
 	templateFile, err := os.Open(tracerSourceFile)
 	if err != nil {

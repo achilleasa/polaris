@@ -11,11 +11,11 @@
 // Limits
 #define MAX_TRACE_STEPS 32
 #define MAX_BOUNCES 4 // iris pro compilation runs out of memory if set to > 5
-#define MIN_BOUNCES_TO_USE_RR 2
+#define MIN_BOUNCES_TO_USE_RR 5
 
 // Epsilon values
-#define NUDGE_EPSILON 1.0e-2f
-#define DIST_SNAP_EPSILON 1.0e-3f
+#define NUDGE_EPSILON 1.0e-1f
+#define DIST_SNAP_EPSILON 1.0e-2f
 
 // Vector helpers
 #define VEC3_MAX_COMPONENT(v) max(v.x, max(v.y, v.z))
@@ -80,7 +80,7 @@ typedef struct {
 __constant float4 sceneBgColor = (float4)(0.0f);
 
 __constant Material SceneMaterial[] = {
-	{MATERIAL_LIGHT, VEC3(0.0f,0.0f,0.0f), VEC3(60.0f,60.0f,60.0f)},
+	{MATERIAL_LIGHT, VEC3(0.0f,0.0f,0.0f), VEC3(50.0f,50.0f,50.0f)},
 	{MATERIAL_DIFFUSE, VEC3(0.75f, 0.25f, 0.25f)},
 	{MATERIAL_DIFFUSE, VEC3(0.25f, 0.25f, 0.75f)},
 	{MATERIAL_DIFFUSE, VEC3(0.75f, 0.75f, 0.75f)},
@@ -90,7 +90,7 @@ __constant Material SceneMaterial[] = {
 
 __constant Object SceneObject[] = {
 	// Light
-	{OBJECT_SPHERE, 0, VEC3(0.0f, 1.5f, 0.0f), VEC1(0.1f)},
+	{OBJECT_SPHERE, 0, VEC3(0.0f, 1.3f, 0.0f), VEC1(0.1f)},
 	// Left wall
 	{OBJECT_BOX, 1, VEC3(-2.0f,0.0f,0.0f), VEC3(0.1f, 2.0f, 2.0f)},
 	// Right wall
@@ -142,6 +142,43 @@ float4 rndCosWeightedHemisphereDir(float4 normal, uint2 *seed) {
 	// Project disk point to unit hemisphere and rotate so that the normal points up
 	return normalize(u * rd * cos(phi) + v * rd * sin(phi) + normal * sqrt(1 - rnd.x));
 }
+
+// Return random cosine weighted direction in a cone centered at the normal
+// proportional to a solid angle. This function has:
+// PDF = cos(theta) /  pi * sin(theta_max)^2
+float4 rndCosWeigthedConeDir(float4 normal, float sinThetaMax, uint2 *seed){
+	float2 rnd  = clRand(seed);
+
+	float rd = sinThetaMax * sqrt(rnd.x);
+	float phi = 2.0f*M_PI*rnd.y;
+	float r2t = sqrt(1 - rnd.x*sinThetaMax*sinThetaMax);
+
+	// Generate tangent, bi-tangent vectors
+	float4 u = normalize(cross((fabs(normal.x) > .1f ? (float4)(0.0f, 1.0f, 0.0f, 0.0f) : (float4)(1.0f, 0.0f, 0.0f, 0.0f)), normal));
+	float4 v = cross(normal,u);
+
+	// Project disk point to unit hemisphere and rotate so that the normal points up
+	return normalize(u * rd * cos(phi) + v * rd * sin(phi) + normal * r2t);
+}
+
+// Return random direction in a cone centered at the normal
+// proportional to a solid angle. This function has:
+// PDF = 1 / 2 * pi * (1 - cos(theta_max))
+float4 rndConeDir(float4 normal, float cosThetaMax, uint2 *seed){
+	float2 rnd  = clRand(seed);
+
+	float rcd = 1.0f - rnd.x*(1.0f - cosThetaMax);
+	float rd = sqrt(1.0f - rcd*rcd);
+	float phi = 2.0f*M_PI*rnd.y;
+
+	// Generate tangent, bi-tangent vectors
+	float4 u = normalize(cross((fabs(normal.x) > .1f ? (float4)(0.0f, 1.0f, 0.0f, 0.0f) : (float4)(1.0f, 0.0f, 0.0f, 0.0f)), normal));
+	float4 v = cross(normal,u);
+
+	// Project disk point to unit hemisphere and rotate so that the normal points up
+	return normalize(u * rd * cos(phi) + v * rd * sin(phi) + normal * rcd);
+}
+
 
 // -----------------------
 // Distance estimators for supported primitives
@@ -243,6 +280,53 @@ void intersectWorld(const float4 rayOrigin, const float4 rayDir, const float min
 	}
 }
 
+// Collect direct light at hit point.
+float4 getDirectLight(Hit *hit, uint2 *rndSeed){
+	float4 light = 0.0f;
+	Hit shadowHit;
+	__constant Material *material;
+	unsigned int objIndex;
+	unsigned int numObjects = (uint)(sizeof(SceneObject) / sizeof(Object));
+
+	for(objIndex=0;objIndex<numObjects; objIndex++){
+		material = &SceneMaterial[SceneObject[objIndex].material];
+		if( material->type != MATERIAL_LIGHT) {
+			continue;
+		}
+
+		float4 lightDir = SceneObject[objIndex].origin - hit->position;
+
+		// Early rejection for back-facing surfaces
+		if(dot(lightDir, hit->normal) < 0){
+			continue;
+		}
+
+		// Treat the light as a sphere with radius the largest dimension; then
+		// generate a lightDir vector to its center and a tangent vector so as to
+		// form a right-angled triangle with base (light radius, light dir) and
+		// hypotenuse the tangent vector. Then generate a random ray towards
+		// the light proportional to the solid angle of the cone defined by
+		// the triangle.
+		float lightDirLen = length(lightDir);
+		float radius = SceneObject[objIndex].params.x;
+		float tLen = sqrt(lightDirLen*lightDirLen + radius*radius);
+		float cosThetaMax = lightDirLen / tLen;
+		lightDir = normalize(lightDir);
+		float4 shadowDir = rndConeDir(lightDir, cosThetaMax, rndSeed);
+
+		// Check line of sight; if we hit anything other than the target or nothing reject light
+		intersectWorld(hit->position, shadowDir, NUDGE_EPSILON, lightDirLen, &shadowHit);
+		if(shadowHit.objIndex != objIndex && shadowHit.objIndex != NO_MATERIAL_HIT){
+			continue;
+		}
+
+		// Radiance = 1/pi * cos(theta) * emissive * PDF
+		light += material->emissive * dot(hit->normal, shadowDir) * 2.0f * (1.0f - cosThetaMax);
+
+	}
+	return light;
+}
+
 // Trace a ray and return the gathered color.
 float4 traceRay(float4 rayOrigin, float4 rayDir, uint2 *rndSeed){
 	Hit hit;
@@ -250,6 +334,7 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, uint2 *rndSeed){
 	float4 rCol = (float4)(0.0f);
 	float4 mask = (float4)(1.0f);
 	unsigned int bounce = 0;
+	bool hitDiffuseObject = false;
 	for(bounce=0;bounce<MAX_BOUNCES;bounce++){
 		intersectWorld(rayOrigin, rayDir, NUDGE_EPSILON, FLT_MAX, &hit);
 
@@ -266,7 +351,9 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, uint2 *rndSeed){
 
 		// If we hit a light just add its emissive property and stop
 		if( material->type == MATERIAL_LIGHT ){
-			rCol += mask * material->emissive;
+			if ( !hitDiffuseObject ){
+				rCol += mask * material->emissive;
+			}
 			break;
 		}
 
@@ -291,11 +378,17 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, uint2 *rndSeed){
 		rayOrigin = hit.position;
 
 		if( material->type == MATERIAL_DIFFUSE ) {
+			hitDiffuseObject = true;
+			rCol += mask * getDirectLight(&hit, rndSeed);
+
 			// We do importance sampling for diffuse rays
 			rayDir = rndCosWeightedHemisphereDir(hit.normal, rndSeed);
-		} else{
+		} else if ( material->type == MATERIAL_SPECULAR){
 			// Reflect ray around normal
 			rayDir = normalize(-2.0f * dot(hit.normal, rayDir) * hit.normal + rayDir);
+		} else {
+			// todo
+			break;
 		}
 
 		++bounce;

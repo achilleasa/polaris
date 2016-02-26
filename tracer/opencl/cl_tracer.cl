@@ -6,16 +6,17 @@
 #define FRAME_H 512
 #define TEXEL_STEP_X 1.0f / 512.0f
 #define TEXEL_STEP_Y 1.0f / 512.0f
-#define NO_MATERIAL_HIT -1
+
+#define DEBUG (get_global_id(0) == 420 && get_global_id(1) == 400)
 
 // Limits
-#define MAX_TRACE_STEPS 32
+#define MAX_TRACE_STEPS 128
 #define MAX_BOUNCES 4 // iris pro compilation runs out of memory if set to > 5
-#define MIN_BOUNCES_TO_USE_RR 5
+#define MIN_BOUNCES_TO_USE_RR 3
 
 // Epsilon values
-#define NUDGE_EPSILON 1.0e-1f
-#define DIST_SNAP_EPSILON 1.0e-2f
+#define NUDGE_EPSILON 1.0e-3f
+#define DIST_SNAP_EPSILON 1.0e-5f
 
 // Vector helpers
 #define VEC3_MAX_COMPONENT(v) max(v.x, max(v.y, v.z))
@@ -39,6 +40,7 @@
 // Tracer structs
 // ---------------------
 
+#define NO_MATERIAL_HIT -1
 typedef struct {
 	float4 position;
 	float4 normal;
@@ -58,6 +60,7 @@ typedef struct {
 	unsigned int type;
 	float4 diffuse;
 	float4 emissive;
+	float IOR; // index of refraction
 } Material;
 
 // Supported object types
@@ -85,12 +88,12 @@ __constant Material SceneMaterial[] = {
 	{MATERIAL_DIFFUSE, VEC3(0.25f, 0.25f, 0.75f)},
 	{MATERIAL_DIFFUSE, VEC3(0.75f, 0.75f, 0.75f)},
 	{MATERIAL_SPECULAR, VEC3(0.999f, 0.999f, 0.999f)},
-	{MATERIAL_REFRACTIVE, VEC3(0.999f, 0.999f, 0.999f)}
+	{MATERIAL_REFRACTIVE, VEC3(0.999f, 0.999f, 0.999f), VEC1(0.0f), 1.5f}
 };
 
 __constant Object SceneObject[] = {
 	// Light
-	{OBJECT_SPHERE, 0, VEC3(0.0f, 1.3f, 0.0f), VEC1(0.1f)},
+	{OBJECT_SPHERE, 0, VEC3(0.0f, 1.3f, -1.0f), VEC1(0.1f)},
 	// Left wall
 	{OBJECT_BOX, 1, VEC3(-2.0f,0.0f,0.0f), VEC3(0.1f, 2.0f, 2.0f)},
 	// Right wall
@@ -335,6 +338,8 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, uint2 *rndSeed){
 	float4 mask = (float4)(1.0f);
 	unsigned int bounce = 0;
 	bool hitDiffuseObject = false;
+	float nc, nt, eta, ddn;
+	float4 nl;
 	for(bounce=0;bounce<MAX_BOUNCES;bounce++){
 		intersectWorld(rayOrigin, rayDir, NUDGE_EPSILON, FLT_MAX, &hit);
 
@@ -371,27 +376,76 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, uint2 *rndSeed){
 			mask /= maxComponent;
 		}
 
-		// Mask outgoing reflectance by material diffuse property
-		mask *= material->diffuse;
-
 		// Next bounce starts at hit point
 		rayOrigin = hit.position;
 
 		if( material->type == MATERIAL_DIFFUSE ) {
+			// Mask outgoing reflectance by material diffuse property
+			mask *= material->diffuse;
+
 			hitDiffuseObject = true;
 			rCol += mask * getDirectLight(&hit, rndSeed);
 
 			// We do importance sampling for diffuse rays
 			rayDir = rndCosWeightedHemisphereDir(hit.normal, rndSeed);
 		} else if ( material->type == MATERIAL_SPECULAR){
+			// Mask outgoing reflectance by material diffuse property
+			mask *= material->diffuse;
+
 			// Reflect ray around normal
 			rayDir = normalize(-2.0f * dot(hit.normal, rayDir) * hit.normal + rayDir);
-		} else {
-			// todo
-			break;
-		}
+		} else if (material->type == MATERIAL_REFRACTIVE){
+			bool insideObject = dot(rayDir, hit.normal) > 0.0f;
+			if (insideObject ){
+				nl = hit.normal * -1.0f;
+				nc = material->IOR;
+				nt = 1.0f; // air
+			} else {
+				nl = hit.normal;
+				nc = 1.0f; // air
+				nt = material->IOR;
+			}
+			eta = nt / nc;
+			ddn = dot(rayDir, nl);
+			float cos2t = 1.0f - eta * eta * (1.0f - ddn*ddn);
 
-		++bounce;
+			// Total internal reflection
+			if( cos2t < 0.0f){
+				// Reflect ray around normal
+				rayDir = normalize(-2.0f * dot(hit.normal, rayDir) * hit.normal + rayDir);
+			} else {
+
+				// Compute transmission ray dir
+				float4 transDir = rayDir * eta;
+				transDir -= hit.normal * ((insideObject ? 1.0f : -1.0f) * (ddn*eta + sqrt(cos2t)));
+				transDir = normalize(transDir);
+
+				// Compute reflectance at normal angle (R0) and reflectance (re) using
+				// Schlick's approximation:
+				float R0 = (nt-nc)*(nt-nc) / (nt+nc)*(nt+nc);
+				// c = cos of transmission ray and normal
+				float c= 1.0f - (insideObject ? -ddn : dot(transDir,hit.normal));
+				// This is Schlick's approximation for reflectance at angle theta
+				float re = R0 + (1.0f - R0) * c * c * c * c * c;
+				float tr = 1.0f - re;
+				float prob = 0.25f + 0.5f * re;
+				// Calc reflection and transmission boost factor based on event probablilities
+				float rp = re / prob;
+				float tp = tr / (1.0f - prob);
+
+				// Use RR to pick reflection or transmission
+				float2 rnd = clRand(rndSeed);
+				if( rnd.x < 0.25f) {
+					mask *= rp;
+
+					// Reflect ray around normal
+					rayDir = normalize(-2.0f * dot(hit.normal, rayDir) * hit.normal + rayDir);
+				} else {
+					mask *= tp;
+					rayDir = transDir;
+				}
+			}	
+		}
 	}
 
 	return rCol;

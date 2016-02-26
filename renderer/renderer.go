@@ -57,7 +57,7 @@ func NewRenderer(frameW, frameH uint32, sc *scene.Scene) *Renderer {
 		tracerErrChan:   make(chan error, 0),
 		frameBuffer:     make([]float32, frameW*frameH*4),
 		accumBuffer:     make([]float32, frameW*frameH*4),
-		blendWeight:     0,
+		blendWeight:     0.9,
 		blockAssignment: make([]uint32, 0),
 		Tracers:         make([]tracer.Tracer, 0),
 		scene:           sc,
@@ -97,7 +97,6 @@ func (r *Renderer) ClearFrame() {
 		r.frameBuffer[i] = 0
 		r.accumBuffer[i] = 0
 	}
-	r.blendWeight = 0
 }
 
 // Generate a RGBA image for the current accumulation buffer contents. If the
@@ -144,12 +143,11 @@ func (r *Renderer) updateAccumulationBuffer() {
 	oneMinusWeight := 1.0 - r.blendWeight
 	weight := r.blendWeight
 	for i := 0; i < pixelCount; i++ {
-		r.accumBuffer[offset] = oneMinusWeight*r.frameBuffer[offset] + weight*r.accumBuffer[offset]
-		r.accumBuffer[offset+1] = oneMinusWeight*r.frameBuffer[offset+1] + weight*r.accumBuffer[offset+1]
-		r.accumBuffer[offset+2] = oneMinusWeight*r.frameBuffer[offset+2] + weight*r.accumBuffer[offset+2]
+		r.accumBuffer[offset] = weight*r.frameBuffer[offset] + oneMinusWeight*r.accumBuffer[offset]
+		r.accumBuffer[offset+1] = weight*r.frameBuffer[offset+1] + oneMinusWeight*r.accumBuffer[offset+1]
+		r.accumBuffer[offset+2] = weight*r.frameBuffer[offset+2] + oneMinusWeight*r.accumBuffer[offset+2]
 		offset += 4
 	}
-	r.blendWeight = 0.2
 }
 
 // Render scene.

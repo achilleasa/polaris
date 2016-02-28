@@ -10,7 +10,7 @@ import (
 
 	"github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/go-pathtrace/tracer"
-	"github.com/hydroflame/gopencl/v1.2/cl"
+	"github.com/achilleasa/gopencl/v1.2/cl"
 )
 
 const (
@@ -44,6 +44,10 @@ type clTracer struct {
 	// Device buffers where the kernel writes its output and frustrum corners.
 	traceOutput     cl.Mem
 	frustrumCorners cl.Mem
+
+	// Device 1D images where the packed scene materials and primitives are stored.
+	packedMaterials  cl.Mem
+	packedPrimitives cl.Mem
 
 	// The scene to be rendered.
 	scene *scene.Scene
@@ -114,15 +118,15 @@ func (tr *clTracer) Setup(sc *scene.Scene, frameW, frameH uint32) error {
 		return ErrAlreadyAttached
 	}
 
-	err := tr.setupKernel(sc, frameW, frameH)
-	if err != nil {
-		return err
-	}
-
 	// Save scene and frame dims
 	tr.scene = sc
 	tr.frameW = frameW
 	tr.frameH = frameH
+
+	err := tr.setupKernel(sc, frameW, frameH)
+	if err != nil {
+		return err
+	}
 
 	readyChan := make(chan struct{}, 0)
 	tr.wg.Add(1)
@@ -161,6 +165,11 @@ func (tr *clTracer) Enqueue(blockReq tracer.BlockRequest) {
 	}
 }
 
+// Sync scene changes with opencl device.
+func (tr *clTracer) SyncScene() error {
+	return tr.syncScene(true)
+}
+
 // Cleanup tracer resources optionally using a lock.
 func (tr *clTracer) cleanup(useLock bool) {
 	if useLock {
@@ -176,6 +185,14 @@ func (tr *clTracer) cleanup(useLock bool) {
 	close(tr.closeChan)
 	tr.wg.Wait()
 
+	if tr.packedPrimitives != nil {
+		cl.ReleaseMemObject(tr.packedPrimitives)
+		tr.packedPrimitives = nil
+	}
+	if tr.packedMaterials != nil {
+		cl.ReleaseMemObject(tr.packedMaterials)
+		tr.packedMaterials = nil
+	}
 	if tr.traceOutput != nil {
 		cl.ReleaseMemObject(tr.traceOutput)
 		tr.traceOutput = nil
@@ -234,29 +251,45 @@ func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 		tr.logger.Printf("Failed to write kernel arg 1")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 2, 16, unsafe.Pointer(&eyePos[0]))
+	errCode = cl.SetKernelArg(tr.traceKernel, 2, 8, unsafe.Pointer(&tr.packedPrimitives))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 2")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 3, 4, unsafe.Pointer(&blockReq.BlockY))
+	errCode = cl.SetKernelArg(tr.traceKernel, 3, 8, unsafe.Pointer(&tr.packedMaterials))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 3")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 4, 4, unsafe.Pointer(&blockReq.SamplesPerPixel))
+	numPrimitives := len(tr.scene.Primitives)
+	errCode = cl.SetKernelArg(tr.traceKernel, 4, 4, unsafe.Pointer(&numPrimitives))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 4")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 5, 4, unsafe.Pointer(&blockReq.Exposure))
+	errCode = cl.SetKernelArg(tr.traceKernel, 5, 16, unsafe.Pointer(&eyePos[0]))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 5")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 6, 4, unsafe.Pointer(&blockReq.Seed))
+	errCode = cl.SetKernelArg(tr.traceKernel, 6, 4, unsafe.Pointer(&blockReq.BlockY))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 6")
+		return ErrSettingKernelArguments
+	}
+	errCode = cl.SetKernelArg(tr.traceKernel, 7, 4, unsafe.Pointer(&blockReq.SamplesPerPixel))
+	if errCode != cl.SUCCESS {
+		tr.logger.Printf("Failed to write kernel arg 7")
+		return ErrSettingKernelArguments
+	}
+	errCode = cl.SetKernelArg(tr.traceKernel, 8, 4, unsafe.Pointer(&blockReq.Exposure))
+	if errCode != cl.SUCCESS {
+		tr.logger.Printf("Failed to write kernel arg 8")
+		return ErrSettingKernelArguments
+	}
+	errCode = cl.SetKernelArg(tr.traceKernel, 9, 4, unsafe.Pointer(&blockReq.Seed))
+	if errCode != cl.SUCCESS {
+		tr.logger.Printf("Failed to write kernel arg 9")
 		return ErrSettingKernelArguments
 	}
 
@@ -304,6 +337,36 @@ func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 		return ErrCopyingDataToHost
 	}
 
+	return nil
+}
+
+// Sync scene changes with the opencl device optionally using a lock.
+func (tr *clTracer) syncScene(useLock bool) error {
+	if useLock {
+		tr.Lock()
+		defer tr.Unlock()
+	}
+
+	if tr.ctx == nil {
+		return ErrPendingSetup
+	}
+
+	// Copy camera frustrum corners to allocated buffer.
+	errCode := cl.EnqueueWriteBuffer(
+		tr.cmdQueue,
+		tr.frustrumCorners,
+		cl.TRUE,
+		0,
+		4*16,
+		unsafe.Pointer(&tr.scene.Camera.Frustrum[0]),
+		0,
+		nil,
+		nil,
+	)
+	if errCode != cl.SUCCESS {
+		tr.logger.Printf("Failed to write frustrum corner data")
+		return ErrCopyingDataToDevice
+	}
 	return nil
 }
 
@@ -363,6 +426,65 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 	if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
 		tr.cleanup(false)
 		return ErrAllocatingBuffers
+	}
+
+	// Pack scene data
+	packedMaterials, packedPrimitives, err := packScene(tr.scene)
+	if err != nil {
+		tr.cleanup(false)
+		return err
+	}
+
+	// Allocate opencl images for packed data and upload it to device
+	if len(packedMaterials) > 0 {
+		sizeInBytes := uint64(uint64(len(packedMaterials)) * uint64(unsafe.Sizeof(packedMaterials[0])))
+		tr.packedMaterials = cl.CreateImage(
+			*tr.ctx,
+			cl.MEM_READ_ONLY|cl.MEM_COPY_HOST_PTR,
+			cl.ImageFormat{cl.RGB, cl.FLOAT}, // 12 bytes per pixel
+			cl.ImageDesc{
+				ImageType: cl.MEM_OBJECT_IMAGE1D,
+				// each pixel takes 12 bytes so to calc image width we need to take
+				// the total packed data bytes and divide it by 12
+
+				ImageWidth:    sizeInBytes / 12,
+				ImageRowPitch: sizeInBytes,
+			},
+			unsafe.Pointer(&packedMaterials[0]),
+			errPtr,
+		)
+		if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
+			tr.cleanup(false)
+			return ErrAllocatingBuffers
+		}
+	}
+	if len(packedPrimitives) > 0 {
+		sizeInBytes := uint64(uint64(len(packedPrimitives)) * uint64(unsafe.Sizeof(packedPrimitives[0])))
+		tr.packedPrimitives = cl.CreateImage(
+			*tr.ctx,
+			cl.MEM_READ_ONLY|cl.MEM_COPY_HOST_PTR,
+			cl.ImageFormat{cl.RGB, cl.FLOAT}, // 12 bytes per pixel
+			cl.ImageDesc{
+				ImageType: cl.MEM_OBJECT_IMAGE1D,
+				// each pixel takes 12 bytes so to calc image width we need to take
+				// the total packed data bytes and divide it by 12
+				ImageWidth:    sizeInBytes / 12,
+				ImageRowPitch: sizeInBytes,
+			},
+			unsafe.Pointer(&packedPrimitives[0]),
+			errPtr,
+		)
+		if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
+			tr.cleanup(false)
+			return ErrAllocatingBuffers
+		}
+	}
+
+	// Sync scene
+	err = tr.syncScene(false)
+	if err != nil {
+		tr.cleanup(false)
+		return err
 	}
 
 	return nil

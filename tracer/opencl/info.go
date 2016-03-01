@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/hydroflame/gopencl/v1.2/cl"
+	"github.com/achilleasa/gopencl/v1.2/cl"
 )
 
 const (

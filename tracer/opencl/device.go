@@ -5,7 +5,7 @@ import (
 	"regexp"
 
 	"github.com/achilleasa/go-pathtrace/tracer"
-	"github.com/hydroflame/gopencl/v1.2/cl"
+	"github.com/achilleasa/gopencl/v1.2/cl"
 )
 
 type DeviceType uint8

@@ -441,13 +441,10 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 		tr.packedMaterials = cl.CreateImage(
 			*tr.ctx,
 			cl.MEM_READ_ONLY|cl.MEM_COPY_HOST_PTR,
-			cl.ImageFormat{cl.RGB, cl.FLOAT}, // 12 bytes per pixel
+			cl.ImageFormat{cl.RGBA, cl.FLOAT}, // 12 bytes per pixel
 			cl.ImageDesc{
-				ImageType: cl.MEM_OBJECT_IMAGE1D,
-				// each pixel takes 12 bytes so to calc image width we need to take
-				// the total packed data bytes and divide it by 12
-
-				ImageWidth:    sizeInBytes / 12,
+				ImageType:     cl.MEM_OBJECT_IMAGE1D,
+				ImageWidth:    sizeInBytes >> 4,
 				ImageRowPitch: sizeInBytes,
 			},
 			unsafe.Pointer(&packedMaterials[0]),
@@ -463,12 +460,10 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 		tr.packedPrimitives = cl.CreateImage(
 			*tr.ctx,
 			cl.MEM_READ_ONLY|cl.MEM_COPY_HOST_PTR,
-			cl.ImageFormat{cl.RGB, cl.FLOAT}, // 12 bytes per pixel
+			cl.ImageFormat{cl.RGBA, cl.FLOAT}, // 16 bytes per pixel
 			cl.ImageDesc{
-				ImageType: cl.MEM_OBJECT_IMAGE1D,
-				// each pixel takes 12 bytes so to calc image width we need to take
-				// the total packed data bytes and divide it by 12
-				ImageWidth:    sizeInBytes / 12,
+				ImageType:     cl.MEM_OBJECT_IMAGE1D,
+				ImageWidth:    sizeInBytes >> 4,
 				ImageRowPitch: sizeInBytes,
 			},
 			unsafe.Pointer(&packedPrimitives[0]),

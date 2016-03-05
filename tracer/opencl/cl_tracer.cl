@@ -7,7 +7,9 @@
 #define TEXEL_STEP_X 1.0f / 512.0f
 #define TEXEL_STEP_Y 1.0f / 512.0f
 
-#define DEBUG (get_global_id(0) == 420 && get_global_id(1) == 400)
+// Render options
+#define COS_WEIGHTED_LIGHT_SAMPLING
+//#define CONE_LIGHT_SAMPLING
 
 // Limits
 #define MAX_BOUNCES 4 // iris pro compilation runs out of memory if set to > 5
@@ -15,6 +17,7 @@
 
 // Epsilon values
 #define NUDGE_EPSILON 1.0e-3f
+#define SNAP_EPSILON 1.0e-5f
 
 // Vector helpers
 #define VEC3_MAX_COMPONENT(v) max(v.x, max(v.y, v.z))
@@ -28,7 +31,7 @@
 #define MATERIAL_DIFFUSE 0.0f
 #define MATERIAL_SPECULAR 1.0f
 #define MATERIAL_REFRACTIVE 2.0f
-#define MATERIAL_EMISSIVE 65535.0f
+#define MATERIAL_EMISSIVE 3.0f
 
 // Supported primitive types
 #define PRIMITIVE_PLANE 0
@@ -43,10 +46,7 @@ const sampler_t dataSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_NONE | C
 // packed primitives and materials are 48 bytes each and our images are
 // RGBA buffers where each component is 4 bytes long (CL_FLOAT). So each
 // item is encoded using 48 / 16 = 3 pixels.
-#define DATA_OFFSET(itemIndex, field) (int)(itemIndex * 3 + field)
-#define DATA_OFFSET_F(itemIndex, field) (float)(itemIndex * 3 + field)
-
-#define DEBUG (get_global_id(0) == 0 && get_global_id(1) == 0)
+#define DATA_OFFSET(itemIndex, field) (float)(itemIndex * 3 + field)
 
 // -----------------------
 // Object and material definitions
@@ -59,18 +59,13 @@ __constant float4 sceneBgColor = (float4)(0.0f);
 // -----------------------
 float2 clRand(uint2 *state)
 {
-    const float2 invMaxInt = (float2) (1.0f/4294967296.0f, 1.0f/4294967296.0f);
-    uint x = (*state).x * 17 + (*state).y * 13123;
-    (*state).x = (x<<13) ^ x;
-    (*state).y ^= (x<<7);
+	const float2 invMaxInt = (float2) (1.0f/4294967296.0f, 1.0f/4294967296.0f);
+	uint x = (*state).x * 17 + (*state).y * 13123;
+	(*state).x = (x<<13) ^ x;
+	(*state).y ^= (x<<7);
 
-    uint2 tmp = (uint2)
-    (
-		(x * (x * x * 15731 + 74323) + 871483),
-		(x * (x * x * 13734 + 37828) + 234234)
-	);
-
-    return convert_float2(tmp) * invMaxInt;
+	uint2 tmp = (uint2)((x * (x * x * 15731 + 74323) + 871483),(x * (x * x * 13734 + 37828) + 234234));
+	return convert_float2(tmp) * invMaxInt;
 }
 
 // Return random direction on hemiphere around normal.
@@ -93,7 +88,7 @@ float4 rndCosWeightedHemisphereDir(float4 normal, uint2 *seed) {
 // Return random cosine weighted direction in a cone centered at the normal
 // proportional to a solid angle. This function has:
 // PDF = cos(theta) /  pi * sin(theta_max)^2
-float4 rndCosWeigthedConeDir(float4 normal, float sinThetaMax, uint2 *seed){
+float4 rndCosWeightedConeDir(float4 normal, float sinThetaMax, uint2 *seed){
 	float2 rnd  = clRand(seed);
 
 	float rd = sinThetaMax * sqrt(rnd.x);
@@ -134,97 +129,140 @@ typedef struct {
 	float4 normal;
 	float dist;
 	uint material;
+	int primitive;
 } Hit;
 
 float intersectPlane(const float4 rayOrigin, const float4 rayDir, const float4 planeNormal, const float planeDist){
-    float denom = dot(planeNormal, rayDir); 
-    if (denom < 1e-6) { 
+	float denom = dot(planeNormal, rayDir);
+	if (denom < 1e-6f) {
 		return FLT_MAX;
 	}
 
-    float t = (dot(planeNormal, rayOrigin) + planeDist) / denom;
-	return t > 0 ? t : FLT_MAX;
+	float t = (dot(planeNormal, rayOrigin) + planeDist) / denom;
+	return t > 0.0f ? t : FLT_MAX;
 }
 
 float intersectSphere(const float4 rayOrigin, const float4 rayDir, const float4 sphereOrigin, const float sphereRadius){
 	float4 op = sphereOrigin - rayOrigin;
-	float epsilon = 0.01f;
 	float b = dot(op, rayDir);
 	float discr = b*b - dot(op, op) + sphereRadius * sphereRadius;
-	if (discr<0){
+	if (discr<0.0f){
 		return FLT_MAX;
 	}
 	discr = sqrt(discr);
 	float t = b - discr;
-	if(t > epsilon) {
+	if(t > SNAP_EPSILON) {
 		return t;
 	}
 	t = b + discr;
-	return t > epsilon ? t : FLT_MAX;
+	return t > SNAP_EPSILON ? t : FLT_MAX;
+}
+
+float intersectBox(const float4 rayOrigin, const float4 rayDir, const float4 boxMin, const float4 boxMax){
+	float4 tmin = (boxMin - rayOrigin) / rayDir;
+	float4 tmax = (boxMax - rayOrigin) / rayDir;
+
+	// If tmin > tmax we need to swap them
+	float4 rmin = fmin(tmin, tmax);
+	float4 rmax = fmax(tmin, tmax);
+
+	float minmax = fmin( fmin(rmax.x, rmax.y), rmax.z);
+	float maxmin = fmax( fmax(rmin.x, rmin.y), rmin.z);
+	return minmax >= maxmin && maxmin > SNAP_EPSILON ? maxmin : FLT_MAX;
+}
+
+float4 aabbNormal(const float4 hitPoint,  const float4 boxMin, const float4 boxMax){
+	float4 rmin = fmin(boxMin, boxMax);
+	float4 rmax = fmax(boxMin, boxMax);
+
+	if (fabs(rmin.x - hitPoint.x) < SNAP_EPSILON){
+		return (float4)(-1.0f, 0.0f, 0.0f, 0.0f);
+	} else if (fabs(rmax.x - hitPoint.x) < SNAP_EPSILON){
+		return (float4)(1.0f, 0.0f, 0.0f, 0.0f);
+	} else if (fabs(rmin.y - hitPoint.y) < SNAP_EPSILON){
+		return (float4)(0.0f, -1.0f, 0.0f,0.0f);
+	} else if (fabs(rmax.y - hitPoint.y) < SNAP_EPSILON){
+		return (float4)(0.0f, 1.0f, 0.0f,0.0f);
+	} else if (fabs(rmin.z - hitPoint.z) < SNAP_EPSILON){
+		return (float4)(0.0f, 0.0f, -1.0f,0.0f);
+	}
+	return (float4)(0.0f, 0.0f, 1.0f,0.0f);
 }
 
 // Check for the closest intersection with scene primitives. If no interection
 // is detected, hit->dist should be set to FLT_MAX
 void getIntersection(const float4 rayOrigin, const float4 rayDir, uint numPrimitives, image1d_t packedPrimitives, Hit *hit){
 	hit->dist = FLT_MAX;
+	hit->primitive = -1;
 
 	float dist;
 	float4 normal;
 	float4 hitPoint;
-	for(uint primIndex=0;primIndex<numPrimitives;primIndex++){
+	for(int primIndex=0;primIndex<numPrimitives;primIndex++){
 		// Get primitive type and material index
 		// x: primitive type
 		// y: material index
-		uint4 primInfo = read_imageui(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,0));
+		float4 primInfo = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,0));
 
 		// Get primitive origin and dimensions
-		float4 origin = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET_F(primIndex,1));
-		float4 dims = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET_F(primIndex,2));
+		float4 origin = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,1));
+		float4 extents = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,2));
 
 		// Check for ray-primitive intersection
-		switch(primInfo.x) {
+		switch(uint(primInfo.x)) {
 			case PRIMITIVE_PLANE:
-				dist = intersectPlane(rayOrigin, rayDir, origin, dims.x);
+				dist = intersectPlane(rayOrigin, rayDir, origin, extents.x);
 				hitPoint = rayOrigin + rayDir * dist;
-				normal = normalize(dims.xyz);
+				normal = origin;
+				break;
 			case PRIMITIVE_SPHERE:
-				dist = intersectSphere(rayOrigin, rayDir, origin, dims.x);
+				dist = intersectSphere(rayOrigin, rayDir, origin, extents.x);
 				hitPoint = rayOrigin + rayDir * dist;
 				normal = normalize(hitPoint - origin);
-			break;
+				break;
+			case PRIMITIVE_BOX:
+				dist = intersectBox(rayOrigin, rayDir, origin, extents);
+				hitPoint = rayOrigin + rayDir * dist;
+				normal = aabbNormal(hitPoint, origin, extents);
+				break;
 		}
 
 		if( dist < hit->dist ){
 			hit->dist = dist;
 			hit->position = hitPoint;
 			hit->normal = normal;
-			hit->material = primInfo.y;
+			hit->material = uint(primInfo.y);
+			hit->primitive = primIndex;
 		}
 	}
 }
 
 // Collect direct light at hit point.
-float4 getDirectLight(Hit *hit, uint2 *rndSeed){
-	return 1.0f;
-	/*
+float4 getDirectLight(Hit *hit, int numPrimitives, image1d_t packedPrimitives, image1d_t packedMaterials, uint2 *rndSeed){
 	float4 light = 0.0f;
+	float4 shadowRayOrigin = hit->position + hit->normal * NUDGE_EPSILON;
 	Hit shadowHit;
-	__constant Material *material;
-	unsigned int objIndex;
-	unsigned int numObjects = (uint)(sizeof(SceneObject) / sizeof(Object));
 
-	for(objIndex=0;objIndex<numObjects; objIndex++){
-		material = &SceneMaterial[SceneObject[objIndex].material];
-		if( material->type != MATERIAL_LIGHT) {
+	for(int primIndex=0;primIndex<numPrimitives;primIndex++){
+
+		// Get primitive type and material index
+		// x: primitive type
+		// y: material index
+		// z: 1 if this is a light
+		float4 primInfo = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,0));
+		if(primInfo.z != 1.0f){
 			continue;
 		}
 
-		float4 lightDir = SceneObject[objIndex].origin - hit->position;
+		float4 origin = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,1));
+		float4 lightDir = origin - hit->position;
 
 		// Early rejection for back-facing surfaces
-		if(dot(lightDir, hit->normal) < 0){
+		if(dot(lightDir, hit->normal) < 0.0f){
 			continue;
 		}
+
+		float4 extents = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,2));
 
 		// Treat the light as a sphere with radius the largest dimension; then
 		// generate a lightDir vector to its center and a tangent vector so as to
@@ -232,29 +270,38 @@ float4 getDirectLight(Hit *hit, uint2 *rndSeed){
 		// hypotenuse the tangent vector. Then generate a random ray towards
 		// the light proportional to the solid angle of the cone defined by
 		// the triangle.
+		float radius = VEC3_MAX_COMPONENT(extents);
 		float lightDirLen = length(lightDir);
-		float radius = SceneObject[objIndex].params.x;
-		float tLen = sqrt(lightDirLen*lightDirLen + radius*radius);
-		float cosThetaMax = lightDirLen / tLen;
+		float tLen = hypot(lightDirLen, radius);
 		lightDir = normalize(lightDir);
-		float4 shadowDir = rndConeDir(lightDir, cosThetaMax, rndSeed);
+#ifdef CONE_LIGHT_SAMPLING
+		float cosThetaMax = lightDirLen / tLen;
+		float4 shadowDir = rndConeDir(lightDir, cosThetaiMax, rndSeed);
+		float pdf = dot(hit->normal, shadowDir) * 2.0f * (1.0f - cosThetaMax);
+#endif
+#ifdef COS_WEIGHTED_LIGHT_SAMPLING
+		float sinThetaMax = radius / tLen;
+		float4 shadowDir = rndCosWeightedConeDir(lightDir, sinThetaMax, rndSeed);
+		float pdf = sinThetaMax * sinThetaMax;
+#endif
 
-		// Check line of sight; if we hit anything other than the target or nothing reject light
-		intersectWorld(hit->position, shadowDir, NUDGE_EPSILON, lightDirLen, &shadowHit);
-		if(shadowHit.objIndex != objIndex && shadowHit.objIndex != NO_MATERIAL_HIT){
+		// Check line of sight; skip if we hit anything other than the target light
+		getIntersection(shadowRayOrigin, shadowDir,  numPrimitives, packedPrimitives, &shadowHit);
+		if(shadowHit.primitive != primIndex){
 			continue;
 		}
 
 		// Radiance = 1/pi * cos(theta) * emissive * PDF
-		light += material->emissive * dot(hit->normal, shadowDir) * 2.0f * (1.0f - cosThetaMax);
+		float4 emissive = read_imagef(packedMaterials, dataSampler, DATA_OFFSET(primInfo.y, 2));
+		light += emissive * pdf;
+
 
 	}
 	return light;
-	*/
 }
 
 // Trace a ray and return the gathered color.
-float4 traceRay(float4 rayOrigin, float4 rayDir, uint numPrimitives, image1d_t packedPrimitives, image1d_t packedMaterials, uint2 *rndSeed){
+float4 traceRay(float4 rayOrigin, float4 rayDir, int numPrimitives, image1d_t packedPrimitives, image1d_t packedMaterials, uint2 *rndSeed){
 	Hit hit;
 	float4 rCol = (float4)(0.0f);
 	float4 mask = (float4)(1.0f);
@@ -274,18 +321,18 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, uint numPrimitives, image1d_t p
 		}
 
 		// Get material properties
-		materialProps = read_imagef(packedMaterials, dataSampler, DATA_OFFSET_F(hit.material, 0));
+		materialProps = read_imagef(packedMaterials, dataSampler, DATA_OFFSET(hit.material, 0));
 
 		// If we hit a light just add its emissive property and stop
 		if( materialProps.x == MATERIAL_EMISSIVE ){
 			if ( !hitDiffuseObject ){
-				rCol += mask * read_imagef(packedMaterials, dataSampler, DATA_OFFSET_F(hit.material, 2));
+				rCol += mask * read_imagef(packedMaterials, dataSampler, DATA_OFFSET(hit.material, 2));
 			}
 			break;
 		}
 
 		// Fetch diffuse color
-		diffuse = read_imagef(packedMaterials, dataSampler, DATA_OFFSET_F(hit.material, 1));
+		diffuse = read_imagef(packedMaterials, dataSampler, DATA_OFFSET(hit.material, 1));
 
 		// After some bounces apply a russian roulette to terminate long paths
 		if( bounce > MIN_BOUNCES_TO_USE_RR ) {
@@ -298,56 +345,57 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, uint numPrimitives, image1d_t p
 			mask /= maxComponent;
 		}
 
-		// Next bounce starts at hit point with a small nudge along the normal
-		// to prevent self-intersection
-		rayOrigin = hit.position + hit.normal * NUDGE_EPSILON;
-
 		// Handle material surface type	(BRDF)
 		if( materialProps.x == MATERIAL_DIFFUSE ) {
 			// Mask outgoing reflectance by material diffuse property
-			mask *= diffuse; 
+			mask *= diffuse;
 			hitDiffuseObject = true;
-			rCol += mask * getDirectLight(&hit, rndSeed);
+			rCol += mask * getDirectLight(&hit, numPrimitives, packedPrimitives, packedMaterials, rndSeed);
 
 			// We do importance sampling for diffuse rays
+			rayOrigin = hit.position + hit.normal * NUDGE_EPSILON;
 			rayDir = rndCosWeightedHemisphereDir(hit.normal, rndSeed);
 		} else if ( materialProps.x == MATERIAL_SPECULAR){
 			// Mask outgoing reflectance by material diffuse property
 			mask *= diffuse;
 
 			// Reflect ray around normal
+			rayOrigin = hit.position + hit.normal * NUDGE_EPSILON;
 			rayDir = normalize(-2.0f * dot(hit.normal, rayDir) * hit.normal + rayDir);
 		} else if (materialProps.x == MATERIAL_REFRACTIVE){
-			bool insideObject = dot(rayDir, hit.normal) > 0.0f;
-			if (insideObject ){
-				nl = hit.normal * -1.0f;
-				nc = materialProps.y;
-				nt = 1.0f; // air
-			} else {
-				nl = hit.normal;
+			// Mask outgoing reflectance by material diffuse property
+			mask *= diffuse;
+
+			// Generate correctly oriented normal
+			nl = dot(rayDir, hit.normal) < 0 ? hit.normal : -1.0f * hit.normal;
+			ddn = dot(rayDir, nl);
+
+			// ray going into object
+			bool into = dot(nl, hit.normal) > 0.0f;
+			if (into){
 				nc = 1.0f; // air
 				nt = materialProps.y;
+			} else {
+				nc = materialProps.y;
+				nt = 1.0f; // air
 			}
-			eta = nt / nc;
-			ddn = dot(rayDir, nl);
+			eta = nc / nt;
 			float cos2t = 1.0f - eta * eta * (1.0f - ddn*ddn);
 
 			// Total internal reflection
 			if( cos2t < 0.0f){
 				// Reflect ray around normal
-				rayDir = normalize(-2.0f * dot(hit.normal, rayDir) * hit.normal + rayDir);
+				rayOrigin = hit.position + nl * NUDGE_EPSILON;
+				rayDir = normalize(rayDir - 2.0f * hit.normal * dot(hit.normal, rayDir));
 			} else {
-
 				// Compute transmission ray dir
-				float4 transDir = rayDir * eta;
-				transDir -= hit.normal * ((insideObject ? 1.0f : -1.0f) * (ddn*eta + sqrt(cos2t)));
-				transDir = normalize(transDir);
+				float4 transDir = normalize(rayDir * eta - hit.normal * ((into ? 1.0f : -1.0f) * (ddn*eta + sqrt(cos2t))));
 
 				// Compute reflectance at normal angle (R0) and reflectance (re) using
 				// Schlick's approximation:
 				float R0 = (nt-nc)*(nt-nc) / (nt+nc)*(nt+nc);
 				// c = cos of transmission ray and normal
-				float c= 1.0f - (insideObject ? -ddn : dot(transDir,hit.normal));
+				float c= 1.0f - (into ? -ddn : dot(transDir,hit.normal));
 				// This is Schlick's approximation for reflectance at angle theta
 				float re = R0 + (1.0f - R0) * c * c * c * c * c;
 				float tr = 1.0f - re;
@@ -362,9 +410,11 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, uint numPrimitives, image1d_t p
 					mask *= rp;
 
 					// Reflect ray around normal
-					rayDir = normalize(-2.0f * dot(hit.normal, rayDir) * hit.normal + rayDir);
+					rayOrigin = hit.position + nl * SNAP_EPSILON;
+					rayDir = normalize(rayDir - 2.0f * hit.normal * dot(hit.normal, rayDir));
 				} else {
 					mask *= tp;
+					rayOrigin = hit.position - nl * SNAP_EPSILON;
 					rayDir = transDir;
 				}
 			}
@@ -380,7 +430,7 @@ __kernel void tracePixel(
 		__global float4 *frustrumCorners,
 		image1d_t packedPrimitives,
 		image1d_t packedMaterials,
-		const unsigned int numPrimitives,
+		const int numPrimitives,
 		const float4 eyePos,
 		const unsigned int blockY,
 		const unsigned int samplesPerPixel,

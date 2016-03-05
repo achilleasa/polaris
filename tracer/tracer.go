@@ -45,4 +45,7 @@ type Tracer interface {
 
 	// Enqueue block request.
 	Enqueue(blockReq BlockRequest)
+
+	// Sync scene changes with tracer.
+	SyncScene() error
 }

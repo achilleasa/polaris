@@ -15,4 +15,5 @@ var (
 	ErrSettingKernelArguments = errors.New("opencl tracer: error setting kernel arguments")
 	ErrKernelExecutionFailed  = errors.New("opencl tracer: kernel execution failed")
 	ErrCopyingDataToHost      = errors.New("opencl tracer: could not copy device data to local buffer")
+	ErrPendingSetup           = errors.New("opencl tracer: tracer setup has not been completed")
 )

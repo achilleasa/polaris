@@ -37,16 +37,16 @@
 #define PRIMITIVE_PLANE 0
 #define PRIMITIVE_SPHERE 1
 #define PRIMITIVE_BOX 2
-#define PRIMITIVE_TORUS 3
+#define PRIMITIVE_TRIANGE 3
 
 // Packed data sampler
 const sampler_t dataSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_NONE | CLK_FILTER_NEAREST;
 
-// Data offset calculator shortcuts:
-// packed primitives and materials are 48 bytes each and our images are
-// RGBA buffers where each component is 4 bytes long (CL_FLOAT). So each
-// item is encoded using 48 / 16 = 3 pixels.
-#define DATA_OFFSET(itemIndex, field) (float)(itemIndex * 3 + field)
+// Data offset calculators. Buffers are stored as RGBA floats (16 bytes per pixel)
+// - packed materials are 48 bytes long (3 pixels each)
+// - packed primitives are 128 bytes long (8 pixels each)
+#define MAT_OFFSET(itemIndex, field) (float)(itemIndex * 3 + field)
+#define PRIM_OFFSET(itemIndex, field) (float)(itemIndex * 8 + field)
 
 // -----------------------
 // Object and material definitions
@@ -132,13 +132,13 @@ typedef struct {
 	int primitive;
 } Hit;
 
-float intersectPlane(const float4 rayOrigin, const float4 rayDir, const float4 planeNormal, const float planeDist){
-	float denom = dot(planeNormal, rayDir);
-	if (denom < 1e-6f) {
+float intersectPlane(const float4 rayOrigin, const float4 rayDir, const float3 planeNormal, const float planeDist){
+	float denom = dot(planeNormal, rayDir.xyz);
+	if (fabs(denom) < 1e-6f) {
 		return FLT_MAX;
 	}
 
-	float t = (dot(planeNormal, rayOrigin) + planeDist) / denom;
+	float t = -(dot(planeNormal, rayOrigin.xyz) - planeDist) / denom;
 	return t > 0.0f ? t : FLT_MAX;
 }
 
@@ -189,6 +189,40 @@ float4 aabbNormal(const float4 hitPoint,  const float4 boxMin, const float4 boxM
 	return (float4)(0.0f, 0.0f, 1.0f,0.0f);
 }
 
+float intersectTriangle(const float4 rayOrigin, const float4 rayDir, uint primIndex, image1d_t packedPrimitives, float4 *pointOut, float4 *normalOut, float2 *uvOut){
+	// Calc intersection with triangle plane
+	float4 normal = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,2) );
+	float d = intersectPlane(rayOrigin, rayDir, normal.xyz, normal.w);
+	if( d == FLT_MAX ){
+		return d;
+	}
+
+	// Check if hit point is inside the triangle by computing the dot product with edge planes
+	// to get barycentric coordinates.
+	float4 edge;
+	float3 point = (rayOrigin + rayDir * d).xyz;
+	
+	edge = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,3) );
+	float kt1 =  dot(point, edge.xyz) - edge.w;
+	if( kt1 < 0.0f ){
+		return FLT_MAX;
+	}
+	edge = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,4) );
+	float kt2 =  dot(point, edge.xyz) - edge.w;
+	if( kt2 < 0.0f ){
+		return FLT_MAX;
+	}
+	edge = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,5) );
+	float kt3 =  dot(point, edge.xyz) - edge.w;
+	if( kt3 < 0.0f ){
+		return FLT_MAX;
+	}
+
+	*pointOut = (float4)(point, 0);
+	*normalOut = (float4)(normal.xyz, 0);
+	return d;
+}
+
 // Check for the closest intersection with scene primitives. If no interection
 // is detected, hit->dist should be set to FLT_MAX
 void getIntersection(const float4 rayOrigin, const float4 rayDir, uint numPrimitives, image1d_t packedPrimitives, Hit *hit){
@@ -198,32 +232,45 @@ void getIntersection(const float4 rayOrigin, const float4 rayDir, uint numPrimit
 	float dist;
 	float4 normal;
 	float4 hitPoint;
+	float4 origin, extents;
+	float2 uv;
 	for(int primIndex=0;primIndex<numPrimitives;primIndex++){
 		// Get primitive type and material index
 		// x: primitive type
 		// y: material index
-		float4 primInfo = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,0));
-
-		// Get primitive origin and dimensions
-		float4 origin = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,1));
-		float4 extents = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,2));
+		float4 primInfo = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,0));
 
 		// Check for ray-primitive intersection
 		switch(uint(primInfo.x)) {
 			case PRIMITIVE_PLANE:
-				dist = intersectPlane(rayOrigin, rayDir, origin, extents.x);
+				// Get primitive origin and dimensions
+				origin = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,1));
+				extents = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,2));
+
+				dist = intersectPlane(rayOrigin, rayDir, origin.xyz, extents.x);
 				hitPoint = rayOrigin + rayDir * dist;
 				normal = origin;
 				break;
 			case PRIMITIVE_SPHERE:
+				// Get primitive origin and dimensions
+				origin = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,1));
+				extents = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,2));
+
 				dist = intersectSphere(rayOrigin, rayDir, origin, extents.x);
 				hitPoint = rayOrigin + rayDir * dist;
 				normal = normalize(hitPoint - origin);
 				break;
 			case PRIMITIVE_BOX:
+				// Get primitive origin and dimensions
+				origin = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,1));
+				extents = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,2));
+
 				dist = intersectBox(rayOrigin, rayDir, origin, extents);
 				hitPoint = rayOrigin + rayDir * dist;
 				normal = aabbNormal(hitPoint, origin, extents);
+				break;
+			case PRIMITIVE_TRIANGE:
+				dist = intersectTriangle(rayOrigin, rayDir, primIndex, packedPrimitives, &hitPoint, &normal, &uv);
 				break;
 		}
 
@@ -249,12 +296,12 @@ float4 getDirectLight(Hit *hit, int numPrimitives, image1d_t packedPrimitives, i
 		// x: primitive type
 		// y: material index
 		// z: 1 if this is a light
-		float4 primInfo = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,0));
+		float4 primInfo = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,0));
 		if(primInfo.z != 1.0f){
 			continue;
 		}
 
-		float4 origin = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,1));
+		float4 origin = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,1));
 		float4 lightDir = origin - hit->position;
 
 		// Early rejection for back-facing surfaces
@@ -262,7 +309,7 @@ float4 getDirectLight(Hit *hit, int numPrimitives, image1d_t packedPrimitives, i
 			continue;
 		}
 
-		float4 extents = read_imagef(packedPrimitives, dataSampler, DATA_OFFSET(primIndex,2));
+		float4 extents = read_imagef(packedPrimitives, dataSampler, PRIM_OFFSET(primIndex,2));
 
 		// Treat the light as a sphere with radius the largest dimension; then
 		// generate a lightDir vector to its center and a tangent vector so as to
@@ -292,7 +339,7 @@ float4 getDirectLight(Hit *hit, int numPrimitives, image1d_t packedPrimitives, i
 		}
 
 		// Radiance = 1/pi * cos(theta) * emissive * PDF
-		float4 emissive = read_imagef(packedMaterials, dataSampler, DATA_OFFSET(primInfo.y, 2));
+		float4 emissive = read_imagef(packedMaterials, dataSampler, MAT_OFFSET(primInfo.y, 2));
 		light += emissive * pdf;
 
 
@@ -319,20 +366,20 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, int numPrimitives, image1d_t pa
 			}
 			break;
 		}
-
+		
 		// Get material properties
-		materialProps = read_imagef(packedMaterials, dataSampler, DATA_OFFSET(hit.material, 0));
+		materialProps = read_imagef(packedMaterials, dataSampler, MAT_OFFSET(hit.material, 0));
 
 		// If we hit a light just add its emissive property and stop
 		if( materialProps.x == MATERIAL_EMISSIVE ){
 			if ( !hitDiffuseObject ){
-				rCol += mask * read_imagef(packedMaterials, dataSampler, DATA_OFFSET(hit.material, 2));
+				rCol += mask * read_imagef(packedMaterials, dataSampler, MAT_OFFSET(hit.material, 2));
 			}
 			break;
 		}
 
 		// Fetch diffuse color
-		diffuse = read_imagef(packedMaterials, dataSampler, DATA_OFFSET(hit.material, 1));
+		diffuse = read_imagef(packedMaterials, dataSampler, MAT_OFFSET(hit.material, 1));
 
 		// After some bounces apply a russian roulette to terminate long paths
 		if( bounce > MIN_BOUNCES_TO_USE_RR ) {

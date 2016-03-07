@@ -441,7 +441,7 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 		tr.packedMaterials = cl.CreateImage(
 			*tr.ctx,
 			cl.MEM_READ_ONLY|cl.MEM_COPY_HOST_PTR,
-			cl.ImageFormat{cl.RGBA, cl.FLOAT}, // 12 bytes per pixel
+			cl.ImageFormat{cl.RGBA, cl.FLOAT}, // 16 bytes per pixel
 			cl.ImageDesc{
 				ImageType:     cl.MEM_OBJECT_IMAGE1D,
 				ImageWidth:    sizeInBytes >> 4,

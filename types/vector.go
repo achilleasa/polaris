@@ -30,6 +30,11 @@ func (v Vec3) Vec4(w float32) Vec4 {
 	return Vec4{v[0], v[1], v[2], w}
 }
 
+// Add a vector.
+func (v Vec3) Add(v2 Vec3) Vec3 {
+	return Vec3{v[0] + v2[0], v[1] + v2[1], v[2] + v2[2]}
+}
+
 // Subtract a vector.
 func (v Vec3) Sub(v2 Vec3) Vec3 {
 	return Vec3{v[0] - v2[0], v[1] - v2[1], v[2] - v2[2]}
@@ -57,6 +62,11 @@ func (v Vec3) Normalize() Vec3 {
 // Calculate dot product of 2 vectors
 func (v Vec2) Dot(v2 Vec2) float32 {
 	return v[0]*v2[0] + v[1]*v2[1]
+}
+
+// Calculate dot product of 2 vectors
+func (v Vec3) Dot(v2 Vec3) float32 {
+	return v[0]*v2[0] + v[1]*v2[1] + v[2]*v2[2]
 }
 
 // Calculate cross product of 2 vectors.

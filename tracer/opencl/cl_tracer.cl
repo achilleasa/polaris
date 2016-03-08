@@ -392,7 +392,7 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, int numPrimitives, int numEmiss
 
 		// Get material properties
 		materialProps = read_imagef(materials, dataSampler, MAT_OFFSET(hit.material, 0));
-		
+
 		// If we hit a light just add its emissive property and stop
 		if( materialProps.x == MATERIAL_EMISSIVE ){
 			if ( !hitDiffuseObject ){
@@ -432,6 +432,11 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, int numPrimitives, int numEmiss
 			// Reflect ray around normal
 			rayOrigin = hit.position + hit.normal * NUDGE_EPSILON;
 			rayDir = normalize(-2.0f * dot(hit.normal, rayDir) * hit.normal + rayDir);
+
+			// If a non-zero roughness value is specified, take a cone-sample instead
+			if( materialProps.z > 0.0f){
+				rayDir = rndConeDir(rayDir, 1.0f - materialProps.z, rndSeed);
+			}
 		} else if (materialProps.x == MATERIAL_REFRACTIVE){
 			// Mask outgoing reflectance by material diffuse property
 			mask *= diffuse;
@@ -452,11 +457,19 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, int numPrimitives, int numEmiss
 			eta = nc / nt;
 			float cos2t = 1.0f - eta * eta * (1.0f - ddn*ddn);
 
+			// Calc reflection ray
+			float4 reflRay = normalize(rayDir - 2.0f * hit.normal * dot(hit.normal, rayDir));
+
+			// If a non-zero roughness value is specified, take a cone-sample instead
+			if( materialProps.z > 0.0f){
+				reflRay = rndConeDir(reflRay, 1.0f - materialProps.z, rndSeed);
+			}
+
 			// Total internal reflection
 			if( cos2t < 0.0f){
 				// Reflect ray around normal
 				rayOrigin = hit.position + nl * NUDGE_EPSILON;
-				rayDir = normalize(rayDir - 2.0f * hit.normal * dot(hit.normal, rayDir));
+				rayDir = reflRay;
 			} else {
 				// Compute transmission ray dir
 				float4 transDir = normalize(rayDir * eta - hit.normal * ((into ? 1.0f : -1.0f) * (ddn*eta + sqrt(cos2t))));
@@ -481,7 +494,7 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, int numPrimitives, int numEmiss
 
 					// Reflect ray around normal
 					rayOrigin = hit.position + nl * SNAP_EPSILON;
-					rayDir = normalize(rayDir - 2.0f * hit.normal * dot(hit.normal, rayDir));
+					rayDir = reflRay;
 				} else {
 					mask *= tp;
 					rayOrigin = hit.position - nl * SNAP_EPSILON;

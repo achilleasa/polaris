@@ -45,9 +45,10 @@ type clTracer struct {
 	traceOutput     cl.Mem
 	frustrumCorners cl.Mem
 
-	// Device 1D images where the packed scene materials and primitives are stored.
-	packedMaterials  cl.Mem
-	packedPrimitives cl.Mem
+	// Device 1D images where the packed scene data is stored
+	packedMaterials       cl.Mem
+	packedPrimitives      cl.Mem
+	packedEmissiveIndices cl.Mem
 
 	// The scene to be rendered.
 	scene *scene.Scene
@@ -251,6 +252,7 @@ func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 		tr.logger.Printf("Failed to write kernel arg 1")
 		return ErrSettingKernelArguments
 	}
+	// Scene data
 	errCode = cl.SetKernelArg(tr.traceKernel, 2, 8, unsafe.Pointer(&tr.packedPrimitives))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 2")
@@ -261,35 +263,47 @@ func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 		tr.logger.Printf("Failed to write kernel arg 3")
 		return ErrSettingKernelArguments
 	}
-	numPrimitives := len(tr.scene.Primitives)
-	errCode = cl.SetKernelArg(tr.traceKernel, 4, 4, unsafe.Pointer(&numPrimitives))
+	errCode = cl.SetKernelArg(tr.traceKernel, 4, 8, unsafe.Pointer(&tr.packedEmissiveIndices))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 4")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 5, 16, unsafe.Pointer(&eyePos[0]))
+	numPrimitives := len(tr.scene.Primitives)
+	errCode = cl.SetKernelArg(tr.traceKernel, 5, 4, unsafe.Pointer(&numPrimitives))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 5")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 6, 4, unsafe.Pointer(&blockReq.BlockY))
+	numIndices := len(tr.scene.EmissivePrimitiveIndices)
+	errCode = cl.SetKernelArg(tr.traceKernel, 6, 4, unsafe.Pointer(&numIndices))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 6")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 7, 4, unsafe.Pointer(&blockReq.SamplesPerPixel))
+	// Other params
+	errCode = cl.SetKernelArg(tr.traceKernel, 7, 16, unsafe.Pointer(&eyePos[0]))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 7")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 8, 4, unsafe.Pointer(&blockReq.Exposure))
+	errCode = cl.SetKernelArg(tr.traceKernel, 8, 4, unsafe.Pointer(&blockReq.BlockY))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 8")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 9, 4, unsafe.Pointer(&blockReq.Seed))
+	errCode = cl.SetKernelArg(tr.traceKernel, 9, 4, unsafe.Pointer(&blockReq.SamplesPerPixel))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 9")
+		return ErrSettingKernelArguments
+	}
+	errCode = cl.SetKernelArg(tr.traceKernel, 10, 4, unsafe.Pointer(&blockReq.Exposure))
+	if errCode != cl.SUCCESS {
+		tr.logger.Printf("Failed to write kernel arg 10")
+		return ErrSettingKernelArguments
+	}
+	errCode = cl.SetKernelArg(tr.traceKernel, 11, 4, unsafe.Pointer(&blockReq.Seed))
+	if errCode != cl.SUCCESS {
+		tr.logger.Printf("Failed to write kernel arg 11")
 		return ErrSettingKernelArguments
 	}
 
@@ -428,16 +442,9 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 		return ErrAllocatingBuffers
 	}
 
-	// Pack scene data
-	packedMaterials, packedPrimitives, err := packScene(tr.scene)
-	if err != nil {
-		tr.cleanup(false)
-		return err
-	}
-
 	// Allocate opencl images for packed data and upload it to device
-	if len(packedMaterials) > 0 {
-		sizeInBytes := uint64(uint64(len(packedMaterials)) * uint64(unsafe.Sizeof(packedMaterials[0])))
+	if len(sc.Materials) > 0 {
+		sizeInBytes := uint64(uint64(len(sc.Materials)) * uint64(unsafe.Sizeof(sc.Materials[0])))
 		tr.packedMaterials = cl.CreateImage(
 			*tr.ctx,
 			cl.MEM_READ_ONLY|cl.MEM_COPY_HOST_PTR,
@@ -447,7 +454,7 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 				ImageWidth:    sizeInBytes >> 4,
 				ImageRowPitch: sizeInBytes,
 			},
-			unsafe.Pointer(&packedMaterials[0]),
+			unsafe.Pointer(&sc.Materials[0]),
 			errPtr,
 		)
 		if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
@@ -455,8 +462,8 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 			return ErrAllocatingBuffers
 		}
 	}
-	if len(packedPrimitives) > 0 {
-		sizeInBytes := uint64(uint64(len(packedPrimitives)) * uint64(unsafe.Sizeof(packedPrimitives[0])))
+	if len(sc.Primitives) > 0 {
+		sizeInBytes := uint64(uint64(len(sc.Primitives)) * uint64(unsafe.Sizeof(sc.Primitives[0])))
 		tr.packedPrimitives = cl.CreateImage(
 			*tr.ctx,
 			cl.MEM_READ_ONLY|cl.MEM_COPY_HOST_PTR,
@@ -466,7 +473,26 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 				ImageWidth:    sizeInBytes >> 4,
 				ImageRowPitch: sizeInBytes,
 			},
-			unsafe.Pointer(&packedPrimitives[0]),
+			unsafe.Pointer(&sc.Primitives[0]),
+			errPtr,
+		)
+		if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
+			tr.cleanup(false)
+			return ErrAllocatingBuffers
+		}
+	}
+	if len(sc.EmissivePrimitiveIndices) > 0 {
+		sizeInBytes := uint64(uint64(len(sc.EmissivePrimitiveIndices)) * uint64(unsafe.Sizeof(sc.EmissivePrimitiveIndices[0])))
+		tr.packedEmissiveIndices = cl.CreateImage(
+			*tr.ctx,
+			cl.MEM_READ_ONLY|cl.MEM_COPY_HOST_PTR,
+			cl.ImageFormat{cl.R, cl.UNSIGNED_INT32}, // 4 bytes per pixel
+			cl.ImageDesc{
+				ImageType:     cl.MEM_OBJECT_IMAGE1D,
+				ImageWidth:    sizeInBytes >> 2,
+				ImageRowPitch: sizeInBytes,
+			},
+			unsafe.Pointer(&sc.EmissivePrimitiveIndices[0]),
 			errPtr,
 		)
 		if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {

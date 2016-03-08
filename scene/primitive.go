@@ -2,73 +2,72 @@ package scene
 
 import "github.com/achilleasa/go-pathtrace/types"
 
-type PrimitiveType uint32
-
 const (
-	PlanePrimitive PrimitiveType = iota
-	SpherePrimitive
-	BoxPrimitive
-	TrianglePrimitive
+	planePrimitive float32 = iota
+	spherePrimitive
+	boxPrimitive
+	trianglePrimitive
 )
 
-// Defines a scene primitive.
+// Internal representation of scene primitive. Each primitive is represented
+// by 128 bytes. The Primitive struct works like a C union; field contents
+// depend on the primitive type.
 type Primitive struct {
-	// The primitive type.
-	Type PrimitiveType
+	// Primitive properties
+	// x: primitive type
+	// y: material index
+	properties types.Vec4
 
-	// The primitive origin.
-	Origin types.Vec3
+	// If solid, this is its origin. If triangle, this is its center
+	// (and w coordinate stores max distance to vertices)
+	center types.Vec4
 
-	// Primitive dimensions. Stored as a Vec3 but the dimension component
-	// count varies depending on primitive type.
-	Dimensions types.Vec3
+	// If solid, this is its extends/dimensions. If triangle, this is its normal plane
+	normal types.Vec4
 
-	// Triangle primitive center, normal-, edge-planes and uv coords
-	TriCenter types.Vec4
-	TriNormal types.Vec4
-	TriEdge   [3]types.Vec4
-	UV        [3]types.Vec2
+	// Precalculated triangle edge planes
+	edge1 types.Vec4
+	edge2 types.Vec4
+	edge3 types.Vec4
 
-	// The primitive material. Must be added to the scene before the primitive
-	Material *Material
+	// Uv coords for each triangle vertex.
+	// UV1( u1, v1, u2, v2 )
+	// UV2( u3, v3, unused, unused )
+	uv1 types.Vec4
+	uv2 types.Vec4
 }
 
 // Create new plane primitive
-func NewPlane(origin types.Vec3, planeDist float32, material *Material) *Primitive {
+func NewPlane(origin types.Vec3, planeDist float32) *Primitive {
 	return &Primitive{
-		Type:       PlanePrimitive,
-		Origin:     origin.Normalize(),
-		Dimensions: types.Vec3{planeDist},
-		Material:   material,
+		properties: types.Vec4{planePrimitive},
+		center:     origin.Vec4(0),
+		normal:     types.Vec4{planeDist},
 	}
 }
 
 // Create new sphere primitive.
-func NewSphere(origin types.Vec3, radius float32, material *Material) *Primitive {
+func NewSphere(origin types.Vec3, radius float32) *Primitive {
 	return &Primitive{
-		Type:       SpherePrimitive,
-		Origin:     origin,
-		Dimensions: types.Vec3{radius},
-		Material:   material,
+		properties: types.Vec4{spherePrimitive},
+		center:     origin.Vec4(0),
+		normal:     types.Vec4{radius},
 	}
 }
 
 // Create new box primitive.
-func NewBox(origin types.Vec3, dims types.Vec3, material *Material) *Primitive {
+func NewBox(origin types.Vec3, dims types.Vec3) *Primitive {
 	return &Primitive{
-		Type:       BoxPrimitive,
-		Origin:     origin,
-		Dimensions: dims,
-		Material:   material,
+		properties: types.Vec4{boxPrimitive},
+		center:     origin.Vec4(0),
+		normal:     dims.Vec4(0),
 	}
 }
 
 // Create new triangle primitive. Vertices should be specified in clockwise order.
-func NewTriangle(vertices [3]types.Vec3, uv [3]types.Vec2, material *Material) *Primitive {
+func NewTriangle(vertices [3]types.Vec3, uv [3]types.Vec2) *Primitive {
 	prim := &Primitive{
-		Type:     TrianglePrimitive,
-		Material: material,
-		UV:       uv,
+		properties: types.Vec4{trianglePrimitive},
 	}
 
 	// Calc center and max distance
@@ -82,7 +81,7 @@ func NewTriangle(vertices [3]types.Vec3, uv [3]types.Vec2, material *Material) *
 	if d > maxDist {
 		maxDist = d
 	}
-	prim.TriCenter = center.Vec4(maxDist)
+	prim.center = center.Vec4(maxDist)
 
 	// Create triangle edges
 	e1 := vertices[1].Sub(vertices[0])
@@ -92,7 +91,7 @@ func NewTriangle(vertices [3]types.Vec3, uv [3]types.Vec2, material *Material) *
 	// Calc normal plane by taking the cross product of two edges
 	// and then the dot product with the third vertice to get the plane dist
 	normal := e1.Cross(e2).Normalize()
-	prim.TriNormal = normal.Vec4(normal.Dot(vertices[0]))
+	prim.normal = normal.Vec4(normal.Dot(vertices[0]))
 
 	// Calc 3 edge planes
 	e1p := normal.Cross(e1).Normalize()
@@ -100,8 +99,13 @@ func NewTriangle(vertices [3]types.Vec3, uv [3]types.Vec2, material *Material) *
 	e3p := normal.Cross(e3).Normalize()
 
 	// Calculate edge planes
-	prim.TriEdge[0] = e1p.Vec4(e1p.Dot(vertices[0]))
-	prim.TriEdge[1] = e2p.Vec4(e2p.Dot(vertices[1]))
-	prim.TriEdge[2] = e3p.Vec4(e3p.Dot(vertices[2]))
+	prim.edge1 = e1p.Vec4(e1p.Dot(vertices[0]))
+	prim.edge2 = e2p.Vec4(e2p.Dot(vertices[1]))
+	prim.edge3 = e3p.Vec4(e3p.Dot(vertices[2]))
+
+	// Package UV coords for vertices
+	prim.uv1 = types.Vec4{uv[0][0], uv[0][1], uv[1][0], uv[1][1]}
+	prim.uv2 = types.Vec4{uv[2][0], uv[2][1]}
+
 	return prim
 }

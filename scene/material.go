@@ -2,26 +2,56 @@ package scene
 
 import "github.com/achilleasa/go-pathtrace/types"
 
-type MaterialType uint8
-
 const (
-	DiffuseMaterial MaterialType = iota
-	SpecularMaterial
-	RefractiveMaterial
-	EmissiveMaterial
+	diffuseMaterial float32 = iota
+	specularMaterial
+	refractiveMaterial
+	emissiveMaterial
 )
 
-// Defines a scene material.
+// Internal material representation. Materials are packed to 48 bytes
 type Material struct {
-	// The type of the material.
-	Type MaterialType
+	// Material properties:
+	// x: surface type
+	// y: IOR (refractive materials)
+	// z: specular roughness (when set to 0 this amounts to ideal specular reflection)
+	properties types.Vec4
 
 	// Diffuse color.
-	Diffuse types.Vec3
+	diffuse types.Vec4
 
-	// Emissive color (if material is light).
-	Emissive types.Vec3
+	// Emissive color (if surface emits light).
+	emissive types.Vec4
+}
 
-	// Index of refraction (refractive materials only)
-	IOR float32
+// Define a new diffuse material
+func DiffuseMaterial(color types.Vec3) *Material {
+	return &Material{
+		properties: types.Vec4{diffuseMaterial},
+		diffuse:    color.Vec4(0),
+	}
+}
+
+// Define a new specular material
+func SpecularMaterial(color types.Vec3, roughness float32) *Material {
+	return &Material{
+		properties: types.Vec4{specularMaterial, 0, roughness},
+		diffuse:    color.Vec4(0),
+	}
+}
+
+// Define a new refractive material
+func RefractiveMaterial(color types.Vec3, IOR float32, roughness float32) *Material {
+	return &Material{
+		properties: types.Vec4{refractiveMaterial, IOR, roughness},
+		diffuse:    color.Vec4(0),
+	}
+}
+
+// Emissive material
+func EmissiveMaterial(emissive types.Vec3) *Material {
+	return &Material{
+		properties: types.Vec4{emissiveMaterial},
+		emissive:   emissive.Vec4(0),
+	}
 }

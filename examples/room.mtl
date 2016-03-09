@@ -1,0 +1,24 @@
+newmtl light
+stype emissive
+Ke 50.0 50.0 50.0
+
+newmtl left
+Kd 0.75 0.25 0.25
+
+newmtl right
+Kd 0.25 0.25 0.75
+
+# top - bottom and back walls
+newmtl tbb
+Kd 0.75 0.75 0.75
+
+newmtl mirror
+stype specular
+Kd 0.999 0.999 0.999
+# roughness 0
+
+newmtl glass
+stype refractive
+Kd 0.999 0.999 0.999
+ior 1.5
+# roughness 0

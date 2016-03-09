@@ -1,0 +1,40 @@
+mtllib room.mtl
+
+# Camera params
+camera_fov  45.0
+camera_exposure 1.0
+camera_eye  1.0 1.0 1.0
+camera_look 1.0 1.0 0   
+camera_up   0.0 1.0 0.0
+
+usemtl light
+sphere 1.0 1.3 -1.0    0.1
+
+usemtl left
+box -0.1 0.0 0.0  0.0 2.0 -2.0
+
+usemtl right
+box 2.0 0.0 0.0   2.1 2.0 -2.0
+
+usemtl tbb
+# top
+box 0.0 2.0 0.0   2.0 2.1 -2.0
+
+# bottom
+box 0.0 0.0 0.0   2.0 -0.1 -2.0
+
+# back
+box 0.0 0.0 -2.0  2.0 2.0 -2.1
+
+usemtl mirror
+sphere 0.5 0.3 -1.5    0.3
+
+usemtl glass
+sphere 1.5 0.3 -1.1    0.3
+
+# Triangle
+usemtl left
+v 0.7 0.7 -1.5
+v 1.3 0.7 -1.5
+v 1.0 1.1 -1.5
+f 1 2 3

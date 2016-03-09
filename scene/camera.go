@@ -28,16 +28,26 @@ type Camera struct {
 	ProjMat  types.Mat4
 	Frustrum Frustrum
 
+	// Camera FOV
+	FOV float32
+
 	// The exposure parameter controls tone-mapping for the rendered frame
 	Exposure float32
 }
 
-func NewCamera(fov, aspect, exposure float32) *Camera {
+func NewCamera(fov, exposure float32) *Camera {
 	return &Camera{
 		ViewMat:  types.Ident4(),
-		ProjMat:  types.Perspective4(fov, aspect, 1, 1000),
+		ProjMat:  types.Ident4(),
+		FOV:      fov,
 		Exposure: exposure,
 	}
+}
+
+// Setup camera projection matrix.
+func (c *Camera) SetupProjection(aspect float32) {
+	c.ProjMat = types.Perspective4(c.FOV, aspect, 1, 1000)
+	c.updateFrustrum()
 }
 
 // Setup a camera origin and lookat point.

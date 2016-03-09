@@ -79,6 +79,36 @@ func (v Vec4) Vec3() Vec3 {
 	return Vec3{v[0], v[1], v[2]}
 }
 
+// Calc min component from two vectors
+func MinVec3(v1, v2 Vec3) Vec3 {
+	out := v1
+	if v2[0] < out[0] {
+		out[0] = v2[0]
+	}
+	if v2[1] < out[1] {
+		out[1] = v2[1]
+	}
+	if v2[2] < out[2] {
+		out[2] = v2[2]
+	}
+	return out
+}
+
+// Calc maxcomponent from two vectors
+func MaxVec3(v1, v2 Vec3) Vec3 {
+	out := v1
+	if v2[0] > out[0] {
+		out[0] = v2[0]
+	}
+	if v2[1] > out[1] {
+		out[1] = v2[1]
+	}
+	if v2[2] > out[2] {
+		out[2] = v2[2]
+	}
+	return out
+}
+
 // Subtract a vector.
 func (v Vec4) Sub(v2 Vec4) Vec4 {
 	return Vec4{v[0] - v2[0], v[1] - v2[1], v[2] - v2[2], v[3] - v2[3]}

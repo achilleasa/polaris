@@ -265,7 +265,7 @@ func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 	}
 	errCode = cl.SetKernelArg(tr.traceKernel, 4, 8, unsafe.Pointer(&tr.packedEmissiveIndices))
 	if errCode != cl.SUCCESS {
-		tr.logger.Printf("Failed to write kernel arg 4")
+		tr.logger.Printf("Failed to write kernel arg 4 (err: %d)", errCode)
 		return ErrSettingKernelArguments
 	}
 	numPrimitives := len(tr.scene.Primitives)
@@ -430,14 +430,14 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 	// Allocate an output buffer large enough to fit a full frame even
 	// though it will never be fully used if more than one tracers are used.
 	tr.traceOutput = cl.CreateBuffer(*tr.ctx, cl.MEM_WRITE_ONLY, cl.MemFlags(4*4*frameW*frameH), nil, errPtr)
-	if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
+	if tr.traceOutput == nil || (errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS) {
 		tr.cleanup(false)
 		return ErrAllocatingBuffers
 	}
 
 	// Allocate buffer for passing frustrum corners (4 x Vec4 = 64 bytes)
 	tr.frustrumCorners = cl.CreateBuffer(*tr.ctx, cl.MEM_READ_ONLY, 4*4*4, nil, errPtr)
-	if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
+	if tr.frustrumCorners == nil || (errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS) {
 		tr.cleanup(false)
 		return ErrAllocatingBuffers
 	}
@@ -457,7 +457,7 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 			unsafe.Pointer(&sc.Materials[0]),
 			errPtr,
 		)
-		if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
+		if tr.packedMaterials == nil || (errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS) {
 			tr.cleanup(false)
 			return ErrAllocatingBuffers
 		}
@@ -476,26 +476,21 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 			unsafe.Pointer(&sc.Primitives[0]),
 			errPtr,
 		)
-		if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
+		if tr.packedPrimitives == nil || (errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS) {
 			tr.cleanup(false)
 			return ErrAllocatingBuffers
 		}
 	}
 	if len(sc.EmissivePrimitiveIndices) > 0 {
 		sizeInBytes := uint64(uint64(len(sc.EmissivePrimitiveIndices)) * uint64(unsafe.Sizeof(sc.EmissivePrimitiveIndices[0])))
-		tr.packedEmissiveIndices = cl.CreateImage(
+		tr.packedEmissiveIndices = cl.CreateBuffer(
 			*tr.ctx,
 			cl.MEM_READ_ONLY|cl.MEM_COPY_HOST_PTR,
-			cl.ImageFormat{cl.R, cl.UNSIGNED_INT32}, // 4 bytes per pixel
-			cl.ImageDesc{
-				ImageType:     cl.MEM_OBJECT_IMAGE1D,
-				ImageWidth:    sizeInBytes >> 2,
-				ImageRowPitch: sizeInBytes,
-			},
+			cl.MemFlags(sizeInBytes),
 			unsafe.Pointer(&sc.EmissivePrimitiveIndices[0]),
 			errPtr,
 		)
-		if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
+		if tr.packedEmissiveIndices == nil || (errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS) {
 			tr.cleanup(false)
 			return ErrAllocatingBuffers
 		}

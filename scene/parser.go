@@ -3,6 +3,7 @@ package scene
 import (
 	"bufio"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,8 +19,8 @@ type asciiScene struct {
 	cameraLook     types.Vec3
 	cameraUp       types.Vec3
 
-	// List of scene primitives.
-	primitives []*Primitive
+	// List of wrapped scene primitives.
+	primitives []*boundedPrimitive
 
 	// A map of material names to material instances. This map contains
 	// all materials available in a material library.
@@ -55,7 +56,7 @@ func Parse(filename string) (*Scene, error) {
 			cameraLook:     types.Vec3{0.0, 0.0, -1.0},
 			cameraUp:       types.Vec3{0.0, 1.0, 0.0},
 			// Init other containers
-			primitives:          make([]*Primitive, 0),
+			primitives:          make([]*boundedPrimitive, 0),
 			availableMaterials:  make(map[string]*Material, 0),
 			referencedMaterials: make(map[string]int, 0),
 			usedMaterials:       make([]*Material, 0),
@@ -125,13 +126,15 @@ func (as *asciiScene) Scene() *Scene {
 	}
 
 	// Package primitives and build emissive primitive list
-	for idx, prim := range as.primitives {
-		sc.Primitives[idx] = *prim
-		matIndex := int(prim.properties[1])
+	for idx, wrappedPrim := range as.primitives {
+		sc.Primitives[idx] = *wrappedPrim.primitive
+		matIndex := int(wrappedPrim.primitive.properties[1])
 		if sc.Materials[matIndex].properties[0] == emissiveMaterial {
 			sc.EmissivePrimitiveIndices = append(sc.EmissivePrimitiveIndices, idx)
 		}
 	}
+
+	buildBVH(as.primitives, 1)
 
 	return sc
 }
@@ -341,9 +344,21 @@ func (as *asciiScene) Parse(filename string) error {
 				as.curMaterial = as.defaultMaterialIndex()
 			}
 
+			// Create primitive and assign material
 			prim := NewTriangle(vertices, uv)
 			prim.properties[1] = float32(as.curMaterial)
-			as.primitives = append(as.primitives, prim)
+
+			// Calc bbox
+			bboxMin := types.MinVec3(types.MinVec3(vertices[0], vertices[1]), vertices[2])
+			bboxMax := types.MaxVec3(types.MaxVec3(vertices[0], vertices[1]), vertices[2])
+
+			// Append wrapped primitive
+			as.primitives = append(as.primitives, &boundedPrimitive{
+				min:       bboxMin,
+				max:       bboxMax,
+				center:    prim.center.Vec3(),
+				primitive: prim,
+			})
 		case "plane":
 			if len(lineTokens) != 5 {
 				return as.emitError(filename, lineNum, "unsupported syntax for 'plane'; expected 4 arguments (x, y, z, D); got %d", len(lineTokens)-1)
@@ -363,9 +378,21 @@ func (as *asciiScene) Parse(filename string) error {
 				as.curMaterial = as.defaultMaterialIndex()
 			}
 
+			// Create primitive and assign material
 			prim := NewPlane(v.Vec3(), v[3])
 			prim.properties[1] = float32(as.curMaterial)
-			as.primitives = append(as.primitives, prim)
+
+			// Calc bbox
+			bboxMin := types.Vec3{-math.MaxFloat32, -math.MaxFloat32, -math.MaxFloat32}
+			bboxMax := types.Vec3{math.MaxFloat32, math.MaxFloat32, math.MaxFloat32}
+
+			// Append wrapped primitive
+			as.primitives = append(as.primitives, &boundedPrimitive{
+				min:       bboxMin,
+				max:       bboxMax,
+				center:    prim.center.Vec3(),
+				primitive: prim,
+			})
 		case "sphere":
 			if len(lineTokens) != 5 {
 				return as.emitError(filename, lineNum, "unsupported syntax for 'sphere'; expected 4 arguments (x, y, z, radius); got %d", len(lineTokens)-1)
@@ -385,9 +412,22 @@ func (as *asciiScene) Parse(filename string) error {
 				as.curMaterial = as.defaultMaterialIndex()
 			}
 
+			// Create primitive and assign material
 			prim := NewSphere(v.Vec3(), v[3])
 			prim.properties[1] = float32(as.curMaterial)
-			as.primitives = append(as.primitives, prim)
+
+			// Calc bbox
+			rvec := types.Vec3{v[3], v[3], v[3]}
+			bboxMin := v.Vec3().Sub(rvec)
+			bboxMax := v.Vec3().Add(rvec)
+
+			// Append wrapped primitive
+			as.primitives = append(as.primitives, &boundedPrimitive{
+				min:       bboxMin,
+				max:       bboxMax,
+				center:    v.Vec3(),
+				primitive: prim,
+			})
 		case "box":
 			if len(lineTokens) != 7 {
 				return as.emitError(filename, lineNum, "unsupported syntax for 'box'; expected 6 arguments (xmin, ymin, zmin, xmax, ymax, zmax); got %d", len(lineTokens)-1)
@@ -415,9 +455,22 @@ func (as *asciiScene) Parse(filename string) error {
 			if as.curMaterial < 0 {
 				as.curMaterial = as.defaultMaterialIndex()
 			}
+
+			// Create primitive and assign material
 			prim := NewBox(bmin, bmax)
 			prim.properties[1] = float32(as.curMaterial)
-			as.primitives = append(as.primitives, prim)
+
+			// Calc bbox
+			bboxMin := types.MinVec3(bmin, bmax)
+			bboxMax := types.MaxVec3(bmin, bmax)
+
+			// Append wrapped primitive
+			as.primitives = append(as.primitives, &boundedPrimitive{
+				min:       bboxMin,
+				max:       bboxMax,
+				center:    bboxMin.Add(bboxMax).Mul(0.5),
+				primitive: prim},
+			)
 		case "camera_fov":
 			if len(lineTokens) != 2 {
 				return as.emitError(filename, lineNum, "unsupported syntax for 'camera_fov'; expected 1 argument; got %d", len(lineTokens)-1)

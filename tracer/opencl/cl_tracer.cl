@@ -287,7 +287,7 @@ void getIntersection(const float4 rayOrigin, const float4 rayDir, uint numPrimit
 }
 
 // Collect direct light at hit point.
-float4 getDirectLight(Hit *hit, int numPrimitives, int numEmissiveIndices, image1d_t primitives, image1d_t materials, image1d_t emissiveIndices, uint2 *rndSeed){
+float4 getDirectLight(Hit *hit, int numPrimitives, int numEmissiveIndices, image1d_t primitives, image1d_t materials, __global uint* emissiveIndices, uint2 *rndSeed){
 	float4 light = 0.0f;
 	float4 shadowRayOrigin = hit->position + hit->normal * NUDGE_EPSILON;
 	Hit shadowHit;
@@ -295,7 +295,7 @@ float4 getDirectLight(Hit *hit, int numPrimitives, int numEmissiveIndices, image
 	for(int index=0;index<numEmissiveIndices;index++){
 
 		// Fetch primitive index for emissive surface
-		primIndex = read_imageui(emissiveIndices, dataSampler, index).x;
+		primIndex = emissiveIndices[index];
 
 		// Get primitive type and material index
 		// x: primitive type
@@ -371,7 +371,7 @@ float4 getDirectLight(Hit *hit, int numPrimitives, int numEmissiveIndices, image
 }
 
 // Trace a ray and return the gathered color.
-float4 traceRay(float4 rayOrigin, float4 rayDir, int numPrimitives, int numEmissiveIndices, image1d_t primitives, image1d_t materials, image1d_t emissiveIndices, uint2 *rndSeed){
+float4 traceRay(float4 rayOrigin, float4 rayDir, int numPrimitives, int numEmissiveIndices, image1d_t primitives, image1d_t materials, __global uint *emissiveIndices, uint2 *rndSeed){
 	Hit hit;
 	float4 rCol = (float4)(0.0f);
 	float4 mask = (float4)(1.0f);
@@ -513,7 +513,7 @@ __kernel void tracePixel(
 		__global float4 *frustrumCorners,
 		image1d_t primitives,
 		image1d_t materials,
-		image1d_t emissiveIndices,
+		__global uint *emissiveIndices,
 		const int numPrimitives,
 		const int numEmissiveIndices,
 		const float4 eyePos,

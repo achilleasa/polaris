@@ -13,6 +13,12 @@ type Reader interface {
 	Read() (*scene.Scene, error)
 }
 
+// The Writer interface is implemented by all scene writers.
+type Writer interface {
+	// Write scene definition
+	Write(*scene.Scene) error
+}
+
 // Read scene from file.
 func ReadScene(filename string) (*scene.Scene, error) {
 	var reader Reader
@@ -24,4 +30,10 @@ func ReadScene(filename string) (*scene.Scene, error) {
 		return nil, fmt.Errorf("readScene: unsupported file format")
 	}
 	return reader.Read()
+}
+
+// Write scene to binary format.
+func WriteScene(sc *scene.Scene, filename string) error {
+	writer := newZipSceneWriter(filename)
+	return writer.Write(sc)
 }

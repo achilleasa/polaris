@@ -7,13 +7,14 @@
 #define TEXEL_STEP_X 1.0f / 512.0f
 #define TEXEL_STEP_Y 1.0f / 512.0f
 
-#define DEBUG (get_global_id(0)==0 && get_global_id(1)==0)
+#define DEBUG (get_global_id(0)==256 && get_global_id(1)==256)
 
 // Render options
 #define COS_WEIGHTED_LIGHT_SAMPLING
 //#define CONE_LIGHT_SAMPLING
 
 // Limits
+#define MAX_BVH_STACK_SIZE 32
 #define MAX_BOUNCES 4 // iris pro compilation runs out of memory if set to > 5
 #define MIN_BOUNCES_TO_USE_RR 3
 
@@ -47,8 +48,10 @@ const sampler_t dataSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_NONE | C
 // Data offset calculators. Buffers are stored as RGBA floats (16 bytes per pixel)
 // - packed materials are 48 bytes long (3 pixels each)
 // - packed primitives are 128 bytes long (8 pixels each)
+// - packed BVH nodes are 32 bytes long (2 pixels each)
 #define MAT_OFFSET(itemIndex, field) (float)(itemIndex * 3 + field)
 #define PRIM_OFFSET(itemIndex, field) (float)(itemIndex * 8 + field)
+#define BVH_OFFSET(itemIndex, field) (float)(itemIndex * 2 + field)
 
 // -----------------------
 // Object and material definitions
@@ -160,17 +163,17 @@ float intersectSphere(const float4 rayOrigin, const float4 rayDir, const float4 
 	return t > SNAP_EPSILON ? t : FLT_MAX;
 }
 
-float intersectBox(const float4 rayOrigin, const float4 rayDir, const float4 boxMin, const float4 boxMax){
-	float4 tmin = (boxMin - rayOrigin) / rayDir;
-	float4 tmax = (boxMax - rayOrigin) / rayDir;
+float intersectBox(const float4 rayOrigin, const float4 rayDir, const float3 boxMin, const float3 boxMax){
+	float3 tmin = (boxMin - rayOrigin.xyz) / rayDir.xyz;
+	float3 tmax = (boxMax - rayOrigin.xyz) / rayDir.xyz;
 
 	// If tmin > tmax we need to swap them
-	float4 rmin = fmin(tmin, tmax);
-	float4 rmax = fmax(tmin, tmax);
+	float3 rmin = fmin(tmin, tmax);
+	float3 rmax = fmax(tmin, tmax);
 
 	float minmax = fmin( fmin(rmax.x, rmax.y), rmax.z);
 	float maxmin = fmax( fmax(rmin.x, rmin.y), rmin.z);
-	return minmax >= maxmin && maxmin > SNAP_EPSILON ? maxmin : FLT_MAX;
+	return minmax < 0 || maxmin > minmax ? FLT_MAX : maxmin;
 }
 
 float4 aabbNormal(const float4 hitPoint,  const float4 boxMin, const float4 boxMax){
@@ -227,7 +230,7 @@ float intersectTriangle(const float4 rayOrigin, const float4 rayDir, uint primIn
 
 // Check for the closest intersection with scene primitives. If no interection
 // is detected, hit->dist should be set to FLT_MAX
-void getIntersection(const float4 rayOrigin, const float4 rayDir, uint numPrimitives, image1d_t primitives, Hit *hit){
+void getIntersection(const float4 rayOrigin, const float4 rayDir,image1d_t bvhNodes,image1d_t primitives, Hit *hit){
 	hit->dist = FLT_MAX;
 	hit->primitive = -1;
 
@@ -236,63 +239,98 @@ void getIntersection(const float4 rayOrigin, const float4 rayDir, uint numPrimit
 	float4 hitPoint;
 	float4 origin, extents;
 	float2 uv;
-	for(int primIndex=0;primIndex<numPrimitives;primIndex++){
-		// Get primitive type and material index
-		// x: primitive type
-		// y: material index
-		float4 primInfo = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,0));
+	float4 nmin, nmax;
 
-		// Check for ray-primitive intersection
-		switch(uint(primInfo.x)) {
-			case PRIMITIVE_PLANE:
-				// Get primitive origin and dimensions
-				origin = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,1));
-				extents = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,2));
+	// Use a fixed-len stack for traversing the bvh. Add the root node to the stack.
+	float nodeIndex;
+	float stack[MAX_BVH_STACK_SIZE];
+	uint stackIndex = 0;
+	stack[stackIndex++] = 0.0f;
 
-				dist = intersectPlane(rayOrigin, rayDir, origin.xyz, extents.x);
-				hitPoint = rayOrigin + rayDir * dist;
-				normal = origin;
-				break;
-			case PRIMITIVE_SPHERE:
-				// Get primitive origin and dimensions
-				origin = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,1));
-				extents = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,2));
+	while( stackIndex ){
 
-				dist = intersectSphere(rayOrigin, rayDir, origin, extents.x);
-				hitPoint = rayOrigin + rayDir * dist;
-				normal = normalize(hitPoint - origin);
-				break;
-			case PRIMITIVE_BOX:
-				// Get primitive origin and dimensions
-				origin = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,1));
-				extents = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,2));
+		// pop the next node from the stack and fetch associated node data
+		nodeIndex = stack[--stackIndex];
+		nmin = read_imagef(bvhNodes, dataSampler, BVH_OFFSET(nodeIndex, 0));
+		nmax = read_imagef(bvhNodes, dataSampler, BVH_OFFSET(nodeIndex, 1));
 
-				dist = intersectBox(rayOrigin, rayDir, origin, extents);
-				hitPoint = rayOrigin + rayDir * dist;
-				normal = aabbNormal(hitPoint, origin, extents);
-				break;
-			case PRIMITIVE_TRIANGE:
-				dist = intersectTriangle(rayOrigin, rayDir, primIndex, primitives, &hitPoint, &normal, &uv);
-				break;
+		// Check if ray intersects node bbox. If not, we don't need to check it
+		dist = intersectBox(rayOrigin, rayDir, nmin.xyz, nmax.xyz);
+		if( dist == FLT_MAX ){
+			continue;
 		}
 
-		if( dist < hit->dist ){
-			hit->dist = dist;
-			hit->position = hitPoint;
-			hit->normal = normal;
-			hit->material = uint(primInfo.y);
-			hit->primitive = primIndex;
+		// If this is a node nmin.w will be > 0 and contain the index to the
+		// left child whereas nmax.w will be > 0 and contain the index to the
+		// right child
+		if( nmin.w > 0.0f ){
+			// Push children to the stack
+			stack[stackIndex++] = nmin.w;
+			stack[stackIndex++] = nmax.w;
+			continue;
+		}
+
+		// This is a leaf. nmin.w will be <= 0 and contain the index to the
+		// first leaf primitive whereas nmax.w will be < 0 and contain the
+		// count of primitives in the leaf. Intersect all primitives and keep nearest match
+		for(uint primIndex=uint(-nmin.w);primIndex<uint(-nmin.w -nmax.w); primIndex++){
+			// Get primitive type and material index
+			// x: primitive type
+			// y: material index
+			float4 primInfo = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,0));
+
+			// Check for ray-primitive intersection
+			switch(uint(primInfo.x)) {
+				case PRIMITIVE_PLANE:
+					// Get primitive origin and dimensions
+					origin = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,1));
+					extents = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,2));
+
+					dist = intersectPlane(rayOrigin, rayDir, origin.xyz, extents.x);
+					hitPoint = rayOrigin + rayDir * dist;
+					normal = origin;
+					break;
+				case PRIMITIVE_SPHERE:
+					// Get primitive origin and dimensions
+					origin = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,1));
+					extents = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,2));
+
+					dist = intersectSphere(rayOrigin, rayDir, origin, extents.x);
+					hitPoint = rayOrigin + rayDir * dist;
+					normal = normalize(hitPoint - origin);
+					break;
+				case PRIMITIVE_BOX:
+					// Get primitive origin and dimensions
+					origin = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,1));
+					extents = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,2));
+
+					dist = intersectBox(rayOrigin, rayDir, origin.xyz, extents.xyz);
+					hitPoint = rayOrigin + rayDir * dist;
+					normal = aabbNormal(hitPoint, origin, extents);
+					break;
+				case PRIMITIVE_TRIANGE:
+					dist = intersectTriangle(rayOrigin, rayDir, primIndex, primitives, &hitPoint, &normal, &uv);
+					break;
+			}
+
+			if( dist < hit->dist ){
+				hit->dist = dist;
+				hit->position = hitPoint;
+				hit->normal = normal;
+				hit->material = uint(primInfo.y);
+				hit->primitive = primIndex;
+			}
 		}
 	}
 }
 
 // Collect direct light at hit point.
-float4 getDirectLight(Hit *hit, int numPrimitives, int numEmissiveIndices, image1d_t primitives, image1d_t materials, __global uint* emissiveIndices, uint2 *rndSeed){
+float4 getDirectLight(Hit *hit, image1d_t materials, image1d_t bvhNodes, image1d_t primitives, __global uint* emissiveIndices, uint numEmissiveIndices, uint2 *rndSeed){
 	float4 light = 0.0f;
 	float4 shadowRayOrigin = hit->position + hit->normal * NUDGE_EPSILON;
 	Hit shadowHit;
 	uint primIndex;
-	for(int index=0;index<numEmissiveIndices;index++){
+	for(uint index=0;index<numEmissiveIndices;index++){
 
 		// Fetch primitive index for emissive surface
 		primIndex = emissiveIndices[index];
@@ -358,7 +396,7 @@ float4 getDirectLight(Hit *hit, int numPrimitives, int numEmissiveIndices, image
 #endif
 
 		// Check line of sight; skip if we hit anything other than the target light
-		getIntersection(shadowRayOrigin, shadowDir, numPrimitives, primitives, &shadowHit);
+		getIntersection(shadowRayOrigin, shadowDir, bvhNodes, primitives, &shadowHit);
 		if(shadowHit.primitive != primIndex){
 			continue;
 		}
@@ -371,7 +409,7 @@ float4 getDirectLight(Hit *hit, int numPrimitives, int numEmissiveIndices, image
 }
 
 // Trace a ray and return the gathered color.
-float4 traceRay(float4 rayOrigin, float4 rayDir, int numPrimitives, int numEmissiveIndices, image1d_t primitives, image1d_t materials, __global uint *emissiveIndices, uint2 *rndSeed){
+float4 traceRay(float4 rayOrigin, float4 rayDir, image1d_t materials, image1d_t bvhNodes, image1d_t primitives, __global uint *emissiveIndices, int numEmissiveIndices, uint2 *rndSeed){
 	Hit hit;
 	float4 rCol = (float4)(0.0f);
 	float4 mask = (float4)(1.0f);
@@ -380,7 +418,7 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, int numPrimitives, int numEmiss
 	float nc, nt, eta, ddn;
 	float4 nl, materialProps, diffuse;
 	for(bounce=0;bounce<MAX_BOUNCES;bounce++){
-		getIntersection(rayOrigin, rayDir, numPrimitives, primitives, &hit);
+		getIntersection(rayOrigin, rayDir, bvhNodes, primitives, &hit);
 
 		// No hit
 		if(hit.dist == FLT_MAX){
@@ -420,7 +458,7 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, int numPrimitives, int numEmiss
 			// Mask outgoing reflectance by material diffuse property
 			mask *= diffuse;
 			hitDiffuseObject = true;
-			rCol += mask * getDirectLight(&hit, numPrimitives, numEmissiveIndices, primitives, materials, emissiveIndices, rndSeed);
+			rCol += mask * getDirectLight(&hit, materials, bvhNodes, primitives, emissiveIndices, numEmissiveIndices, rndSeed);
 
 			// We do importance sampling for diffuse rays
 			rayOrigin = hit.position + hit.normal * NUDGE_EPSILON;
@@ -511,10 +549,10 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, int numPrimitives, int numEmiss
 __kernel void tracePixel(
 		__global float4 *frameBuffer,
 		__global float4 *frustrumCorners,
-		image1d_t primitives,
 		image1d_t materials,
+		image1d_t bvhNodes,
+		image1d_t primitives,
 		__global uint *emissiveIndices,
-		const int numPrimitives,
 		const int numEmissiveIndices,
 		const float4 eyePos,
 		const unsigned int blockY,
@@ -551,7 +589,7 @@ __kernel void tracePixel(
 		// add result to accumulation buffer
 		float4 lVec = frustrumCorners[0] * (1 - ty) + frustrumCorners[2] * ty;
 		float4 rVec = frustrumCorners[1] * (1 - ty) + frustrumCorners[3] * ty;
-		accum += traceRay(eyePos, normalize(lVec * (1 - tx) + rVec * tx), numPrimitives, numEmissiveIndices, primitives, materials, emissiveIndices, &rndSeed);
+		accum += traceRay(eyePos, normalize(lVec * (1 - tx) + rVec * tx), materials, bvhNodes, primitives, emissiveIndices, numEmissiveIndices, &rndSeed);
 	}
 
 	// Average samples

@@ -10,9 +10,10 @@ type Scene struct {
 	Camera *Camera
 
 	Materials                []Material
+	BvhNodes                 []BvhNode
 	Primitives               []Primitive
-	EmissivePrimitiveIndices []int
-	matNameToIndex           map[string]int
+	EmissivePrimitiveIndices []uint32
+	MatNameToIndex           map[string]int
 
 	BgColor types.Vec3
 }
@@ -21,8 +22,8 @@ func NewScene() *Scene {
 	return &Scene{
 		Materials:                make([]Material, 0),
 		Primitives:               make([]Primitive, 0),
-		EmissivePrimitiveIndices: make([]int, 0),
-		matNameToIndex:           make(map[string]int, 0),
+		EmissivePrimitiveIndices: make([]uint32, 0),
+		MatNameToIndex:           make(map[string]int, 0),
 	}
 }
 
@@ -33,11 +34,11 @@ func (s *Scene) SetCamera(camera *Camera) {
 
 // Add a material to the scene.
 func (s *Scene) AddMaterial(name string, material *Material) error {
-	if _, exists := s.matNameToIndex[name]; exists {
+	if _, exists := s.MatNameToIndex[name]; exists {
 		return fmt.Errorf("scene: material already added")
 	}
 	s.Materials = append(s.Materials, *material)
-	s.matNameToIndex[name] = len(s.Materials) - 1
+	s.MatNameToIndex[name] = len(s.Materials) - 1
 	return nil
 }
 
@@ -46,18 +47,18 @@ func (s *Scene) AddPrimitive(primitive *Primitive, matName string) error {
 	if matName == "" {
 		return fmt.Errorf("scene: no material assigned to primitive")
 	}
-	matIndex, exists := s.matNameToIndex[matName]
+	matIndex, exists := s.MatNameToIndex[matName]
 	if !exists {
 		return fmt.Errorf("scene: primitive references unknown material '%s'; ensure that the material is added to the scene before adding the primitive", matName)
 	}
 	// Patch material index into primitive properties
-	primitive.properties[1] = float32(matIndex)
+	primitive.Properties[1] = float32(matIndex)
 	s.Primitives = append(s.Primitives, *primitive)
 
 	// If primitive uses an emissive material remember its index
-	emissive := s.Materials[matIndex].emissive
+	emissive := s.Materials[matIndex].Emissive
 	if emissive[0] > 0.0 || emissive[1] > 0.0 || emissive[2] > 0.0 {
-		s.EmissivePrimitiveIndices = append(s.EmissivePrimitiveIndices, len(s.Primitives)-1)
+		s.EmissivePrimitiveIndices = append(s.EmissivePrimitiveIndices, uint32(len(s.Primitives)-1))
 	}
 
 	return nil

@@ -47,6 +47,7 @@ type clTracer struct {
 
 	// Device 1D images where the packed scene data is stored
 	packedMaterials       cl.Mem
+	packedBvhNodes        cl.Mem
 	packedPrimitives      cl.Mem
 	packedEmissiveIndices cl.Mem
 
@@ -253,23 +254,22 @@ func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 		return ErrSettingKernelArguments
 	}
 	// Scene data
-	errCode = cl.SetKernelArg(tr.traceKernel, 2, 8, unsafe.Pointer(&tr.packedPrimitives))
+	errCode = cl.SetKernelArg(tr.traceKernel, 2, 8, unsafe.Pointer(&tr.packedMaterials))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 2")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 3, 8, unsafe.Pointer(&tr.packedMaterials))
+	errCode = cl.SetKernelArg(tr.traceKernel, 3, 8, unsafe.Pointer(&tr.packedBvhNodes))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 3")
 		return ErrSettingKernelArguments
 	}
-	errCode = cl.SetKernelArg(tr.traceKernel, 4, 8, unsafe.Pointer(&tr.packedEmissiveIndices))
+	errCode = cl.SetKernelArg(tr.traceKernel, 4, 8, unsafe.Pointer(&tr.packedPrimitives))
 	if errCode != cl.SUCCESS {
-		tr.logger.Printf("Failed to write kernel arg 4 (err: %d)", errCode)
+		tr.logger.Printf("Failed to write kernel arg 4")
 		return ErrSettingKernelArguments
 	}
-	numPrimitives := len(tr.scene.Primitives)
-	errCode = cl.SetKernelArg(tr.traceKernel, 5, 4, unsafe.Pointer(&numPrimitives))
+	errCode = cl.SetKernelArg(tr.traceKernel, 5, 8, unsafe.Pointer(&tr.packedEmissiveIndices))
 	if errCode != cl.SUCCESS {
 		tr.logger.Printf("Failed to write kernel arg 5")
 		return ErrSettingKernelArguments
@@ -458,6 +458,25 @@ func (tr *clTracer) setupKernel(sc *scene.Scene, frameW, frameH uint32) error {
 			errPtr,
 		)
 		if tr.packedMaterials == nil || (errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS) {
+			tr.cleanup(false)
+			return ErrAllocatingBuffers
+		}
+	}
+	if len(sc.BvhNodes) > 0 {
+		sizeInBytes := uint64(uint64(len(sc.BvhNodes)) * uint64(unsafe.Sizeof(sc.BvhNodes[0])))
+		tr.packedBvhNodes = cl.CreateImage(
+			*tr.ctx,
+			cl.MEM_READ_ONLY|cl.MEM_COPY_HOST_PTR,
+			cl.ImageFormat{cl.RGBA, cl.FLOAT}, // 16 bytes per pixel
+			cl.ImageDesc{
+				ImageType:     cl.MEM_OBJECT_IMAGE1D,
+				ImageWidth:    sizeInBytes >> 4,
+				ImageRowPitch: sizeInBytes,
+			},
+			unsafe.Pointer(&sc.BvhNodes[0]),
+			errPtr,
+		)
+		if tr.packedBvhNodes == nil || (errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS) {
 			tr.cleanup(false)
 			return ErrAllocatingBuffers
 		}

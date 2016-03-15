@@ -78,10 +78,17 @@ func (r *Renderer) Close() {
 
 // Add a tracer to the renderer's tracer pool.
 func (r *Renderer) AddTracer(tr tracer.Tracer) error {
-	err := tr.Setup(r.scene, r.frameW, r.frameH)
+	err := tr.Setup(r.frameW, r.frameH)
 	if err != nil {
 		return err
 	}
+
+	// sync scene with tracer
+	err = r.syncScene(tr)
+	if err != nil {
+		return err
+	}
+
 	r.Tracers = append(r.Tracers, tr)
 	r.blockAssignment = append(r.blockAssignment, 0)
 	return nil
@@ -120,6 +127,17 @@ func (r *Renderer) Frame() *image.RGBA {
 	}
 
 	return img
+}
+
+// Syncronize scene changes with tracer and manually trigger a flush.
+func (r *Renderer) syncScene(tr tracer.Tracer) error {
+	tr.AppendChange(tracer.UpdateCamera, r.scene.Camera)
+	tr.AppendChange(tracer.SetMaterials, r.scene.Materials)
+	tr.AppendChange(tracer.SetBvhNodes, r.scene.BvhNodes)
+	tr.AppendChange(tracer.SetPrimitivies, r.scene.Primitives)
+	tr.AppendChange(tracer.SetEmissiveLightIndices, r.scene.EmissivePrimitiveIndices)
+
+	return tr.ApplyPendingChanges()
 }
 
 // Distribute the frame rows between the pooled tracers.
@@ -179,7 +197,7 @@ func (r *Renderer) RenderFrame() error {
 	blockReq.RenderTarget = r.frameBuffer
 	blockReq.DoneChan = r.tracerDoneChan
 	blockReq.ErrChan = r.tracerErrChan
-	blockReq.SamplesPerPixel = 16
+	blockReq.SamplesPerPixel = 1
 	blockReq.Exposure = r.scene.Camera.Exposure
 	blockReq.Seed = rand.Uint32()
 

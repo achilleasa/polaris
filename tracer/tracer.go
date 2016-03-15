@@ -1,7 +1,13 @@
 package tracer
 
-import (
-	"github.com/achilleasa/go-pathtrace/scene"
+type ChangeType uint8
+
+const (
+	SetBvhNodes ChangeType = iota
+	SetPrimitivies
+	SetMaterials
+	SetEmissiveLightIndices
+	UpdateCamera
 )
 
 // A unit of work that is processed by a tracer.
@@ -40,12 +46,15 @@ type Tracer interface {
 	// baseline (cpu) impelemntation.
 	SpeedEstimate() float32
 
-	// Attach tracer to scene and start processing incoming block requests.
-	Setup(sc *scene.Scene, frameW, frameH uint32) error
+	// Setup the tracer.
+	Setup(frameW, frameH uint32) error
 
 	// Enqueue block request.
-	Enqueue(blockReq BlockRequest)
+	Enqueue(BlockRequest)
 
-	// Sync scene changes with tracer.
-	SyncScene() error
+	// Append a change to the tracer's update buffer.
+	AppendChange(ChangeType, interface{})
+
+	// Apply all pending changes from the update buffer.
+	ApplyPendingChanges() error
 }

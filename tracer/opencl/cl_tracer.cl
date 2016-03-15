@@ -2,10 +2,14 @@
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
 #endif
-#define FRAME_W 512
-#define FRAME_H 512
-#define TEXEL_STEP_X 1.0f / 512.0f
-#define TEXEL_STEP_Y 1.0f / 512.0f
+#ifndef FRAME_W
+#error "frame width needs to be specified using -D FRAME_W=value"
+#endif
+#ifndef FRAME_H
+#error "frame height needs to be specified using -D FRAME_H=value"
+#endif
+#define TEXEL_STEP_X 1.0f / float(FRAME_W)
+#define TEXEL_STEP_Y 1.0f / float(FRAME_H)
 
 #define DEBUG (get_global_id(0)==256 && get_global_id(1)==256)
 
@@ -49,9 +53,31 @@ const sampler_t dataSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_NONE | C
 // - packed materials are 48 bytes long (3 pixels each)
 // - packed primitives are 128 bytes long (8 pixels each)
 // - packed BVH nodes are 32 bytes long (2 pixels each)
-#define MAT_OFFSET(itemIndex, field) (float)(itemIndex * 3 + field)
-#define PRIM_OFFSET(itemIndex, field) (float)(itemIndex * 8 + field)
-#define BVH_OFFSET(itemIndex, field) (float)(itemIndex * 2 + field)
+#define MAT_OFFSET(itemIndex, field) (float2)((itemIndex * 3 + field)&8191,(itemIndex * 3 + field)>>13)
+#define PRIM_OFFSET(itemIndex, field) (float2)((itemIndex * 8 + field)&8191,(itemIndex * 8 + field)>>13)
+#define BVH_OFFSET(itemIndex, field) (float2)((itemIndex * 2 + field)&8191,(itemIndex * 2 + field)>>13)
+
+typedef struct {
+	float4 position;
+	float4 normal;
+	float dist;
+	uint material;
+	int primitive;
+} Hit;
+
+// Define function prototypes so the compiler does not emit warnings
+float2 clRand(uint2 *state);
+float4 rndCosWeightedHemisphereDir(float4 normal, uint2 *seed);
+float4 rndCosWeightedConeDir(float4 normal, float sinThetaMax, uint2 *seed);
+float4 rndConeDir(float4 normal, float cosThetaMax, uint2 *seed);
+float intersectPlane(const float4 rayOrigin, const float4 rayDir, const float3 planeNormal, const float planeDist);
+float intersectSphere(const float4 rayOrigin, const float4 rayDir, const float4 sphereOrigin, const float sphereRadius);
+float intersectBox(const float4 rayOrigin, const float4 rayDir, const float3 boxMin, const float3 boxMax);
+float4 aabbNormal(const float4 hitPoint,  const float4 boxMin, const float4 boxMax);
+float intersectTriangle(const float4 rayOrigin, const float4 rayDir, uint primIndex, image2d_t primitives, float4 *pointOut, float4 *normalOut, float2 *uvOut);
+void getIntersection(const float4 rayOrigin, const float4 rayDir,image2d_t bvhNodes,image2d_t primitives, Hit *hit);
+float4 getDirectLight(Hit *hit, image2d_t materials, image2d_t bvhNodes, image2d_t primitives, __global uint* emissiveIndices, uint numEmissiveIndices, uint2 *rndSeed);
+float4 traceRay(float4 rayOrigin, float4 rayDir, image2d_t materials, image2d_t bvhNodes, image2d_t primitives, __global uint *emissiveIndices, int numEmissiveIndices, uint2 *rndSeed);
 
 // -----------------------
 // Object and material definitions
@@ -128,15 +154,6 @@ float4 rndConeDir(float4 normal, float cosThetaMax, uint2 *seed){
 
 // Tracer implementation
 // ---------------------
-
-typedef struct {
-	float4 position;
-	float4 normal;
-	float dist;
-	uint material;
-	int primitive;
-} Hit;
-
 float intersectPlane(const float4 rayOrigin, const float4 rayDir, const float3 planeNormal, const float planeDist){
 	float denom = dot(planeNormal, rayDir.xyz);
 	if (fabs(denom) < 1e-6f) {
@@ -194,7 +211,7 @@ float4 aabbNormal(const float4 hitPoint,  const float4 boxMin, const float4 boxM
 	return (float4)(0.0f, 0.0f, 1.0f,0.0f);
 }
 
-float intersectTriangle(const float4 rayOrigin, const float4 rayDir, uint primIndex, image1d_t primitives, float4 *pointOut, float4 *normalOut, float2 *uvOut){
+float intersectTriangle(const float4 rayOrigin, const float4 rayDir, uint primIndex, image2d_t primitives, float4 *pointOut, float4 *normalOut, float2 *uvOut){
 	// Calc intersection with triangle plane
 	float4 normal = read_imagef(primitives, dataSampler, PRIM_OFFSET(primIndex,2) );
 	float d = intersectPlane(rayOrigin, rayDir, normal.xyz, normal.w);
@@ -230,7 +247,7 @@ float intersectTriangle(const float4 rayOrigin, const float4 rayDir, uint primIn
 
 // Check for the closest intersection with scene primitives. If no interection
 // is detected, hit->dist should be set to FLT_MAX
-void getIntersection(const float4 rayOrigin, const float4 rayDir,image1d_t bvhNodes,image1d_t primitives, Hit *hit){
+void getIntersection(const float4 rayOrigin, const float4 rayDir,image2d_t bvhNodes,image2d_t primitives, Hit *hit){
 	hit->dist = FLT_MAX;
 	hit->primitive = -1;
 
@@ -242,10 +259,10 @@ void getIntersection(const float4 rayOrigin, const float4 rayDir,image1d_t bvhNo
 	float4 nmin, nmax;
 
 	// Use a fixed-len stack for traversing the bvh. Add the root node to the stack.
-	float nodeIndex;
-	float stack[MAX_BVH_STACK_SIZE];
+	uint nodeIndex;
+	uint stack[MAX_BVH_STACK_SIZE];
 	uint stackIndex = 0;
-	stack[stackIndex++] = 0.0f;
+	stack[stackIndex++] = 0;
 
 	while( stackIndex ){
 
@@ -265,8 +282,8 @@ void getIntersection(const float4 rayOrigin, const float4 rayDir,image1d_t bvhNo
 		// right child
 		if( nmin.w > 0.0f ){
 			// Push children to the stack
-			stack[stackIndex++] = nmin.w;
-			stack[stackIndex++] = nmax.w;
+			stack[stackIndex++] = uint(nmin.w);
+			stack[stackIndex++] = uint(nmax.w);
 			continue;
 		}
 
@@ -325,7 +342,7 @@ void getIntersection(const float4 rayOrigin, const float4 rayDir,image1d_t bvhNo
 }
 
 // Collect direct light at hit point.
-float4 getDirectLight(Hit *hit, image1d_t materials, image1d_t bvhNodes, image1d_t primitives, __global uint* emissiveIndices, uint numEmissiveIndices, uint2 *rndSeed){
+float4 getDirectLight(Hit *hit, image2d_t materials, image2d_t bvhNodes, image2d_t primitives, __global uint* emissiveIndices, uint numEmissiveIndices, uint2 *rndSeed){
 	float4 light = 0.0f;
 	float4 shadowRayOrigin = hit->position + hit->normal * NUDGE_EPSILON;
 	Hit shadowHit;
@@ -402,14 +419,15 @@ float4 getDirectLight(Hit *hit, image1d_t materials, image1d_t bvhNodes, image1d
 		}
 
 		// Radiance = 1/pi * cos(theta) * emissive * PDF
-		float4 emissive = read_imagef(materials, dataSampler, MAT_OFFSET(primInfo.y, 2));
+		uint matIndex = uint(primInfo.y);
+		float4 emissive = read_imagef(materials, dataSampler, MAT_OFFSET(matIndex, 2));
 		light += emissive * pdf;
 	}
 	return light;
 }
 
 // Trace a ray and return the gathered color.
-float4 traceRay(float4 rayOrigin, float4 rayDir, image1d_t materials, image1d_t bvhNodes, image1d_t primitives, __global uint *emissiveIndices, int numEmissiveIndices, uint2 *rndSeed){
+float4 traceRay(float4 rayOrigin, float4 rayDir, image2d_t materials, image2d_t bvhNodes, image2d_t primitives, __global uint *emissiveIndices, int numEmissiveIndices, uint2 *rndSeed){
 	Hit hit;
 	float4 rCol = (float4)(0.0f);
 	float4 mask = (float4)(1.0f);
@@ -549,9 +567,9 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, image1d_t materials, image1d_t 
 __kernel void tracePixel(
 		__global float4 *frameBuffer,
 		__global float4 *frustrumCorners,
-		image1d_t materials,
-		image1d_t bvhNodes,
-		image1d_t primitives,
+		image2d_t materials,
+		image2d_t bvhNodes,
+		image2d_t primitives,
 		__global uint *emissiveIndices,
 		const int numEmissiveIndices,
 		const float4 eyePos,
@@ -566,7 +584,7 @@ __kernel void tracePixel(
 	if ( x > FRAME_W || y > FRAME_H ) {
 		return;
 	}
-
+	
 	// Setup seed for random numbers
 	uint2 rndSeed = (uint2)(x * seed, y * seed);
 

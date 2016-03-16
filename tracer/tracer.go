@@ -25,8 +25,8 @@ type BlockRequest struct {
 	// A random seed value for the tracer's random number generator.
 	Seed uint32
 
-	// A framebuffer where the rendered block is to be copied.
-	RenderTarget []float32
+	// Number of sequential rendered frames from current camera position.
+	FrameCount uint32
 
 	// A channel to signal on block completion with the number of completed rows.
 	DoneChan chan<- uint32
@@ -47,7 +47,7 @@ type Tracer interface {
 	SpeedEstimate() float32
 
 	// Setup the tracer.
-	Setup(frameW, frameH uint32) error
+	Setup(frameW, frameH uint32, accumBuffer []float32, frameBuffer []uint8) error
 
 	// Enqueue block request.
 	Enqueue(BlockRequest)

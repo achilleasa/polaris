@@ -42,12 +42,17 @@ type clTracer struct {
 	kernel cl.Kernel
 
 	// Device buffers.
+	accumBuffer     cl.Mem
 	frameBuffer     cl.Mem
 	frustrumCorners cl.Mem
 	materials       cl.Mem
 	bvhNodes        cl.Mem
 	primitives      cl.Mem
 	emissiveIndices cl.Mem
+
+	// Host buffers.
+	hostAccumBuffer []float32
+	hostFrameBuffer []uint8
 
 	// Commit buffer for syncing scene changes with the local scene copy.
 	updateBuffer map[tracer.ChangeType]interface{}
@@ -97,7 +102,7 @@ func (tr *clTracer) SpeedEstimate() float32 {
 }
 
 // Setup the tracer.
-func (tr *clTracer) Setup(frameW, frameH uint32) error {
+func (tr *clTracer) Setup(frameW, frameH uint32, accumBuffer []float32, frameBuffer []uint8) error {
 	tr.Lock()
 	defer tr.Unlock()
 
@@ -107,6 +112,8 @@ func (tr *clTracer) Setup(frameW, frameH uint32) error {
 
 	tr.frameW = frameW
 	tr.frameH = frameH
+	tr.hostAccumBuffer = accumBuffer
+	tr.hostFrameBuffer = frameBuffer
 
 	// Init kernel
 	err := tr.setupKernel()
@@ -149,7 +156,7 @@ func (tr *clTracer) ApplyPendingChanges() error {
 		switch changeType {
 		case tracer.SetMaterials:
 			kernelArgName = "materials"
-			kernelArgIndex = 2
+			kernelArgIndex = 3
 			if data, valid := changeData.([]scene.Material); valid {
 				hostData = unsafe.Pointer(&data[0])
 				sizeInBytes = uint64(len(data)) * uint64(unsafe.Sizeof(&data[0]))
@@ -160,7 +167,7 @@ func (tr *clTracer) ApplyPendingChanges() error {
 			}
 		case tracer.SetBvhNodes:
 			kernelArgName = "bvhNodes"
-			kernelArgIndex = 3
+			kernelArgIndex = 4
 			if data, valid := changeData.([]scene.BvhNode); valid {
 				hostData = unsafe.Pointer(&data[0])
 				sizeInBytes = uint64(len(data)) * uint64(unsafe.Sizeof(&data[0]))
@@ -171,7 +178,7 @@ func (tr *clTracer) ApplyPendingChanges() error {
 			}
 		case tracer.SetPrimitivies:
 			kernelArgName = "primitives"
-			kernelArgIndex = 4
+			kernelArgIndex = 5
 			if data, valid := changeData.([]scene.Primitive); valid {
 				hostData = unsafe.Pointer(&data[0])
 				sizeInBytes = uint64(len(data)) * uint64(unsafe.Sizeof(&data[0]))
@@ -182,13 +189,13 @@ func (tr *clTracer) ApplyPendingChanges() error {
 			}
 		case tracer.SetEmissiveLightIndices:
 			kernelArgName = "emissiveLightIndices"
-			kernelArgIndex = 5
+			kernelArgIndex = 6
 			if data, valid := changeData.([]uint32); valid {
 				// Update count
 				numIndices := len(data)
-				errCode := cl.SetKernelArg(tr.kernel, 6, 4, unsafe.Pointer(&numIndices))
+				errCode := cl.SetKernelArg(tr.kernel, 7, 4, unsafe.Pointer(&numIndices))
 				if errCode != cl.SUCCESS {
-					tr.logger.Printf("error %d setting kernel arg 6 (numEmissiveIndices)", errCode)
+					tr.logger.Printf("error %d setting kernel arg 7 (numEmissiveIndices)", errCode)
 					return ErrSettingKernelArgument
 				}
 
@@ -202,13 +209,13 @@ func (tr *clTracer) ApplyPendingChanges() error {
 			}
 		case tracer.UpdateCamera:
 			kernelArgName = "frustrumCorners"
-			kernelArgIndex = 1
+			kernelArgIndex = 2
 			if data, valid := changeData.(*scene.Camera); valid {
 				// Update eye position
 				eyePos := data.Position()
-				errCode := cl.SetKernelArg(tr.kernel, 7, 16, unsafe.Pointer(&eyePos[0]))
+				errCode := cl.SetKernelArg(tr.kernel, 8, 16, unsafe.Pointer(&eyePos[0]))
 				if errCode != cl.SUCCESS {
-					tr.logger.Printf("error %d setting kernel arg 7 (eyePos)", errCode)
+					tr.logger.Printf("error %d setting kernel arg 8 (eyePos)", errCode)
 					return ErrSettingKernelArgument
 				}
 
@@ -434,6 +441,10 @@ func (tr *clTracer) cleanup() {
 		cl.ReleaseMemObject(tr.frustrumCorners)
 		tr.frustrumCorners = nil
 	}
+	if tr.accumBuffer != nil {
+		cl.ReleaseMemObject(tr.accumBuffer)
+		tr.accumBuffer = nil
+	}
 	if tr.frameBuffer != nil {
 		cl.ReleaseMemObject(tr.frameBuffer)
 		tr.frameBuffer = nil
@@ -460,25 +471,51 @@ func (tr *clTracer) cleanup() {
 func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 	var errCode cl.ErrorCode
 
+	// Calculate offsets for accumulation buffer (16 bytes per pixel)
+	accumOffset := uint64(tr.frameW*blockReq.BlockY) << 4
+	accumBlockSize := uint64(tr.frameW*blockReq.BlockH) << 4
+
+	// Copy accumulation data to device
+	errCode = cl.EnqueueWriteBuffer(
+		tr.cmdQueue,
+		tr.accumBuffer,
+		cl.TRUE,
+		accumOffset,
+		accumBlockSize,
+		unsafe.Pointer(&tr.hostAccumBuffer[accumOffset>>2]), // divide by sizeof(float32)
+		0,
+		nil,
+		nil,
+	)
+	if errCode != cl.SUCCESS {
+		tr.logger.Printf("Error %d copying accumBuffer data to device", errCode)
+		return ErrCopyingDataToDevice
+	}
+
 	// Set variable kernel params
-	errCode = cl.SetKernelArg(tr.kernel, 8, 4, unsafe.Pointer(&blockReq.BlockY))
+	errCode = cl.SetKernelArg(tr.kernel, 9, 4, unsafe.Pointer(&blockReq.BlockY))
 	if errCode != cl.SUCCESS {
-		tr.logger.Printf("error %d setting kernel arg 8 (blockY)", errCode)
+		tr.logger.Printf("error %d setting kernel arg 9 (blockY)", errCode)
 		return ErrSettingKernelArgument
 	}
-	errCode = cl.SetKernelArg(tr.kernel, 9, 4, unsafe.Pointer(&blockReq.SamplesPerPixel))
+	errCode = cl.SetKernelArg(tr.kernel, 10, 4, unsafe.Pointer(&blockReq.SamplesPerPixel))
 	if errCode != cl.SUCCESS {
-		tr.logger.Printf("error %d setting kernel arg 9 (samplesPerPixel)", errCode)
+		tr.logger.Printf("error %d setting kernel arg 10 (samplesPerPixel)", errCode)
 		return ErrSettingKernelArgument
 	}
-	errCode = cl.SetKernelArg(tr.kernel, 10, 4, unsafe.Pointer(&blockReq.Exposure))
+	errCode = cl.SetKernelArg(tr.kernel, 11, 4, unsafe.Pointer(&blockReq.Exposure))
 	if errCode != cl.SUCCESS {
-		tr.logger.Printf("error %d setting kernel arg 10 (exposure)", errCode)
+		tr.logger.Printf("error %d setting kernel arg 11 (exposure)", errCode)
 		return ErrSettingKernelArgument
 	}
-	errCode = cl.SetKernelArg(tr.kernel, 11, 4, unsafe.Pointer(&blockReq.Seed))
+	errCode = cl.SetKernelArg(tr.kernel, 12, 4, unsafe.Pointer(&blockReq.Seed))
 	if errCode != cl.SUCCESS {
-		tr.logger.Printf("error %d setting kernel arg 11 (seed)", errCode)
+		tr.logger.Printf("error %d setting kernel arg 12 (seed)", errCode)
+		return ErrSettingKernelArgument
+	}
+	errCode = cl.SetKernelArg(tr.kernel, 13, 4, unsafe.Pointer(&blockReq.FrameCount))
+	if errCode != cl.SUCCESS {
+		tr.logger.Printf("error %d setting kernel arg 13 (frameCount)", errCode)
 		return ErrSettingKernelArgument
 	}
 
@@ -508,23 +545,40 @@ func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 		return ErrKernelExecutionFailed
 	}
 
-	// Copy the rendered block from device buffer to the render target
-	readOffset := uint64(tr.frameW * 4 * 4 * blockReq.BlockY)
-	blockSizeBytes := uint64(tr.frameW * 4 * 4 * blockReq.BlockH)
+	// Copy device data back to host
 	errCode = cl.EnqueueReadBuffer(
 		tr.cmdQueue,
-		tr.frameBuffer,
+		tr.accumBuffer,
 		cl.TRUE,
-		readOffset,     // start at beginning of block
-		blockSizeBytes, // read just the block data
-		// target is []float32 so we need to divide offset by 4
-		unsafe.Pointer(&blockReq.RenderTarget[readOffset>>2]),
+		accumOffset,
+		accumBlockSize,
+		unsafe.Pointer(&tr.hostAccumBuffer[accumOffset>>2]), // divide by sizeof(float32)
 		0,
 		nil,
 		nil,
 	)
 	if errCode != cl.SUCCESS {
-		tr.logger.Printf("Error copying data to host: (blockY: %d, blockH: %d, readOffset: %d, bytes: %d, code %d)", blockReq.BlockY, blockReq.BlockH, readOffset, blockSizeBytes, errCode)
+		tr.logger.Printf("Error %d copying accumBuffer data from device", errCode)
+		return ErrCopyingDataToHost
+	}
+
+	// Calculate offsets for accumulation buffer (4 bytes per pixel)
+	fbOffset := uint64(tr.frameW*blockReq.BlockY) << 2
+	fbBlockSize := uint64(tr.frameW*blockReq.BlockH) << 2
+
+	errCode = cl.EnqueueReadBuffer(
+		tr.cmdQueue,
+		tr.frameBuffer,
+		cl.TRUE,
+		fbOffset,
+		fbBlockSize,
+		unsafe.Pointer(&tr.hostFrameBuffer[fbOffset]),
+		0,
+		nil,
+		nil,
+	)
+	if errCode != cl.SUCCESS {
+		tr.logger.Printf("Error %d copying accumBuffer data from device", errCode)
 		return ErrCopyingDataToHost
 	}
 
@@ -621,17 +675,27 @@ func (tr *clTracer) setupKernel() error {
 		return ErrKernelCreationFailed
 	}
 
-	// Allocate an output buffer large enough to fit a full frame even
-	// though it will never be fully used if more than one tracers are used.
-	tr.frameBuffer = cl.CreateBuffer(*tr.ctx, cl.MEM_WRITE_ONLY, cl.MemFlags(tr.frameW*tr.frameH*16), nil, errPtr)
+	tr.accumBuffer = cl.CreateBuffer(*tr.ctx, cl.MEM_READ_WRITE, cl.MemFlags(tr.frameW*tr.frameH*16), nil, errPtr)
+	if tr.accumBuffer == nil || (errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS) {
+		tr.cleanup()
+		return ErrAllocatingBuffer
+	}
+	errCode = cl.SetKernelArg(tr.kernel, 0, 8, unsafe.Pointer(&tr.accumBuffer))
+	if errCode != cl.SUCCESS {
+		tr.cleanup()
+		tr.logger.Printf("error %d setting kernel arg 0 (accumBuffer)", errCode)
+		return ErrSettingKernelArgument
+	}
+
+	tr.frameBuffer = cl.CreateBuffer(*tr.ctx, cl.MEM_WRITE_ONLY, cl.MemFlags(tr.frameW*tr.frameH*4), nil, errPtr)
 	if tr.frameBuffer == nil || (errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS) {
 		tr.cleanup()
 		return ErrAllocatingBuffer
 	}
-	errCode = cl.SetKernelArg(tr.kernel, 0, 8, unsafe.Pointer(&tr.frameBuffer))
+	errCode = cl.SetKernelArg(tr.kernel, 1, 8, unsafe.Pointer(&tr.frameBuffer))
 	if errCode != cl.SUCCESS {
 		tr.cleanup()
-		tr.logger.Printf("error %d setting kernel arg 0 (frameBuffer)", errCode)
+		tr.logger.Printf("error %d setting kernel arg 1 (frameBuffer)", errCode)
 		return ErrSettingKernelArgument
 	}
 

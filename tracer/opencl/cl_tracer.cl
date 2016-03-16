@@ -11,8 +11,6 @@
 #define TEXEL_STEP_X 1.0f / float(FRAME_W)
 #define TEXEL_STEP_Y 1.0f / float(FRAME_H)
 
-#define DEBUG (get_global_id(0)==256 && get_global_id(1)==256)
-
 // Render options
 #define COS_WEIGHTED_LIGHT_SAMPLING
 //#define CONE_LIGHT_SAMPLING
@@ -565,7 +563,8 @@ float4 traceRay(float4 rayOrigin, float4 rayDir, image2d_t materials, image2d_t 
 
 // Emit the color of a pixel by tracing a ray through the scene.
 __kernel void tracePixel(
-		__global float4 *frameBuffer,
+		__global float4 *accumBuffer,
+		__global uchar4 *frameBuffer,
 		__global float4 *frustrumCorners,
 		image2d_t materials,
 		image2d_t bvhNodes,
@@ -576,7 +575,8 @@ __kernel void tracePixel(
 		const unsigned int blockY,
 		const unsigned int samplesPerPixel,
 		const float exposure,
-		const int seed
+		const int seed,
+		const unsigned int frameCount
 		){
 	// Get pixel coordinates
 	unsigned int x = get_global_id(0);
@@ -584,9 +584,9 @@ __kernel void tracePixel(
 	if ( x > FRAME_W || y > FRAME_H ) {
 		return;
 	}
-	
+
 	// Setup seed for random numbers
-	uint2 rndSeed = (uint2)(x * seed, y * seed);
+	uint2 rndSeed = (uint2)(x + seed, y + seed);
 
 	// Calculate texel coordinates [0,1] range
 	float accumScaler = 1.0f / (float)samplesPerPixel;
@@ -613,8 +613,22 @@ __kernel void tracePixel(
 	// Average samples
 	accum *= accumScaler;
 
-	// Apply tone-mapping and gamma correction using:
+	uint bufOffset = y*FRAME_W + x;
+
+	// Update accumulation buffer by averaging values over the last frameCount frames
+	float4 avg = (accum + float(frameCount - 1) * accumBuffer[bufOffset]) / float(frameCount);
+	accumBuffer[bufOffset] = avg;
+
+	// Apply tone-mapping and gamma-correction to the frame buffer:
+	//
 	// 1 - exp(-hdrColor * exposure)) [tone mapping HDR -> LDR]
 	// pow(ldr, 0.45)) [gamma correction]
-	frameBuffer[y*FRAME_W + x] = pow(-expm1(-accum*exposure), 0.45f);
+	float4 adjAvg = pow(-expm1(-avg*exposure), 0.45f) * 255.0f;
+	uchar4 rgbOut = (uchar4)(
+			(uchar)adjAvg.x,
+			(uchar)adjAvg.y,
+			(uchar)adjAvg.z,
+			255 // alpha
+			);
+	frameBuffer[bufOffset] = rgbOut;
 }

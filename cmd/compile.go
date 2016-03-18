@@ -1,0 +1,32 @@
+package cmd
+
+import (
+	"strings"
+
+	"github.com/achilleasa/go-pathtrace/scene/io"
+	"github.com/codegangsta/cli"
+)
+
+// Compile scene to binary format.
+func CompileScene(ctx *cli.Context) {
+	for idx := 0; idx < ctx.NArg(); idx++ {
+		sceneFile := ctx.Args().Get(idx)
+		if !strings.HasSuffix(sceneFile, ".obj") {
+			logger.Printf("skipping unsupported file %s", sceneFile)
+			continue
+		}
+
+		sc, err := io.ReadScene(sceneFile)
+		if err != nil {
+			logger.Printf("error: %s", err.Error())
+			continue
+		}
+
+		zipFile := strings.Replace(sceneFile, ".obj", ".zip", -1)
+		err = io.WriteScene(sc, zipFile)
+		if err != nil {
+			logger.Printf("error: %s", err.Error())
+			continue
+		}
+	}
+}

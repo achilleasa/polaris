@@ -137,45 +137,6 @@ func (r *Renderer) assignTracerBlocks() {
 	}
 }
 
-// Blend contents of the frame buffer into the accumulation buffer and update
-// the outputbuffer. Tone-mapping and gamma-correction are applied to the output
-// buffer using the following formulas:
-//
-// 1 - exp(-hdrColor * exposure)) [tone mapping HDR -> LDR]
-// pow(ldr, 0.45)) [gamma correction]
-//func (r *Renderer) updateAccumulationBuffer() {
-//tick := time.Now()
-//defer func() {
-//fmt.Printf("accum update time: %d ms\n", time.Since(tick).Nanoseconds()/1000000)
-//}()
-//pixelCount := int(r.frameW * r.frameH)
-//offset := 0
-//w1 := 1.0 / float32(r.frameCount)
-//w2 := float32(r.frameCount-1) / float32(r.frameCount)
-//outputBuffer := r.outputBuffer.Pix
-//exposure := r.scene.Camera.Exposure
-//var v float32
-//for i := 0; i < pixelCount; i++ {
-//v = w1*r.frameBuffer[offset] + w2*r.accumBuffer[offset]
-//r.accumBuffer[offset] = v
-//outputBuffer[offset] = uint8(255.0 * math.Pow(-math.Expm1(float64(-v*exposure)), 0.45))
-//offset++
-
-//v = w1*r.frameBuffer[offset] + w2*r.accumBuffer[offset]
-//r.accumBuffer[offset] = v
-//outputBuffer[offset] = uint8(255.0 * math.Pow(-math.Expm1(float64(-v*exposure)), 0.45))
-//offset++
-
-//v = w1*r.frameBuffer[offset] + w2*r.accumBuffer[offset]
-//r.accumBuffer[offset] = v
-//outputBuffer[offset] = uint8(255.0 * math.Pow(-math.Expm1(float64(-v*exposure)), 0.45))
-//offset++
-
-//outputBuffer[offset] = 255 // alpha channel
-//offset++
-//}
-//}
-
 // Render frame. This method splits the screen into blocks and distributes them
 // to all available tracers. Once the blocks have been successfully rendered
 // it composes the results into an RGBA image. Callers must never modify the

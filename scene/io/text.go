@@ -3,11 +3,13 @@ package io
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/go-pathtrace/scene/tools"
@@ -15,6 +17,8 @@ import (
 )
 
 type textSceneReader struct {
+	logger *log.Logger
+
 	// The name of the file where the scene is stored
 	sceneFile string
 
@@ -55,6 +59,7 @@ type textSceneReader struct {
 // Create a new text scene reader.
 func newTextSceneReader(sceneFile string) *textSceneReader {
 	return &textSceneReader{
+		logger:    log.New(os.Stdout, "textSceneReader: ", log.LstdFlags),
 		sceneFile: sceneFile,
 		// Init camera defaults
 		cameraExposure: 1.0,
@@ -75,11 +80,15 @@ func newTextSceneReader(sceneFile string) *textSceneReader {
 
 // Read scene definition.
 func (p *textSceneReader) Read() (*scene.Scene, error) {
+	p.logger.Printf("parsing and compiling scene from %s", p.sceneFile)
+	start := time.Now()
+
 	// Parse scene
 	err := p.parse(p.sceneFile)
 	if err != nil {
 		return nil, err
 	}
+	p.logger.Printf("parsed scene in %d ms", time.Since(start).Nanoseconds()/1000000)
 
 	// Generate packed scene representation
 	sc := &scene.Scene{
@@ -108,6 +117,7 @@ func (p *textSceneReader) Read() (*scene.Scene, error) {
 		}
 	}
 
+	p.logger.Printf("compiled scene in %d ms", time.Since(start).Nanoseconds()/1000000)
 	return sc, nil
 }
 

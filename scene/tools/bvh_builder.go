@@ -50,7 +50,7 @@ type bvhBuilder struct {
 // will be automatically converted into a leaf.
 func BuildBVH(workList []*scene.BvhPrimitive, minNodePrimitives int) ([]scene.BvhNode, []scene.Primitive) {
 	builder := &bvhBuilder{
-		logger: log.New(os.Stderr, "bvhBuilder: ", log.LstdFlags),
+		logger: log.New(os.Stdout, "bvhBuilder: ", log.LstdFlags),
 		nodes:  make([]scene.BvhNode, 0),
 		// All primitives will be eventually partitioned so we can
 		// pre-allocate the primitive list now since its size is known

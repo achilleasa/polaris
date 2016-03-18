@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/achilleasa/go-pathtrace/scene"
 )
@@ -20,20 +21,24 @@ const (
 )
 
 type zipSceneWriter struct {
+	logger    *log.Logger
 	sceneFile string
 }
 
 // Create a new zip scene writer
 func newZipSceneWriter(sceneFile string) *zipSceneWriter {
 	return &zipSceneWriter{
+		logger:    log.New(os.Stdout, "zipSceneWriter: ", log.LstdFlags),
 		sceneFile: sceneFile,
 	}
 }
 
 // Write scene definition to zip file.
 func (w *zipSceneWriter) Write(sc *scene.Scene) error {
-	var err error
+	w.logger.Printf("writing compressed scene to %s", w.sceneFile)
+	start := time.Now()
 
+	var err error
 	zipFile, err := os.Create(w.sceneFile)
 	if err != nil {
 		return err
@@ -91,6 +96,7 @@ func (w *zipSceneWriter) Write(sc *scene.Scene) error {
 		return err
 	}
 
+	w.logger.Printf("compressed scene in %d ms", time.Since(start).Nanoseconds()/1000000)
 	return nil
 }
 
@@ -102,13 +108,16 @@ type zipSceneReader struct {
 // Create a new zip scene writer
 func newZipSceneReader(sceneFile string) *zipSceneReader {
 	return &zipSceneReader{
-		logger:    log.New(os.Stderr, "zipSceneReader: ", log.LstdFlags),
+		logger:    log.New(os.Stdout, "zipSceneReader: ", log.LstdFlags),
 		sceneFile: sceneFile,
 	}
 }
 
 // Read scene definition from zip file.
 func (p *zipSceneReader) Read() (*scene.Scene, error) {
+	p.logger.Printf("parsing compiled scene from %s", p.sceneFile)
+	start := time.Now()
+
 	var err error
 	zr, err := zip.OpenReader(p.sceneFile)
 	if err != nil {
@@ -149,5 +158,6 @@ func (p *zipSceneReader) Read() (*scene.Scene, error) {
 		}
 	}
 
+	p.logger.Printf("loaded scene in %d ms", time.Since(start).Nanoseconds()/1000000)
 	return sc, nil
 }

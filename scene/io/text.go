@@ -62,10 +62,9 @@ func newTextSceneReader(sceneFile string) *textSceneReader {
 		logger:    log.New(os.Stdout, "textSceneReader: ", log.LstdFlags),
 		sceneFile: sceneFile,
 		// Init camera defaults
-		cameraExposure: 1.0,
-		cameraFov:      45.0,
-		cameraLook:     types.Vec3{0.0, 0.0, -1.0},
-		cameraUp:       types.Vec3{0.0, 1.0, 0.0},
+		cameraFov:  45.0,
+		cameraLook: types.Vec3{0.0, 0.0, -1.0},
+		cameraUp:   types.Vec3{0.0, 1.0, 0.0},
 		// Init other containers
 		primitives:          make([]*scene.BvhPrimitive, 0),
 		availableMaterials:  make(map[string]*scene.Material, 0),
@@ -92,7 +91,7 @@ func (p *textSceneReader) Read() (*scene.Scene, error) {
 
 	// Generate packed scene representation
 	sc := &scene.Scene{
-		Camera:                   scene.NewCamera(p.cameraFov, p.cameraExposure),
+		Camera:                   scene.NewCamera(p.cameraFov),
 		Materials:                make([]scene.Material, len(p.usedMaterials)),
 		EmissivePrimitiveIndices: make([]uint32, 0),
 		MatNameToIndex:           p.referencedMaterials,
@@ -493,16 +492,6 @@ func (p *textSceneReader) parse(filename string) error {
 				return p.emitError(filename, lineNum, "could not parse camera fov: %s", err.Error())
 			}
 			p.cameraFov = float32(v)
-		case "camera_exposure":
-			if len(lineTokens) != 2 {
-				return p.emitError(filename, lineNum, "unsupported syntax for 'camera_exposure'; expected 1 argument; got %d", len(lineTokens)-1)
-			}
-
-			v, err := strconv.ParseFloat(lineTokens[1], 32)
-			if err != nil {
-				return p.emitError(filename, lineNum, "could not parse camera exposure: %s", err.Error())
-			}
-			p.cameraExposure = float32(v)
 		case "camera_eye":
 			if len(lineTokens) != 4 {
 				return p.emitError(filename, lineNum, "unsupported syntax for 'camera_eye'; expected 3 argument; got %d", len(lineTokens)-1)

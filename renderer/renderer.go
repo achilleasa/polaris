@@ -1,12 +1,10 @@
 package renderer
 
 import (
-	"fmt"
 	"image"
 	"math"
 	"math/rand"
 	"sync"
-	"time"
 
 	"github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/go-pathtrace/tracer"
@@ -59,6 +57,9 @@ type Renderer struct {
 
 	// SPP estimate based on last frame stats.
 	sppEstimate uint32
+
+	// The exposure parameter controls tone-mapping
+	Exposure float32
 }
 
 // Create a new renderer
@@ -75,6 +76,7 @@ func NewRenderer(frameW, frameH uint32, sc *scene.Scene) *Renderer {
 		tracers:         make([]tracer.Tracer, 0),
 		scene:           sc,
 		sppEstimate:     1,
+		Exposure:        1,
 	}
 }
 
@@ -145,12 +147,6 @@ func (r *Renderer) Render(spp SamplesPerPixel) (*image.RGBA, error) {
 	r.Lock()
 	defer r.Unlock()
 
-	// Time frame
-	start := time.Now()
-	defer func() {
-		fmt.Printf("Frame time: %d ms\n", time.Since(start).Nanoseconds()/1000000)
-	}()
-
 	if r.scene == nil {
 		return nil, ErrSceneNotDefined
 	}
@@ -174,7 +170,7 @@ func (r *Renderer) Render(spp SamplesPerPixel) (*image.RGBA, error) {
 	} else {
 		blockReq.SamplesPerPixel = uint32(spp)
 	}
-	blockReq.Exposure = r.scene.Camera.Exposure
+	blockReq.Exposure = r.Exposure
 	blockReq.Seed = rand.Uint32()
 
 	// Enqueue work units

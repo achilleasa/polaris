@@ -31,16 +31,15 @@ type Camera struct {
 	// Camera FOV
 	FOV float32
 
-	// The exposure parameter controls tone-mapping for the rendered frame
-	Exposure float32
+	// Adjust the frustrum so that Y is inverted
+	InvertY bool
 }
 
-func NewCamera(fov, exposure float32) *Camera {
+func NewCamera(fov float32) *Camera {
 	return &Camera{
-		ViewMat:  types.Ident4(),
-		ProjMat:  types.Ident4(),
-		FOV:      fov,
-		Exposure: exposure,
+		ViewMat: types.Ident4(),
+		ProjMat: types.Ident4(),
+		FOV:     fov,
 	}
 }
 
@@ -72,15 +71,20 @@ func (c *Camera) updateFrustrum() {
 	eyePos := c.Position()
 	invProjViewMat := c.InvViewProjMat()
 
-	v = invProjViewMat.Mul4x1(types.XYZW(-1, 1, -1, 1))
+	var yUp float32 = 1.0
+	if c.InvertY {
+		yUp = -1.0
+	}
+
+	v = invProjViewMat.Mul4x1(types.XYZW(-1, yUp, -1, 1))
 	c.Frustrum[0] = v.Mul(1.0 / v[3]).Sub(eyePos).Vec3().Vec4(0)
 
-	v = invProjViewMat.Mul4x1(types.XYZW(1, 1, -1, 1))
+	v = invProjViewMat.Mul4x1(types.XYZW(1, yUp, -1, 1))
 	c.Frustrum[1] = v.Mul(1.0 / v[3]).Sub(eyePos).Vec3().Vec4(0)
 
-	v = invProjViewMat.Mul4x1(types.XYZW(-1, -1, -1, 1))
+	v = invProjViewMat.Mul4x1(types.XYZW(-1, -yUp, -1, 1))
 	c.Frustrum[2] = v.Mul(1.0 / v[3]).Sub(eyePos).Vec3().Vec4(0)
 
-	v = invProjViewMat.Mul4x1(types.XYZW(1, -1, -1, 1))
+	v = invProjViewMat.Mul4x1(types.XYZW(1, -yUp, -1, 1))
 	c.Frustrum[3] = v.Mul(1.0 / v[3]).Sub(eyePos).Vec3().Vec4(0)
 }

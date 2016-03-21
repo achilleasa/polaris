@@ -6,6 +6,18 @@ import (
 	"github.com/achilleasa/go-pathtrace/types"
 )
 
+// Constants for the directions that cameras can move.
+type CameraDirection uint8
+
+const (
+	Up CameraDirection = iota
+	Down
+	Left
+	Right
+	Forward
+	Backward
+)
+
 // Stores the ray directions at the for corners of our camera frustrum. It is
 // used as a shortcut for generating per pixel rays via interpolation of the
 // corner rays. While we don't care about the W coordinate we use Vec4 since
@@ -55,6 +67,30 @@ func NewCamera(fov float32) *Camera {
 // Setup camera projection matrix.
 func (c *Camera) SetupProjection(aspect float32) {
 	c.ProjMat = types.Perspective4(c.FOV, aspect, 1, 1000)
+	c.Update()
+}
+
+// Move camera towards a specific direction using a particular offset.
+func (c *Camera) Move(dir CameraDirection, offset float32) {
+	var delta types.Vec3
+
+	switch dir {
+	case Up:
+		delta = c.Up.Mul(offset)
+	case Down:
+		delta = c.Up.Mul(-offset)
+	case Left:
+		delta = c.LookAt.Sub(c.Position).Normalize().Cross(c.Up).Mul(-offset)
+	case Right:
+		delta = c.LookAt.Sub(c.Position).Normalize().Cross(c.Up).Mul(offset)
+	case Forward:
+		delta = c.LookAt.Sub(c.Position).Normalize().Mul(offset)
+	case Backward:
+		delta = c.LookAt.Sub(c.Position).Normalize().Mul(-offset)
+	}
+
+	c.Position = c.Position.Add(delta)
+	c.LookAt = c.LookAt.Add(delta)
 	c.Update()
 }
 

@@ -23,6 +23,9 @@ const (
 	// Coefficients for converting delta cursor movements to yaw/pitch camera angles.
 	mouseSensitivityX float32 = 0.005
 	mouseSensitivityY float32 = 0.005
+
+	// Camera movement speed
+	cameraMoveSpeed float32 = 0.05
 )
 
 // Return the available opencl devices after applying the blacklist filters.
@@ -201,9 +204,34 @@ func RenderInteractive(ctx *cli.Context) {
 	var mousePressed bool
 	window.SetInputMode(glfw.CursorMode, glfw.CursorNormal)
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-		if action == glfw.Press && key == glfw.KeyEscape {
-			window.SetShouldClose(true)
+		if action != glfw.Press && action != glfw.Repeat {
+			return
 		}
+
+		var moveDir scene.CameraDirection
+		switch key {
+		case glfw.KeyEscape:
+			window.SetShouldClose(true)
+		case glfw.KeyUp:
+			moveDir = scene.Forward
+		case glfw.KeyDown:
+			moveDir = scene.Backward
+		case glfw.KeyLeft:
+			moveDir = scene.Left
+		case glfw.KeyRight:
+			moveDir = scene.Right
+		default:
+			return
+
+		}
+
+		// Double speed if shift is pressed
+		var speedScaler float32 = 1.0
+		if (mods & glfw.ModShift) == glfw.ModShift {
+			speedScaler = 2.0
+		}
+		camera.Move(moveDir, speedScaler*cameraMoveSpeed)
+		r.UpdateCamera()
 	})
 	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
 		if button != glfw.MouseButtonLeft {

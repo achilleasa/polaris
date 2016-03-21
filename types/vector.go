@@ -25,6 +25,11 @@ func XYZW(x, y, z, w float32) Vec4 {
 	return Vec4{x, y, z, w}
 }
 
+// Expand a 2 component vector to a Vec3
+func (v Vec2) Vec3(z float32) Vec3 {
+	return Vec3{v[0], v[1], z}
+}
+
 // Expand a 3 component vector to a Vec4.
 func (v Vec3) Vec4(w float32) Vec4 {
 	return Vec4{v[0], v[1], v[2], w}
@@ -57,6 +62,11 @@ func (v Vec3) Normalize() Vec3 {
 		return Vec3{}
 	}
 	return Vec3{v[0] * l, v[1] * l, v[2] * l}
+}
+
+// Subtract a vector.
+func (v Vec2) Sub(v2 Vec2) Vec2 {
+	return Vec2{v[0] - v2[0], v[1] - v2[1]}
 }
 
 // Calculate dot product of 2 vectors

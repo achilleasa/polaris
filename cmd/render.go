@@ -10,11 +10,19 @@ import (
 	"unsafe"
 
 	"github.com/achilleasa/go-pathtrace/renderer"
+	"github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/go-pathtrace/scene/io"
 	"github.com/achilleasa/go-pathtrace/tracer/opencl"
+	"github.com/achilleasa/go-pathtrace/types"
 	"github.com/codegangsta/cli"
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.1/glfw"
+)
+
+const (
+	// Coefficients for converting delta cursor movements to yaw/pitch camera angles.
+	mouseSensitivityX float32 = 0.005
+	mouseSensitivityY float32 = 0.005
 )
 
 // Return the available opencl devices after applying the blacklist filters.
@@ -42,7 +50,7 @@ func filteredDeviceList(ctx *cli.Context) []opencl.Device {
 }
 
 // Load scene and setup renderer.
-func setupRenderer(ctx *cli.Context, invertY bool) *renderer.Renderer {
+func setupRenderer(ctx *cli.Context, invertY bool) (*renderer.Renderer, *scene.Camera) {
 	// Get render params
 	frameW := uint32(ctx.Int("width"))
 	frameH := uint32(ctx.Int("height"))
@@ -98,7 +106,7 @@ func setupRenderer(ctx *cli.Context, invertY bool) *renderer.Renderer {
 	sc.Camera.SetupProjection(float32(frameW) / float32(frameH))
 	r.UpdateCamera()
 
-	return r
+	return r, sc.Camera
 }
 
 // Render still frame.
@@ -108,7 +116,7 @@ func RenderFrame(ctx *cli.Context) {
 	imgFile := ctx.String("out")
 
 	// Render frame
-	r := setupRenderer(ctx, false)
+	r, _ := setupRenderer(ctx, false)
 	defer r.Close()
 	logger.Print("rendering frame")
 	start := time.Now()
@@ -185,14 +193,47 @@ func RenderInteractive(ctx *cli.Context) {
 	// Init renderer. glBlitFrameBuffer copies the texture with the Y axis
 	// inverted. To correct this, we adjust the camera frustrum corners
 	// so that the scene is rendered upside-down.
-	r := setupRenderer(ctx, true)
+	r, camera := setupRenderer(ctx, true)
 	defer r.Close()
 
-	// Register input callback handler
+	// Enable mouse cursor and register input callbacks
+	var lastCursorPos types.Vec2
+	var mousePressed bool
+	window.SetInputMode(glfw.CursorMode, glfw.CursorNormal)
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 		if action == glfw.Press && key == glfw.KeyEscape {
 			window.SetShouldClose(true)
 		}
+	})
+	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
+		if button != glfw.MouseButtonLeft {
+			return
+		}
+
+		if action == glfw.Press {
+			xPos, yPos := w.GetCursorPos()
+			lastCursorPos[0], lastCursorPos[1] = float32(xPos), float32(yPos)
+			mousePressed = true
+		} else {
+			mousePressed = false
+		}
+	})
+	window.SetCursorPosCallback(func(w *glfw.Window, xPos, yPos float64) {
+		if !mousePressed {
+			return
+		}
+
+		// Calculate delta movement and apply mouse sensitivity
+		newPos := types.Vec2{float32(xPos), float32(yPos)}
+		delta := lastCursorPos.Sub(newPos)
+		delta[0] *= mouseSensitivityX
+		delta[1] *= mouseSensitivityY
+		lastCursorPos = newPos
+
+		camera.Pitch = delta[1]
+		camera.Yaw = delta[0]
+		camera.Update()
+		r.UpdateCamera()
 	})
 
 	// Enter render loop

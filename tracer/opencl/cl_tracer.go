@@ -212,7 +212,7 @@ func (tr *clTracer) ApplyPendingChanges() error {
 			kernelArgIndex = 2
 			if data, valid := changeData.(*scene.Camera); valid {
 				// Update eye position
-				eyePos := data.Position()
+				eyePos := data.Position.Vec4(0)
 				errCode := cl.SetKernelArg(tr.kernel, 8, 16, unsafe.Pointer(&eyePos[0]))
 				if errCode != cl.SUCCESS {
 					tr.logger.Printf("error %d setting kernel arg 8 (eyePos)", errCode)

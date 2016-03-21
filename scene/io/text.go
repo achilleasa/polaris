@@ -98,7 +98,10 @@ func (p *textSceneReader) Read() (*scene.Scene, error) {
 	}
 
 	// Setup camera
-	sc.Camera.LookAt(p.cameraEye, p.cameraLook, p.cameraUp)
+	sc.Camera.Position = p.cameraEye
+	sc.Camera.LookAt = p.cameraLook
+	sc.Camera.Up = p.cameraUp
+	sc.Camera.Update()
 
 	// Package materials
 	for idx, mat := range p.usedMaterials {

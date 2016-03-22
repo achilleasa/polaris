@@ -2,9 +2,9 @@ package renderer
 
 import (
 	"image"
-	"math"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/go-pathtrace/tracer"
@@ -24,6 +24,9 @@ type Renderer struct {
 	// Renderer frame dims.
 	frameW uint32
 	frameH uint32
+
+	// A block scheduler instance
+	scheduler tracer.BlockScheduler
 
 	// The scene to be rendered.
 	scene *scene.Scene
@@ -49,8 +52,8 @@ type Renderer struct {
 	// framebuffer contents into the accumulation buffer.
 	frameCount uint32
 
-	// A list of assigned block height for each tracer
-	blockAssignment []uint32
+	// The time it took to render last frame (in nanoseconds)
+	lastFrameTime int64
 
 	// The list of attached tracers
 	tracers []tracer.Tracer
@@ -65,18 +68,18 @@ type Renderer struct {
 // Create a new renderer
 func NewRenderer(frameW, frameH uint32, sc *scene.Scene) *Renderer {
 	return &Renderer{
-		frameW:          frameW,
-		frameH:          frameH,
-		tracerDoneChan:  make(chan uint32, frameH),
-		tracerErrChan:   make(chan error, 0),
-		frameBuffer:     image.NewRGBA(image.Rect(0, 0, int(frameW), int(frameH))),
-		accumBuffer:     make([]float32, frameW*frameH*4),
-		frameCount:      0,
-		blockAssignment: make([]uint32, 0),
-		tracers:         make([]tracer.Tracer, 0),
-		scene:           sc,
-		sppEstimate:     1,
-		Exposure:        1,
+		frameW:         frameW,
+		frameH:         frameH,
+		scheduler:      tracer.NewPerfectScheduler(),
+		tracerDoneChan: make(chan uint32, frameH),
+		tracerErrChan:  make(chan error, 0),
+		frameBuffer:    image.NewRGBA(image.Rect(0, 0, int(frameW), int(frameH))),
+		accumBuffer:    make([]float32, frameW*frameH*4),
+		frameCount:     0,
+		tracers:        make([]tracer.Tracer, 0),
+		scene:          sc,
+		sppEstimate:    1,
+		Exposure:       1,
 	}
 }
 
@@ -110,7 +113,6 @@ func (r *Renderer) AddTracer(tr tracer.Tracer) error {
 	defer r.Unlock()
 
 	r.tracers = append(r.tracers, tr)
-	r.blockAssignment = append(r.blockAssignment, 0)
 	return nil
 }
 
@@ -125,20 +127,6 @@ func (r *Renderer) syncScene(tr tracer.Tracer) error {
 	return tr.ApplyPendingChanges()
 }
 
-// Distribute the frame rows between the pooled tracers.
-func (r *Renderer) assignTracerBlocks() {
-	// Get speed estimate for each tracer and distribute rows accordingly
-	var totalSpeedEstimate float32 = 0.0
-	for _, tr := range r.tracers {
-		totalSpeedEstimate += tr.SpeedEstimate()
-	}
-	scaler := float32(r.frameH) / totalSpeedEstimate
-
-	for idx, tr := range r.tracers {
-		r.blockAssignment[idx] = uint32(math.Ceil(float64(tr.SpeedEstimate() * scaler)))
-	}
-}
-
 // Render frame. This method splits the screen into blocks and distributes them
 // to all available tracers. Once the blocks have been successfully rendered
 // it composes the results into an RGBA image. Callers must never modify the
@@ -146,6 +134,8 @@ func (r *Renderer) assignTracerBlocks() {
 func (r *Renderer) Render(spp SamplesPerPixel) (*image.RGBA, error) {
 	r.Lock()
 	defer r.Unlock()
+
+	startTime := time.Now()
 
 	if r.scene == nil {
 		return nil, ErrSceneNotDefined
@@ -158,7 +148,7 @@ func (r *Renderer) Render(spp SamplesPerPixel) (*image.RGBA, error) {
 	}
 
 	// Update block assignments
-	r.assignTracerBlocks()
+	blockAssignment := r.scheduler.Schedule(r.tracers, r.frameH, r.lastFrameTime)
 
 	// Setup common block request values
 	var blockReq tracer.BlockRequest
@@ -177,10 +167,7 @@ func (r *Renderer) Render(spp SamplesPerPixel) (*image.RGBA, error) {
 	var pendingRows uint32 = 0
 	for idx, tr := range r.tracers {
 		blockReq.BlockY = pendingRows
-		blockReq.BlockH = r.blockAssignment[idx]
-		if blockReq.BlockY+blockReq.BlockH > r.frameH {
-			blockReq.BlockH = r.frameH - blockReq.BlockY
-		}
+		blockReq.BlockH = blockAssignment[idx]
 		tr.Enqueue(blockReq)
 
 		pendingRows += blockReq.BlockH
@@ -193,7 +180,7 @@ func (r *Renderer) Render(spp SamplesPerPixel) (*image.RGBA, error) {
 			pendingRows -= completedRows
 			if pendingRows == 0 {
 				r.frameCount++
-				//r.updateAccumulationBuffer()
+				r.lastFrameTime = time.Since(startTime).Nanoseconds()
 				return r.frameBuffer, nil
 			}
 		case err := <-r.tracerErrChan:

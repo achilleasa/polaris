@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/achilleasa/go-pathtrace/scene"
@@ -66,6 +67,9 @@ type clTracer struct {
 
 	// A channel for signaling the worker to exit.
 	closeChan chan struct{}
+
+	// Statistics for last rendered frame
+	stats *tracer.Stats
 }
 
 // Create a new opencl tracer.
@@ -78,6 +82,7 @@ func newTracer(id string, device Device) (*clTracer, error) {
 		blockReqChan: make(chan tracer.BlockRequest, 0),
 		closeChan:    make(chan struct{}, 0),
 		updateBuffer: make(map[tracer.ChangeType]interface{}, 0),
+		stats:        &tracer.Stats{},
 	}
 
 	return tr, nil
@@ -251,6 +256,11 @@ func (tr *clTracer) ApplyPendingChanges() error {
 
 	tr.updateBuffer = make(map[tracer.ChangeType]interface{}, 0)
 	return nil
+}
+
+// Retrieve last frame statistics.
+func (tr *clTracer) Stats() *tracer.Stats {
+	return tr.stats
 }
 
 // Sync host data buffer with opencl device buffer. If the device buffer is not
@@ -470,7 +480,6 @@ func (tr *clTracer) cleanup() {
 // Process block request.
 func (tr *clTracer) process(blockReq tracer.BlockRequest) error {
 	var errCode cl.ErrorCode
-
 	// Calculate offsets for accumulation buffer (16 bytes per pixel)
 	accumOffset := uint64(tr.frameW*blockReq.BlockY) << 4
 	accumBlockSize := uint64(tr.frameW*blockReq.BlockH) << 4
@@ -592,11 +601,15 @@ func (tr *clTracer) startWorker() {
 	go func() {
 		defer tr.wg.Done()
 		var blockReq tracer.BlockRequest
+		var startTime time.Time
 		var err error
 		close(readyChan)
 		for {
 			select {
 			case blockReq = <-tr.blockReqChan:
+
+				startTime = time.Now()
+
 				// commit pending changes
 				err = tr.ApplyPendingChanges()
 				if err != nil {
@@ -610,6 +623,11 @@ func (tr *clTracer) startWorker() {
 					blockReq.ErrChan <- err
 					continue
 				}
+
+				// Update stats
+				tr.stats.BlockH = blockReq.BlockH
+				tr.stats.BlockTime = time.Since(startTime).Nanoseconds()
+
 				blockReq.DoneChan <- blockReq.BlockH
 			case <-tr.closeChan:
 				return

@@ -35,6 +35,15 @@ type BlockRequest struct {
 	ErrChan chan<- error
 }
 
+// Tracer statistics.
+type Stats struct {
+	// The rendered block height
+	BlockH uint32
+
+	// The time for rendering this block (in nanoseconds)
+	BlockTime int64
+}
+
 type Tracer interface {
 	// Get tracer id.
 	Id() string
@@ -57,4 +66,7 @@ type Tracer interface {
 
 	// Apply all pending changes from the update buffer.
 	ApplyPendingChanges() error
+
+	// Retrieve last frame statistics.
+	Stats() *Stats
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -16,10 +17,7 @@ import (
 type wavefrontSceneReader struct {
 	logger *log.Logger
 
-	// The name of the file where the scene is stored
-	sceneFile string
-
-	// The parsed scene
+	// The parsed scene.
 	sceneGraph *scene
 
 	// A map of material names to material index.
@@ -39,10 +37,9 @@ type wavefrontSceneReader struct {
 }
 
 // Create a new text scene reader.
-func newWavefrontReader(sceneFile string) *wavefrontSceneReader {
+func newWavefrontReader() *wavefrontSceneReader {
 	return &wavefrontSceneReader{
 		logger:         log.New(os.Stdout, "wavefrontSceneReader: ", log.LstdFlags),
-		sceneFile:      sceneFile,
 		sceneGraph:     newScene(),
 		matNameToIndex: make(map[string]uint32, 0),
 		curMaterial:    -1,
@@ -54,24 +51,34 @@ func newWavefrontReader(sceneFile string) *wavefrontSceneReader {
 }
 
 // Read scene definition.
-func (r *wavefrontSceneReader) Read() (*scenePkg.Scene, error) {
-	r.logger.Printf("parsing scene from %s", r.sceneFile)
+func (r *wavefrontSceneReader) Read(sceneRes *resource) (*scenePkg.Scene, error) {
+	r.logger.Printf("parsing scene from %s", sceneRes.Path())
 	start := time.Now()
 
-	sceneRes, err := newResource(r.sceneFile, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer sceneRes.Close()
-
 	// Parse scene
-	err = r.parse(sceneRes)
+	err := r.parse(sceneRes)
 	if err != nil {
 		return nil, err
 	}
+
+	// If no mesh instances are defined, create instances for each defined mesh
+	if len(r.sceneGraph.meshInstances) == 0 {
+		r.createDefaultMeshInstances()
+	}
+
 	r.logger.Printf("parsed scene in %d ms", time.Since(start).Nanoseconds()/1000000)
 
 	return nil, fmt.Errorf("scenegraph conversion not yet implemented")
+}
+
+// Generate a mesh instance with an identity transformation for each defined mesh.
+func (r *wavefrontSceneReader) createDefaultMeshInstances() {
+	for meshIndex, _ := range r.sceneGraph.meshes {
+		r.sceneGraph.meshInstances = append(r.sceneGraph.meshInstances, &meshInstance{
+			mesh:      uint32(meshIndex),
+			transform: types.Ident4(),
+		})
+	}
 }
 
 // Generate an error message that also includes any data in the error stack.
@@ -231,10 +238,93 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 			if err != nil {
 				return r.emitError(res.Path(), lineNum, err.Error())
 			}
+		case "instance":
+			instance, err := r.parseMeshInstance(lineTokens)
+			if err != nil {
+				return r.emitError(res.Path(), lineNum, err.Error())
+			}
+			r.sceneGraph.meshInstances = append(r.sceneGraph.meshInstances, instance)
 		}
 	}
 
 	return nil
+}
+
+// Parse mesh instance definition. Definitions use the following format:
+// instance mesh_name tX tY tZ yaw pitch roll sX sY sZ
+// where:
+// - tX, tY, tZ       : translation vector
+// - yaw, pitch, roll : rotation angles in degrees
+// - sX, sY, sZ	      : scale
+func (r *wavefrontSceneReader) parseMeshInstance(lineTokens []string) (*meshInstance, error) {
+	if len(lineTokens) != 11 {
+		return nil, fmt.Errorf("unsupported syntax for 'instance'; expected 10 arguments: mesh_name tX tY tZ yaw pitch roll sX sY sZ; got %d", len(lineTokens)-1)
+	}
+
+	// Find object by name
+	meshName := lineTokens[1]
+	meshIndex := -1
+	for index, mesh := range r.sceneGraph.meshes {
+		if mesh.name == meshName {
+			meshIndex = index
+			break
+		}
+	}
+
+	if meshIndex == -1 {
+		return nil, fmt.Errorf("unknown mesh with name '%s'", meshName)
+	}
+
+	var translation, rotation, scale types.Vec3
+
+	// Parse translation
+	for index := 2; index < 5; index++ {
+		v, err := strconv.ParseFloat(lineTokens[index], 32)
+		if err != nil {
+			return nil, err
+		}
+		translation[index-2] = float32(v)
+	}
+
+	// Parse rotation angles and convert to radians
+	for index := 5; index < 8; index++ {
+		v, err := strconv.ParseFloat(lineTokens[index], 32)
+		if err != nil {
+			return nil, err
+		}
+		v *= math.Pi / 180.0
+		rotation[index-5] = float32(v)
+	}
+
+	// Parse scale
+	for index := 8; index < 11; index++ {
+		v, err := strconv.ParseFloat(lineTokens[index], 32)
+		if err != nil {
+			return nil, err
+		}
+		scale[index-8] = float32(v)
+	}
+
+	// Generate final matrix: M = T * R * S
+	yawQuat := types.QuatFromAxisAngle(types.Vec3{1, 0, 0}, rotation[0])
+	pitchQuat := types.QuatFromAxisAngle(types.Vec3{0, 1, 0}, rotation[1])
+	rollQuat := types.QuatFromAxisAngle(types.Vec3{0, 0, 1}, rotation[2])
+	rotMat := rollQuat.Mul(pitchQuat.Mul(yawQuat)).Normalize().Mat4()
+	scaleMat := types.Scale4(scale)
+	transMat := types.Translate4(translation)
+
+	// Transform mesh bbox and recalculate a new AABB for the mesh instance
+	meshBBox := r.sceneGraph.meshes[meshIndex].bbox
+	min, max := transMat.Mul4x1(meshBBox[0].Vec4(1)).Vec3(), transMat.Mul4x1(meshBBox[1].Vec4(1)).Vec3()
+
+	return &meshInstance{
+		mesh:      uint32(meshIndex),
+		transform: scaleMat.Mul4(rotMat.Mul4(transMat)),
+		bbox: [2]types.Vec3{
+			types.MinVec3(min, max),
+			types.MaxVec3(min, max),
+		},
+	}, nil
 }
 
 // Parse face definition. Each face definitions consists of 3 arguments,

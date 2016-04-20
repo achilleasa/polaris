@@ -105,6 +105,91 @@ func TestSelectFaceCoordinate(t *testing.T) {
 	}
 }
 
+func TestDefaultMeshInstanceGeneration(t *testing.T) {
+	payload := `
+o testObj
+v 0 0 0
+v 1 0 0
+v 0 1 0
+vn 1 0 0
+vt 0 0
+vn 0 1 0
+vt 0 1
+vn 0 1 0
+vt 1 0
+vn 0 0 1
+# Comment
+f 1/1/1 2/2/2 -1/-1/-1
+`
+
+	res := mockResource(payload)
+	r := newWavefrontReader()
+	r.Read(res)
+
+	expMeshInstances := 1
+	if len(r.sceneGraph.meshInstances) != expMeshInstances {
+		t.Fatalf("expected %d mesh instances to be generated; got %d", expMeshInstances, len(r.sceneGraph.meshInstances))
+	}
+	inst0 := r.sceneGraph.meshInstances[0]
+	if inst0.mesh != 0 {
+		t.Fatalf("expected mesh instance to point to mesh at index 0; got %d", inst0.mesh)
+	}
+	ident := types.Ident4()
+	if !reflect.DeepEqual(inst0.transform, ident) {
+		t.Fatalf("expected mesh instance transform matric to be equal to a 4x4 identity matrix; got %s", inst0.transform)
+	}
+}
+
+func TestMeshInstancing(t *testing.T) {
+	payload := `
+o testObj
+v 0 0 0
+v 1 0 0
+v 0 1 0
+vn 1 0 0
+vt 0 0
+vn 0 1 0
+vt 0 1
+vn 0 1 0
+vt 1 0
+vn 0 0 1
+# Comment
+f 1/1/1 2/2/2 -1/-1/-1
+# Mesh instances
+instance testObj 	1 0 1	0 0 0 	1 1 1
+instance testObj 	0 0 0	0 90 0 	1 1 1
+instance testObj 	0 1 0	90 0 0	10 10 10
+`
+
+	res := mockResource(payload)
+	r := newWavefrontReader()
+	r.Read(res)
+
+	expMeshInstances := 3
+	if len(r.sceneGraph.meshInstances) != expMeshInstances {
+		t.Fatalf("expected %d mesh instances to be generated; got %d", expMeshInstances, len(r.sceneGraph.meshInstances))
+	}
+
+	type spec struct {
+		instance   uint32
+		in, expOut types.Vec3
+	}
+	specs := []spec{
+		{0, types.Vec3{0, 0, 0}, types.Vec3{1, 0, 1}},
+		{0, types.Vec3{-1, 0, -1}, types.Vec3{0, 0, 0}},
+		{1, types.Vec3{1, 0, 0}, types.Vec3{0, 0, -1}},
+		{1, types.Vec3{0, 0, -1}, types.Vec3{-1, 0, 0}},
+		{2, types.Vec3{0, 1, 0}, types.Vec3{0, 0, 20}},
+	}
+	for idx, s := range specs {
+		inst := r.sceneGraph.meshInstances[s.instance]
+		out := inst.transform.Mul4x1(s.in.Vec4(1.0)).Vec3()
+		if !types.ApproxEqual(out, s.expOut, 1e-3) {
+			t.Fatalf("[spec %d] expected transformed point with instance %d matrix to be %v; got %v", idx, s.instance, s.expOut, out)
+		}
+	}
+}
+
 func TestParseSingleFacedObject(t *testing.T) {
 	payload := `
 o testObj
@@ -123,7 +208,7 @@ f 1/1/1 2/2/2 -1/-1/-1
 `
 
 	res := mockResource(payload)
-	r := newWavefrontReader(res.Path())
+	r := newWavefrontReader()
 	err := r.parse(res)
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +271,7 @@ f 1/1/1 2/2/2 -1/-1/-1
 func TestMaterialLoaderMissingNewMaterialCommand(t *testing.T) {
 	payload := `Kd 1.0 1.0 1.0`
 	res := mockResource(payload)
-	err := newWavefrontReader(res.Path()).parseMaterials(res)
+	err := newWavefrontReader().parseMaterials(res)
 
 	expError := "[embedded: 1] error: got 'Kd' without a 'newmtl'"
 	if err == nil || err.Error() != expError {
@@ -199,7 +284,7 @@ func TestMaterialLoaderInvalidVec3Param(t *testing.T) {
 	newmtl foo
 	Kd 1.0`
 	res := mockResource(payload)
-	err := newWavefrontReader(res.Path()).parseMaterials(res)
+	err := newWavefrontReader().parseMaterials(res)
 
 	expError := "[embedded: 3] error: unsupported syntax for 'Kd'; expected 3 arguments; got 1"
 	if err == nil || err.Error() != expError {
@@ -212,7 +297,7 @@ func TestMaterialLoaderInvalidScalarParam(t *testing.T) {
 	newmtl foo
 	Ni`
 	res := mockResource(payload)
-	err := newWavefrontReader(res.Path()).parseMaterials(res)
+	err := newWavefrontReader().parseMaterials(res)
 
 	expError := "[embedded: 3] error: unsupported syntax for 'Ni'; expected 1 argument; got 0"
 	if err == nil || err.Error() != expError {
@@ -230,7 +315,7 @@ func TestMaterialLoaderSuccess(t *testing.T) {
 	Ni 2.5
 	Nr 0`
 	res := mockResource(payload)
-	r := newWavefrontReader(res.Path())
+	r := newWavefrontReader()
 	err := r.parseMaterials(res)
 	if err != nil {
 		t.Fatal(err)
@@ -286,7 +371,7 @@ map_Ni SERVER/ni.png
 map_Nr SERVER/nr.png
 `
 	res := mockResource(strings.Replace(payload, "SERVER", server.URL, -1))
-	r := newWavefrontReader(res.Path())
+	r := newWavefrontReader()
 	err := r.parseMaterials(res)
 	if err != nil {
 		t.Fatal(err)

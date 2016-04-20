@@ -33,9 +33,19 @@ func (m Mat3) Mul3x1(v Vec3) Vec3 {
 	}
 }
 
-// Create a 4x4 identity matrix
+// Create a 4x4 identity matrix.
 func Ident4() Mat4 {
 	return Mat4{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
+}
+
+// Create a 4x4 scale matrix.
+func Scale4(scale Vec3) Mat4 {
+	return Mat4{scale[0], 0, 0, 0, 0, scale[1], 0, 0, 0, 0, scale[2], 0, 0, 0, 0, 1}
+}
+
+// Create a 4x4 translation matrix.
+func Translate4(translation Vec3) Mat4 {
+	return Mat4{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, translation[0], translation[1], translation[2], 1}
 }
 
 // Multiply a 4x4 matrix with a Vec4. The vector is treated as a 4x1 matrix

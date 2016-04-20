@@ -151,3 +151,13 @@ func (m Mat4) Mat3() Mat3 {
 		m[8], m[9], m[10],
 	}
 }
+
+// Check if two vectors are equal based on a comparison epsilon.
+func ApproxEqual(v1, v2 Vec3, epsilon float32) bool {
+	delta := v1.Sub(v2)
+	delta[0] = float32(math.Abs(float64(delta[0])))
+	delta[1] = float32(math.Abs(float64(delta[1])))
+	delta[2] = float32(math.Abs(float64(delta[2])))
+
+	return delta[0] <= epsilon && delta[1] <= epsilon && delta[2] <= epsilon
+}

@@ -22,7 +22,8 @@ type mesh struct {
 // transformation matrix.
 type meshInstance struct {
 	mesh      uint32
-	transform []types.Mat4
+	transform types.Mat4
+	bbox      [2]types.Vec3
 }
 
 // A material consists of a set of vector and scalar parameters that define the

@@ -73,10 +73,13 @@ func (r *wavefrontSceneReader) Read(sceneRes *resource) (*scenePkg.Scene, error)
 
 // Generate a mesh instance with an identity transformation for each defined mesh.
 func (r *wavefrontSceneReader) createDefaultMeshInstances() {
-	for meshIndex, _ := range r.sceneGraph.Meshes {
+	for meshIndex, mesh := range r.sceneGraph.Meshes {
+		bbox := mesh.BBox()
 		r.sceneGraph.MeshInstances = append(r.sceneGraph.MeshInstances, &MeshInstance{
 			MeshIndex: uint32(meshIndex),
 			Transform: types.Ident4(),
+			bbox:      bbox,
+			center:    bbox[0].Add(bbox[1]).Mul(0.5),
 		})
 	}
 }
@@ -217,6 +220,7 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 
 			// Append primitive
 			meshIndex := len(r.sceneGraph.Meshes) - 1
+			r.sceneGraph.Meshes[meshIndex].bboxNeedsUpdate = true
 			r.sceneGraph.Meshes[meshIndex].Primitives = append(r.sceneGraph.Meshes[meshIndex].Primitives, prim)
 		case "camera_fov":
 			r.sceneGraph.Camera.FOV, err = parseFloat32(lineTokens)
@@ -314,16 +318,17 @@ func (r *wavefrontSceneReader) parseMeshInstance(lineTokens []string) (*MeshInst
 	transMat := types.Translate4(translation)
 
 	// Transform mesh bbox and recalculate a new AABB for the mesh instance
-	meshBBox := r.sceneGraph.Meshes[meshIndex].BBox
+	meshBBox := r.sceneGraph.Meshes[meshIndex].BBox()
 	min, max := transMat.Mul4x1(meshBBox[0].Vec4(1)).Vec3(), transMat.Mul4x1(meshBBox[1].Vec4(1)).Vec3()
-
+	instBBox := [2]types.Vec3{
+		types.MinVec3(min, max),
+		types.MaxVec3(min, max),
+	}
 	return &MeshInstance{
 		MeshIndex: uint32(meshIndex),
 		Transform: scaleMat.Mul4(rotMat.Mul4(transMat)),
-		BBox: [2]types.Vec3{
-			types.MinVec3(min, max),
-			types.MaxVec3(min, max),
-		},
+		bbox:      instBBox,
+		center:    instBBox[0].Add(instBBox[1]).Mul(0.5),
 	}, nil
 }
 
@@ -398,14 +403,15 @@ func (r *wavefrontSceneReader) parseFace(lineTokens []string) (*Primitive, error
 	}
 
 	return &Primitive{
-		Vertices: vertices,
-		Normals:  normals,
-		UVs:      uv,
-		BBox: [2]types.Vec3{
+		Vertices:      vertices,
+		Normals:       normals,
+		UVs:           uv,
+		MaterialIndex: uint32(r.curMaterial),
+		bbox: [2]types.Vec3{
 			types.MinVec3(vertices[0], types.MinVec3(vertices[1], vertices[2])),
 			types.MaxVec3(vertices[0], types.MaxVec3(vertices[1], vertices[2])),
 		},
-		MaterialIndex: uint32(r.curMaterial),
+		center: vertices[0].Add(vertices[1]).Add(vertices[2]).Mul(1.0 / 3.0),
 	}, nil
 }
 

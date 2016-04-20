@@ -1,21 +1,59 @@
 package reader
 
-import "github.com/achilleasa/go-pathtrace/types"
+import (
+	"math"
+
+	"github.com/achilleasa/go-pathtrace/types"
+)
 
 // The primitive struct represents a parsed triangle primitive.
 type Primitive struct {
 	Vertices      [3]types.Vec3
 	Normals       [3]types.Vec3
 	UVs           [3]types.Vec2
-	BBox          [2]types.Vec3
 	MaterialIndex uint32
+
+	bbox   [2]types.Vec3
+	center types.Vec3
+}
+
+// Implements optimizer.BoundedVolume
+func (prim *Primitive) BBox() [2]types.Vec3 {
+	return prim.bbox
+}
+
+// Implements optimized.BoundedVolume
+func (prim *Primitive) Center() types.Vec3 {
+	return prim.center
 }
 
 // A mesh is comprised of a list of primitives
 type Mesh struct {
 	Name       string
 	Primitives []*Primitive
-	BBox       [2]types.Vec3
+
+	bbox            [2]types.Vec3
+	bboxNeedsUpdate bool
+}
+
+// Get mesh bounding box.
+func (m *Mesh) BBox() [2]types.Vec3 {
+	if m.bboxNeedsUpdate {
+		m.bbox = [2]types.Vec3{
+			types.Vec3{math.MaxFloat32, math.MaxFloat32, math.MaxFloat32},
+			types.Vec3{-math.MaxFloat32, -math.MaxFloat32, -math.MaxFloat32},
+		}
+
+		for _, prim := range m.Primitives {
+			primBBox := prim.BBox()
+			m.bbox[0] = types.MinVec3(m.bbox[0], primBBox[0])
+			m.bbox[1] = types.MaxVec3(m.bbox[1], primBBox[1])
+		}
+
+		m.bboxNeedsUpdate = false
+	}
+
+	return m.bbox
 }
 
 // A mesh instance reuses the geometry of a mesh and combines it with a
@@ -23,7 +61,18 @@ type Mesh struct {
 type MeshInstance struct {
 	MeshIndex uint32
 	Transform types.Mat4
-	BBox      [2]types.Vec3
+	bbox      [2]types.Vec3
+	center    types.Vec3
+}
+
+// Implements optimizer.BoundedVolume
+func (mi *MeshInstance) BBox() [2]types.Vec3 {
+	return mi.bbox
+}
+
+// Implements optimized.BoundedVolume
+func (mi *MeshInstance) Center() types.Vec3 {
+	return mi.center
 }
 
 // A material consists of a set of vector and scalar parameters that define the
@@ -111,8 +160,9 @@ func newScene() *Scene {
 
 func newMesh(name string) *Mesh {
 	return &Mesh{
-		Name:       name,
-		Primitives: make([]*Primitive, 0),
+		Name:            name,
+		Primitives:      make([]*Primitive, 0),
+		bboxNeedsUpdate: true,
 	}
 }
 

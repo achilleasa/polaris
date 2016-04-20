@@ -138,6 +138,22 @@ f 1/1/1 2/2/2 -1/-1/-1
 	if !reflect.DeepEqual(inst0.Transform, ident) {
 		t.Fatalf("expected mesh instance transform matric to be equal to a 4x4 identity matrix; got %s", inst0.Transform)
 	}
+
+	expCenter := types.Vec3{0.5, 0.5, 0}
+	if !types.ApproxEqual(inst0.Center(), expCenter, 1e-3) {
+		t.Fatalf("expected mesh center to be %v; got %v", expCenter, inst0.Center())
+	}
+	expBBox := [2]types.Vec3{
+		{0, 0, 0},
+		{1, 1, 0},
+	}
+	bbox := inst0.BBox()
+	if !types.ApproxEqual(bbox[0], expBBox[0], 1e-3) {
+		t.Fatalf("expected bbox min to be %v; got %v", expBBox[0], bbox[0])
+	}
+	if !types.ApproxEqual(bbox[1], expBBox[1], 1e-3) {
+		t.Fatalf("expected bbox max to be %v; got %v", expBBox[1], bbox[1])
+	}
 }
 
 func TestMeshInstancing(t *testing.T) {
@@ -186,6 +202,19 @@ instance testObj 	0 1 0	90 0 0	10 10 10
 		out := inst.Transform.Mul4x1(s.in.Vec4(1.0)).Vec3()
 		if !types.ApproxEqual(out, s.expOut, 1e-3) {
 			t.Fatalf("[spec %d] expected transformed point with instance %d matrix to be %v; got %v", idx, s.instance, s.expOut, out)
+		}
+	}
+
+	expBBoxes := [][2]types.Vec3{
+		[2]types.Vec3{types.Vec3{1, 0, 1}, types.Vec3{2, 1, 1}},
+	}
+	for meshIndex, expBBox := range expBBoxes {
+		bbox := r.sceneGraph.MeshInstances[meshIndex].BBox()
+		if !types.ApproxEqual(bbox[0], expBBox[0], 1e-3) {
+			t.Fatalf("[mesh inst. %d] expected bbox min to be %v; got %v", meshIndex, expBBox[0], bbox[0])
+		}
+		if !types.ApproxEqual(bbox[1], expBBox[1], 1e-3) {
+			t.Fatalf("[mesh inst. %d] expected bbox max to be %v; got %v", meshIndex, expBBox[1], bbox[1])
 		}
 	}
 }
@@ -265,6 +294,22 @@ f 1/1/1 2/2/2 -1/-1/-1
 		if !reflect.DeepEqual(prim0.UVs[idx], exp) {
 			t.Fatalf("expected uv %d to be %v; got %v", idx, exp, prim0.UVs[idx])
 		}
+	}
+
+	expCenter := types.Vec3{0.333, 0.333, 0}
+	if !types.ApproxEqual(prim0.Center(), expCenter, 1e-3) {
+		t.Fatalf("expected face center to be %v; got %v", expCenter, prim0.Center())
+	}
+	expBBox := [2]types.Vec3{
+		{0, 0, 0},
+		{1, 1, 0},
+	}
+	bbox := prim0.BBox()
+	if !types.ApproxEqual(bbox[0], expBBox[0], 1e-3) {
+		t.Fatalf("expected bbox min to be %v; got %v", expBBox[0], bbox[0])
+	}
+	if !types.ApproxEqual(bbox[1], expBBox[1], 1e-3) {
+		t.Fatalf("expected bbox max to be %v; got %v", expBBox[1], bbox[1])
 	}
 }
 

@@ -105,17 +105,17 @@ func TestRgba8Texture(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if tex.width != 1 || tex.height != 1 {
-		t.Fatalf("expected tex dims to be 1x1; got %dx%d", tex.width, tex.height)
+	if tex.Width != 1 || tex.Height != 1 {
+		t.Fatalf("expected tex dims to be 1x1; got %dx%d", tex.Width, tex.Height)
 	}
 
-	if tex.format != Rgba8 {
-		t.Fatalf("expected tex format to be %d; got %d", Rgb8, tex.format)
+	if tex.Format != Rgba8 {
+		t.Fatalf("expected tex format to be %d; got %d", Rgb8, tex.Format)
 	}
 
 	expLen := 4
-	if len(tex.data) != expLen {
-		t.Fatalf("expected tex data len to be %d; got %d", expLen, len(tex.data))
+	if len(tex.Data) != expLen {
+		t.Fatalf("expected tex data len to be %d; got %d", expLen, len(tex.Data))
 	}
 }
 
@@ -132,17 +132,17 @@ func TestRgb32Texture(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if tex.width != 1 || tex.height != 1 {
-		t.Fatalf("expected tex dims to be 1x1; got %dx%d", tex.width, tex.height)
+	if tex.Width != 1 || tex.Height != 1 {
+		t.Fatalf("expected tex dims to be 1x1; got %dx%d", tex.Width, tex.Height)
 	}
 
-	if tex.format != Rgba32 {
-		t.Fatalf("expected tex format to be %d; got %d", Rgb32, tex.format)
+	if tex.Format != Rgba32 {
+		t.Fatalf("expected tex format to be %d; got %d", Rgb32, tex.Format)
 	}
 
 	expLen := 4 * 4
-	if len(tex.data) != expLen {
-		t.Fatalf("expected tex data len to be %d; got %d", expLen, len(tex.data))
+	if len(tex.Data) != expLen {
+		t.Fatalf("expected tex data len to be %d; got %d", expLen, len(tex.Data))
 	}
 }
 
@@ -168,17 +168,17 @@ func TestStreamHttpTexture(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if tex.width != 1 || tex.height != 1 {
-		t.Fatalf("expected tex dims to be 1x1; got %dx%d", tex.width, tex.height)
+	if tex.Width != 1 || tex.Height != 1 {
+		t.Fatalf("expected tex dims to be 1x1; got %dx%d", tex.Width, tex.Height)
 	}
 
-	if tex.format != Rgba32 {
-		t.Fatalf("expected tex format to be %d; got %d", Rgb32, tex.format)
+	if tex.Format != Rgba32 {
+		t.Fatalf("expected tex format to be %d; got %d", Rgb32, tex.Format)
 	}
 
 	expLen := 4 * 4
-	if len(tex.data) != expLen {
-		t.Fatalf("expected tex data len to be %d; got %d", expLen, len(tex.data))
+	if len(tex.Data) != expLen {
+		t.Fatalf("expected tex data len to be %d; got %d", expLen, len(tex.Data))
 	}
 }
 

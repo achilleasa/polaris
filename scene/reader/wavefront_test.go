@@ -127,16 +127,16 @@ f 1/1/1 2/2/2 -1/-1/-1
 	r.Read(res)
 
 	expMeshInstances := 1
-	if len(r.sceneGraph.meshInstances) != expMeshInstances {
-		t.Fatalf("expected %d mesh instances to be generated; got %d", expMeshInstances, len(r.sceneGraph.meshInstances))
+	if len(r.sceneGraph.MeshInstances) != expMeshInstances {
+		t.Fatalf("expected %d mesh instances to be generated; got %d", expMeshInstances, len(r.sceneGraph.MeshInstances))
 	}
-	inst0 := r.sceneGraph.meshInstances[0]
-	if inst0.mesh != 0 {
-		t.Fatalf("expected mesh instance to point to mesh at index 0; got %d", inst0.mesh)
+	inst0 := r.sceneGraph.MeshInstances[0]
+	if inst0.MeshIndex != 0 {
+		t.Fatalf("expected mesh instance to point to mesh at index 0; got %d", inst0.MeshIndex)
 	}
 	ident := types.Ident4()
-	if !reflect.DeepEqual(inst0.transform, ident) {
-		t.Fatalf("expected mesh instance transform matric to be equal to a 4x4 identity matrix; got %s", inst0.transform)
+	if !reflect.DeepEqual(inst0.Transform, ident) {
+		t.Fatalf("expected mesh instance transform matric to be equal to a 4x4 identity matrix; got %s", inst0.Transform)
 	}
 }
 
@@ -166,8 +166,8 @@ instance testObj 	0 1 0	90 0 0	10 10 10
 	r.Read(res)
 
 	expMeshInstances := 3
-	if len(r.sceneGraph.meshInstances) != expMeshInstances {
-		t.Fatalf("expected %d mesh instances to be generated; got %d", expMeshInstances, len(r.sceneGraph.meshInstances))
+	if len(r.sceneGraph.MeshInstances) != expMeshInstances {
+		t.Fatalf("expected %d mesh instances to be generated; got %d", expMeshInstances, len(r.sceneGraph.MeshInstances))
 	}
 
 	type spec struct {
@@ -182,8 +182,8 @@ instance testObj 	0 1 0	90 0 0	10 10 10
 		{2, types.Vec3{0, 1, 0}, types.Vec3{0, 0, 20}},
 	}
 	for idx, s := range specs {
-		inst := r.sceneGraph.meshInstances[s.instance]
-		out := inst.transform.Mul4x1(s.in.Vec4(1.0)).Vec3()
+		inst := r.sceneGraph.MeshInstances[s.instance]
+		out := inst.Transform.Mul4x1(s.in.Vec4(1.0)).Vec3()
 		if !types.ApproxEqual(out, s.expOut, 1e-3) {
 			t.Fatalf("[spec %d] expected transformed point with instance %d matrix to be %v; got %v", idx, s.instance, s.expOut, out)
 		}
@@ -215,24 +215,24 @@ f 1/1/1 2/2/2 -1/-1/-1
 	}
 
 	expMeshes := 1
-	if len(r.sceneGraph.meshes) != expMeshes {
-		t.Fatalf("expected %d meshes to be parsed; got %d", expMeshes, len(r.sceneGraph.meshes))
+	if len(r.sceneGraph.Meshes) != expMeshes {
+		t.Fatalf("expected %d meshes to be parsed; got %d", expMeshes, len(r.sceneGraph.Meshes))
 	}
 
-	mesh0 := r.sceneGraph.meshes[0]
+	mesh0 := r.sceneGraph.Meshes[0]
 	expName := "testObj"
-	if mesh0.name != expName {
-		t.Fatalf("expected mesh[0] name to be '%s'; got %s", expName, mesh0.name)
+	if mesh0.Name != expName {
+		t.Fatalf("expected mesh[0] name to be '%s'; got %s", expName, mesh0.Name)
 	}
 
 	expPrimitives := 1
-	if len(mesh0.primitives) != expPrimitives {
-		t.Fatalf("expected mesh[0] to contain %d primitives; got %d", expPrimitives, len(mesh0.primitives))
+	if len(mesh0.Primitives) != expPrimitives {
+		t.Fatalf("expected mesh[0] to contain %d primitives; got %d", expPrimitives, len(mesh0.Primitives))
 	}
 
 	expMaterials := 1
-	if len(r.sceneGraph.materials) != expMaterials {
-		t.Fatalf("expected scene to contain %d material(s); got %d", expMaterials, len(r.sceneGraph.materials))
+	if len(r.sceneGraph.Materials) != expMaterials {
+		t.Fatalf("expected scene to contain %d material(s); got %d", expMaterials, len(r.sceneGraph.Materials))
 	}
 
 	expPoints := []types.Vec3{
@@ -250,20 +250,20 @@ f 1/1/1 2/2/2 -1/-1/-1
 		{0, 1},
 		{1, 0},
 	}
-	prim0 := mesh0.primitives[0]
+	prim0 := mesh0.Primitives[0]
 	for idx, exp := range expPoints {
-		if !reflect.DeepEqual(prim0.vertices[idx], exp) {
-			t.Fatalf("expected vertex %d to be %v; got %v", idx, exp, prim0.vertices[idx])
+		if !reflect.DeepEqual(prim0.Vertices[idx], exp) {
+			t.Fatalf("expected vertex %d to be %v; got %v", idx, exp, prim0.Vertices[idx])
 		}
 	}
 	for idx, exp := range expNormals {
-		if !reflect.DeepEqual(prim0.normals[idx], exp) {
-			t.Fatalf("expected normal %d to be %v; got %v", idx, exp, prim0.normals[idx])
+		if !reflect.DeepEqual(prim0.Normals[idx], exp) {
+			t.Fatalf("expected normal %d to be %v; got %v", idx, exp, prim0.Normals[idx])
 		}
 	}
 	for idx, exp := range expUVs {
-		if !reflect.DeepEqual(prim0.uvs[idx], exp) {
-			t.Fatalf("expected uv %d to be %v; got %v", idx, exp, prim0.uvs[idx])
+		if !reflect.DeepEqual(prim0.UVs[idx], exp) {
+			t.Fatalf("expected uv %d to be %v; got %v", idx, exp, prim0.UVs[idx])
 		}
 	}
 }
@@ -321,35 +321,35 @@ func TestMaterialLoaderSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	matLen := len(r.sceneGraph.materials)
+	matLen := len(r.sceneGraph.Materials)
 	if matLen != 1 {
 		t.Fatalf("expected to parse 1 material; got %d", matLen)
 	}
 
-	mat := r.sceneGraph.materials[0]
-	if mat.name != "foo" {
-		t.Fatalf("expected material name to be 'foo'; got %s", mat.name)
+	mat := r.sceneGraph.Materials[0]
+	if mat.Name != "foo" {
+		t.Fatalf("expected material name to be 'foo'; got %s", mat.Name)
 	}
 
 	expVec3 := types.Vec3{1, 1, 1}
-	if !reflect.DeepEqual(mat.kd, expVec3) {
-		t.Fatalf("expected Kd to be %v; got %v", expVec3, mat.kd)
+	if !reflect.DeepEqual(mat.Kd, expVec3) {
+		t.Fatalf("expected Kd to be %v; got %v", expVec3, mat.Kd)
 	}
 	expVec3 = types.Vec3{0.1, 0.2, 0.3}
-	if !reflect.DeepEqual(mat.ks, expVec3) {
-		t.Fatalf("expected Ks to be %v; got %v", expVec3, mat.ks)
+	if !reflect.DeepEqual(mat.Ks, expVec3) {
+		t.Fatalf("expected Ks to be %v; got %v", expVec3, mat.Ks)
 	}
 	expVec3 = types.Vec3{0.4, 0.5, 0.6}
-	if !reflect.DeepEqual(mat.ke, expVec3) {
-		t.Fatalf("expected Ke to be %v; got %v", expVec3, mat.ke)
+	if !reflect.DeepEqual(mat.Ke, expVec3) {
+		t.Fatalf("expected Ke to be %v; got %v", expVec3, mat.Ke)
 	}
 	var expScalar float32 = 2.5
-	if mat.ni != expScalar {
-		t.Fatalf("expected Ni to be %f; got %f", expScalar, mat.ni)
+	if mat.Ni != expScalar {
+		t.Fatalf("expected Ni to be %f; got %f", expScalar, mat.Ni)
 	}
 	expScalar = 0
-	if mat.nr != expScalar {
-		t.Fatalf("expected Nr to be %f; got %f", expScalar, mat.nr)
+	if mat.Nr != expScalar {
+		t.Fatalf("expected Nr to be %f; got %f", expScalar, mat.Nr)
 	}
 
 }
@@ -377,33 +377,33 @@ map_Nr SERVER/nr.png
 		t.Fatal(err)
 	}
 
-	if len(r.sceneGraph.materials) != 1 {
-		t.Fatalf("expected to parse 1 material; got %d", len(r.sceneGraph.materials))
+	if len(r.sceneGraph.Materials) != 1 {
+		t.Fatalf("expected to parse 1 material; got %d", len(r.sceneGraph.Materials))
 	}
 
 	expTexCount := 6
-	if len(r.sceneGraph.textures) != expTexCount {
-		t.Fatalf("expected to load %d textures; got %d", expTexCount, len(r.sceneGraph.textures))
+	if len(r.sceneGraph.Textures) != expTexCount {
+		t.Fatalf("expected to load %d textures; got %d", expTexCount, len(r.sceneGraph.Textures))
 	}
 
 	texIndices := 0
-	mat := r.sceneGraph.materials[0]
-	if mat.kdTex != -1 {
+	mat := r.sceneGraph.Materials[0]
+	if mat.KdTex != -1 {
 		texIndices++
 	}
-	if mat.ksTex != -1 {
+	if mat.KsTex != -1 {
 		texIndices++
 	}
-	if mat.keTex != -1 {
+	if mat.KeTex != -1 {
 		texIndices++
 	}
-	if mat.niTex != -1 {
+	if mat.NiTex != -1 {
 		texIndices++
 	}
-	if mat.nrTex != -1 {
+	if mat.NrTex != -1 {
 		texIndices++
 	}
-	if mat.normalTex != -1 {
+	if mat.NormalTex != -1 {
 		texIndices++
 	}
 	if texIndices != expTexCount {

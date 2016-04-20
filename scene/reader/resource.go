@@ -84,7 +84,7 @@ func newResource(pathToResource string, relTo *resource) (*resource, error) {
 }
 
 // Create a new texture from a resource.
-func newTexture(res *resource) (*texture, error) {
+func newTexture(res *resource) (*Texture, error) {
 	var pathToFile string
 
 	// If this is a remote resource save it to a temp file so that oiio can load it
@@ -155,16 +155,16 @@ func newTexture(res *resource) (*texture, error) {
 	}
 
 	// Setup texture
-	texture := &texture{
-		format: texFmt,
-		width:  uint32(spec.Width()),
-		height: uint32(spec.Height()),
+	texture := &Texture{
+		Format: texFmt,
+		Width:  uint32(spec.Width()),
+		Height: uint32(spec.Height()),
 	}
 
 	// Cast data to []byte
 	switch t := imgData.(type) {
 	case []uint8:
-		texture.data = t
+		texture.Data = t
 	case []uint:
 		// Fetch slice header and adjust len/capacity (1 uint32 = 4 bytes)
 		header := *(*reflect.SliceHeader)(unsafe.Pointer(&t))
@@ -172,7 +172,7 @@ func newTexture(res *resource) (*texture, error) {
 		header.Cap <<= 2
 
 		// Convert to a []byte
-		texture.data = *(*[]byte)(unsafe.Pointer(&header))
+		texture.Data = *(*[]byte)(unsafe.Pointer(&header))
 	}
 
 	return texture, nil

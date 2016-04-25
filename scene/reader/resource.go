@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/openimageigo"
 )
 
@@ -84,7 +85,7 @@ func newResource(pathToResource string, relTo *resource) (*resource, error) {
 }
 
 // Create a new texture from a resource.
-func newTexture(res *resource) (*Texture, error) {
+func newTexture(res *resource) (*scene.ParsedTexture, error) {
 	var pathToFile string
 
 	// If this is a remote resource save it to a temp file so that oiio can load it
@@ -122,7 +123,7 @@ func newTexture(res *resource) (*Texture, error) {
 	}
 
 	// Select tex format
-	var texFmt TextureFormat
+	var texFmt scene.TextureFormat
 	var convertTo oiio.TypeDesc
 	switch spec.Format() {
 	case oiio.TypeUint8:
@@ -130,21 +131,21 @@ func newTexture(res *resource) (*Texture, error) {
 
 		switch spec.NumChannels() {
 		case 1:
-			texFmt = Luminance8
+			texFmt = scene.Luminance8
 		case 3:
-			texFmt = Rgb8
+			texFmt = scene.Rgb8
 		case 4:
-			texFmt = Rgba8
+			texFmt = scene.Rgba8
 		}
 	default:
 		convertTo = oiio.TypeUint
 		switch spec.NumChannels() {
 		case 1:
-			texFmt = Luminance32
+			texFmt = scene.Luminance32
 		case 3:
-			texFmt = Rgb32
+			texFmt = scene.Rgb32
 		case 4:
-			texFmt = Rgba32
+			texFmt = scene.Rgba32
 		}
 	}
 
@@ -155,7 +156,7 @@ func newTexture(res *resource) (*Texture, error) {
 	}
 
 	// Setup texture
-	texture := &Texture{
+	texture := &scene.ParsedTexture{
 		Format: texFmt,
 		Width:  uint32(spec.Width()),
 		Height: uint32(spec.Height()),

@@ -18,7 +18,7 @@ type wavefrontSceneReader struct {
 	logger *log.Logger
 
 	// The parsed scene.
-	sceneGraph *Scene
+	sceneGraph *scenePkg.ParsedScene
 
 	// A map of material names to material index.
 	matNameToIndex map[string]uint32
@@ -40,7 +40,7 @@ type wavefrontSceneReader struct {
 func newWavefrontReader() *wavefrontSceneReader {
 	return &wavefrontSceneReader{
 		logger:         log.New(os.Stdout, "wavefrontSceneReader: ", log.LstdFlags),
-		sceneGraph:     newScene(),
+		sceneGraph:     scenePkg.NewParsedScene(),
 		matNameToIndex: make(map[string]uint32, 0),
 		curMaterial:    -1,
 		vertexList:     make([]types.Vec3, 0),
@@ -75,12 +75,13 @@ func (r *wavefrontSceneReader) Read(sceneRes *resource) (*scenePkg.Scene, error)
 func (r *wavefrontSceneReader) createDefaultMeshInstances() {
 	for meshIndex, mesh := range r.sceneGraph.Meshes {
 		bbox := mesh.BBox()
-		r.sceneGraph.MeshInstances = append(r.sceneGraph.MeshInstances, &MeshInstance{
+		inst := &scenePkg.ParsedMeshInstance{
 			MeshIndex: uint32(meshIndex),
 			Transform: types.Ident4(),
-			bbox:      bbox,
-			center:    bbox[0].Add(bbox[1]).Mul(0.5),
-		})
+		}
+		inst.SetBBox(bbox)
+		inst.SetCenter(bbox[0].Add(bbox[1]).Mul(0.5))
+		r.sceneGraph.MeshInstances = append(r.sceneGraph.MeshInstances, inst)
 	}
 }
 
@@ -122,7 +123,7 @@ func (r *wavefrontSceneReader) defaultMaterial() int32 {
 	matIndex, exists := r.matNameToIndex[matName]
 	if !exists {
 		// Add it now
-		r.sceneGraph.Materials = append(r.sceneGraph.Materials, &Material{Kd: types.Vec3{0.7, 0.7, 0.7}})
+		r.sceneGraph.Materials = append(r.sceneGraph.Materials, &scenePkg.ParsedMaterial{Kd: types.Vec3{0.7, 0.7, 0.7}})
 		matIndex = uint32(len(r.sceneGraph.Materials) - 1)
 	}
 	r.curMaterial = int32(matIndex)
@@ -206,7 +207,7 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 				return r.emitError(res.Path(), lineNum, "unsupported syntax for '%s'; expected 1 argument for object name; got %d", lineTokens[0], len(lineTokens)-1)
 			}
 
-			r.sceneGraph.Meshes = append(r.sceneGraph.Meshes, newMesh(lineTokens[1]))
+			r.sceneGraph.Meshes = append(r.sceneGraph.Meshes, scenePkg.NewParsedMesh(lineTokens[1]))
 		case "f":
 			prim, err := r.parseFace(lineTokens)
 			if err != nil {
@@ -215,12 +216,12 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 
 			// If no object has been defined create a default one
 			if len(r.sceneGraph.Meshes) == 0 {
-				r.sceneGraph.Meshes = append(r.sceneGraph.Meshes, newMesh("default"))
+				r.sceneGraph.Meshes = append(r.sceneGraph.Meshes, scenePkg.NewParsedMesh("default"))
 			}
 
 			// Append primitive
 			meshIndex := len(r.sceneGraph.Meshes) - 1
-			r.sceneGraph.Meshes[meshIndex].bboxNeedsUpdate = true
+			r.sceneGraph.Meshes[meshIndex].MarkBBoxDirty()
 			r.sceneGraph.Meshes[meshIndex].Primitives = append(r.sceneGraph.Meshes[meshIndex].Primitives, prim)
 		case "camera_fov":
 			r.sceneGraph.Camera.FOV, err = parseFloat32(lineTokens)
@@ -260,7 +261,7 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 // - tX, tY, tZ       : translation vector
 // - yaw, pitch, roll : rotation angles in degrees
 // - sX, sY, sZ	      : scale
-func (r *wavefrontSceneReader) parseMeshInstance(lineTokens []string) (*MeshInstance, error) {
+func (r *wavefrontSceneReader) parseMeshInstance(lineTokens []string) (*scenePkg.ParsedMeshInstance, error) {
 	if len(lineTokens) != 11 {
 		return nil, fmt.Errorf("unsupported syntax for 'instance'; expected 10 arguments: mesh_name tX tY tZ yaw pitch roll sX sY sZ; got %d", len(lineTokens)-1)
 	}
@@ -324,12 +325,14 @@ func (r *wavefrontSceneReader) parseMeshInstance(lineTokens []string) (*MeshInst
 		types.MinVec3(min, max),
 		types.MaxVec3(min, max),
 	}
-	return &MeshInstance{
+	inst := &scenePkg.ParsedMeshInstance{
 		MeshIndex: uint32(meshIndex),
 		Transform: scaleMat.Mul4(rotMat.Mul4(transMat)),
-		bbox:      instBBox,
-		center:    instBBox[0].Add(instBBox[1]).Mul(0.5),
-	}, nil
+	}
+	inst.SetBBox(instBBox)
+	inst.SetCenter(instBBox[0].Add(instBBox[1]).Mul(0.5))
+
+	return inst, nil
 }
 
 // Parse face definition. Each face definitions consists of 3 arguments,
@@ -346,7 +349,7 @@ func (r *wavefrontSceneReader) parseMeshInstance(lineTokens []string) (*MeshInst
 //
 // This method only works with triangular faces and will return an error if a
 // face with more than 3 vertices is encountered.
-func (r *wavefrontSceneReader) parseFace(lineTokens []string) (*Primitive, error) {
+func (r *wavefrontSceneReader) parseFace(lineTokens []string) (*scenePkg.ParsedPrimitive, error) {
 	if len(lineTokens) != 4 {
 		return nil, fmt.Errorf("unsupported syntax for 'f'; expected 3 arguments for triangular face; got %d. Select the triangulation option in your exporter.", len(lineTokens)-1)
 	}
@@ -402,17 +405,21 @@ func (r *wavefrontSceneReader) parseFace(lineTokens []string) (*Primitive, error
 		r.curMaterial = r.defaultMaterial()
 	}
 
-	return &Primitive{
+	prim := &scenePkg.ParsedPrimitive{
 		Vertices:      vertices,
 		Normals:       normals,
 		UVs:           uv,
 		MaterialIndex: uint32(r.curMaterial),
-		bbox: [2]types.Vec3{
+	}
+	prim.SetBBox(
+		[2]types.Vec3{
 			types.MinVec3(vertices[0], types.MinVec3(vertices[1], vertices[2])),
 			types.MaxVec3(vertices[0], types.MaxVec3(vertices[1], vertices[2])),
 		},
-		center: vertices[0].Add(vertices[1]).Add(vertices[2]).Mul(1.0 / 3.0),
-	}, nil
+	)
+	prim.SetCenter(vertices[0].Add(vertices[1]).Add(vertices[2]).Mul(1.0 / 3.0))
+
+	return prim, nil
 }
 
 // Parse a wavefront material library.
@@ -422,7 +429,7 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 
 	scanner := bufio.NewScanner(res)
 
-	var curMaterial *Material = nil
+	var curMaterial *scenePkg.ParsedMaterial = nil
 	var matName string = ""
 
 	for scanner.Scan() {
@@ -446,7 +453,7 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 			}
 
 			// Allocate new material and add it to library
-			curMaterial = newMaterial(matName)
+			curMaterial = scenePkg.NewParsedMaterial(matName)
 			r.sceneGraph.Materials = append(r.sceneGraph.Materials, curMaterial)
 			r.matNameToIndex[matName] = uint32(len(r.sceneGraph.Materials) - 1)
 		default:

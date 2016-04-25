@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/achilleasa/go-pathtrace/scene"
 )
 
 func TestLocalResource(t *testing.T) {
@@ -109,8 +111,8 @@ func TestRgba8Texture(t *testing.T) {
 		t.Fatalf("expected tex dims to be 1x1; got %dx%d", tex.Width, tex.Height)
 	}
 
-	if tex.Format != Rgba8 {
-		t.Fatalf("expected tex format to be %d; got %d", Rgb8, tex.Format)
+	if tex.Format != scene.Rgba8 {
+		t.Fatalf("expected tex format to be %d; got %d", scene.Rgb8, tex.Format)
 	}
 
 	expLen := 4
@@ -136,8 +138,8 @@ func TestRgb32Texture(t *testing.T) {
 		t.Fatalf("expected tex dims to be 1x1; got %dx%d", tex.Width, tex.Height)
 	}
 
-	if tex.Format != Rgba32 {
-		t.Fatalf("expected tex format to be %d; got %d", Rgb32, tex.Format)
+	if tex.Format != scene.Rgba32 {
+		t.Fatalf("expected tex format to be %d; got %d", scene.Rgb32, tex.Format)
 	}
 
 	expLen := 4 * 4
@@ -172,8 +174,8 @@ func TestStreamHttpTexture(t *testing.T) {
 		t.Fatalf("expected tex dims to be 1x1; got %dx%d", tex.Width, tex.Height)
 	}
 
-	if tex.Format != Rgba32 {
-		t.Fatalf("expected tex format to be %d; got %d", Rgb32, tex.Format)
+	if tex.Format != scene.Rgba32 {
+		t.Fatalf("expected tex format to be %d; got %d", scene.Rgb32, tex.Format)
 	}
 
 	expLen := 4 * 4

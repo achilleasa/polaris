@@ -3,7 +3,8 @@ package cmd
 import (
 	"strings"
 
-	"github.com/achilleasa/go-pathtrace/scene/io"
+	"github.com/achilleasa/go-pathtrace/scene/reader"
+	"github.com/achilleasa/go-pathtrace/scene/writer"
 	"github.com/codegangsta/cli"
 )
 
@@ -16,14 +17,14 @@ func CompileScene(ctx *cli.Context) {
 			continue
 		}
 
-		sc, err := io.ReadScene(sceneFile)
+		sc, err := reader.ReadScene(sceneFile)
 		if err != nil {
 			logger.Printf("error: %s", err.Error())
 			continue
 		}
 
 		zipFile := strings.Replace(sceneFile, ".obj", ".zip", -1)
-		err = io.WriteScene(sc, zipFile)
+		err = writer.WriteScene(sc, zipFile)
 		if err != nil {
 			logger.Printf("error: %s", err.Error())
 			continue

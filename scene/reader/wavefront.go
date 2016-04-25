@@ -11,6 +11,7 @@ import (
 	"time"
 
 	scenePkg "github.com/achilleasa/go-pathtrace/scene"
+	"github.com/achilleasa/go-pathtrace/scene/compiler"
 	"github.com/achilleasa/go-pathtrace/types"
 )
 
@@ -68,7 +69,8 @@ func (r *wavefrontSceneReader) Read(sceneRes *resource) (*scenePkg.Scene, error)
 
 	r.logger.Printf("parsed scene in %d ms", time.Since(start).Nanoseconds()/1000000)
 
-	return nil, fmt.Errorf("scenegraph conversion not yet implemented")
+	// Compile scene into an optimized, gpu-friendly format
+	return compiler.Compile(r.sceneGraph)
 }
 
 // Generate a mesh instance with an identity transformation for each defined mesh.

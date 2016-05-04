@@ -135,17 +135,6 @@ type ParsedMaterial struct {
 	NrTex     int32
 }
 
-type TextureFormat uint32
-
-const (
-	Luminance8 TextureFormat = iota
-	Luminance32
-	Rgb8
-	Rgba8
-	Rgb32
-	Rgba32
-)
-
 // A texture image and its metadata.
 type ParsedTexture struct {
 	Format TextureFormat

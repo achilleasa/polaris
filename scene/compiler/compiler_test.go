@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"bytes"
+	"reflect"
 	"testing"
 
 	"github.com/achilleasa/go-pathtrace/scene"
@@ -139,8 +140,10 @@ func TestPartitionGeometry(t *testing.T) {
 	ps.MeshInstances[1].SetCenter(center)
 
 	sc := &sceneCompiler{
-		parsedScene:    ps,
-		optimizedScene: &scene.Scene{},
+		parsedScene: ps,
+		optimizedScene: &scene.Scene{
+			MaterialNodeRoots: []uint32{0},
+		},
 	}
 	err := sc.partitionGeometry()
 	if err != nil {
@@ -187,5 +190,212 @@ func TestPartitionGeometry(t *testing.T) {
 	}
 	if os.MeshInstanceList[1].BvhRoot != 3 {
 		t.Fatalf("expected bvh bottom root for mesh instance 1 to be 3; got %d", os.MeshInstanceList[1].BvhRoot)
+	}
+}
+
+func TestCreateLayeredMaterialTrees(t *testing.T) {
+	ps := &scene.ParsedScene{
+		Materials: []*scene.ParsedMaterial{
+			&scene.ParsedMaterial{
+				Kd:        types.Vec3{1, 1, 1},
+				KdTex:     1,
+				NormalTex: 2,
+			},
+			&scene.ParsedMaterial{
+				Ks:        types.Vec3{1, 1, 1},
+				KsTex:     1,
+				NormalTex: 2,
+				//
+				KdTex: -1,
+				KeTex: -1,
+				NiTex: -1,
+			},
+			&scene.ParsedMaterial{
+				NormalTex: 2,
+				Ni:        1.333,
+				NiTex:     1,
+				//
+				KdTex: -1,
+				KsTex: -1,
+				KeTex: -1,
+			},
+			&scene.ParsedMaterial{
+				Ks:        types.Vec3{1, 1, 1},
+				KsTex:     1,
+				NormalTex: 2,
+				Ni:        1.333,
+				NiTex:     3,
+				//
+				KdTex: -1,
+				KeTex: -1,
+			},
+			&scene.ParsedMaterial{
+				Ke:    types.Vec3{10, 10, 10},
+				KeTex: 1,
+				//
+				KdTex: -1,
+				KsTex: -1,
+				NiTex: -1,
+			},
+		},
+	}
+
+	sc := &sceneCompiler{
+		parsedScene:    ps,
+		optimizedScene: &scene.Scene{},
+	}
+
+	err := sc.createLayeredMaterialTrees()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(sc.optimizedScene.MaterialNodeRoots) != len(ps.Materials) {
+		t.Fatalf("expected len(MaterialNodeRoots) to be %d; got %d", len(ps.Materials), len(sc.optimizedScene.MaterialNodeRoots))
+	}
+
+	var node scene.MaterialNode
+	var expValue int32
+	var matIndex int
+
+	// First material should be diffuse
+	matIndex = 0
+	node = sc.optimizedScene.MaterialNodeList[sc.optimizedScene.MaterialNodeRoots[matIndex]]
+
+	if !reflect.DeepEqual(node.Kval, ps.Materials[matIndex].Kd.Vec4(0)) {
+		t.Fatalf("[mat %d] expected Kval to be %#+v; got %#+v", matIndex, ps.Materials[matIndex].Kd, node.Kval)
+	}
+
+	expValue = ps.Materials[matIndex].KdTex
+	if node.UnionData[0] != expValue {
+		t.Fatalf("[mat %d] expected Kval tex index to be %d; got %d", matIndex, expValue, node.UnionData[matIndex])
+	}
+
+	expValue = ps.Materials[matIndex].NormalTex
+	if node.UnionData[1] != expValue {
+		t.Fatalf("[mat %d] expected Normal tex index to be %d; got %d", matIndex, expValue, node.UnionData[1])
+	}
+
+	if node.UnionData[3] != int32(scene.Diffuse) {
+		t.Fatalf("[mat %d] expected BRDF type to be Diffuse; got %d", matIndex, node.UnionData[3])
+	}
+
+	// Second material should be specular
+	matIndex = 1
+	node = sc.optimizedScene.MaterialNodeList[sc.optimizedScene.MaterialNodeRoots[matIndex]]
+
+	if !reflect.DeepEqual(node.Kval, ps.Materials[matIndex].Ks.Vec4(0)) {
+		t.Fatalf("[mat %d] expected Kval to be %#+v; got %#+v", matIndex, ps.Materials[matIndex].Ks, node.Kval)
+	}
+
+	expValue = ps.Materials[matIndex].KsTex
+	if node.UnionData[0] != expValue {
+		t.Fatalf("[mat %d] expected Kval tex index to be %d; got %d", matIndex, expValue, node.UnionData[matIndex])
+	}
+
+	expValue = ps.Materials[matIndex].NormalTex
+	if node.UnionData[1] != expValue {
+		t.Fatalf("[mat %d] expected Normal tex index to be %d; got %d", matIndex, expValue, node.UnionData[1])
+	}
+
+	if node.UnionData[3] != int32(scene.Specular) {
+		t.Fatalf("[mat %d] expected BRDF type to be Specular; got %d", matIndex, node.UnionData[3])
+	}
+
+	// Third material should be refractive
+	matIndex = 2
+	node = sc.optimizedScene.MaterialNodeList[sc.optimizedScene.MaterialNodeRoots[matIndex]]
+
+	if node.Nval != ps.Materials[matIndex].Ni {
+		t.Fatalf("[mat %d] expected Nval to be %f; got %f", matIndex, ps.Materials[matIndex].Ni, node.Nval)
+	}
+
+	expValue = ps.Materials[matIndex].NiTex
+	if node.UnionData[2] != expValue {
+		t.Fatalf("[mat %d] expected Ni tex index to be %d; got %d", matIndex, expValue, node.UnionData[2])
+	}
+
+	expValue = ps.Materials[matIndex].NormalTex
+	if node.UnionData[1] != expValue {
+		t.Fatalf("[mat %d] expected Normal tex index to be %d; got %d", matIndex, expValue, node.UnionData[1])
+	}
+
+	if node.UnionData[3] != int32(scene.Refractive) {
+		t.Fatalf("[mat %d] expected BRDF type to be Refractive; got %d", matIndex, node.UnionData[3])
+	}
+
+	// Fourth material should be a 2-level specular/refractive material
+	matIndex = 3
+	node = sc.optimizedScene.MaterialNodeList[sc.optimizedScene.MaterialNodeRoots[matIndex]]
+
+	if node.IsNode != 1 {
+		t.Fatalf("[mat %d] expected to find an intermediate node; got leaf", matIndex)
+	}
+
+	if node.UnionData[3] != int32(scene.Fresnel) {
+		t.Fatalf("[mat %d] expected material node to specify a Fresnel blend func; got %d", matIndex, node.UnionData[2])
+	}
+
+	// Expect left node to be specular
+	{
+		leftNode := sc.optimizedScene.MaterialNodeList[node.UnionData[0]]
+
+		if !reflect.DeepEqual(leftNode.Kval, ps.Materials[matIndex].Ks.Vec4(0)) {
+			t.Fatalf("[mat %d - left child] expected Kval to be %#+v; got %#+v", matIndex, ps.Materials[matIndex].Ks, leftNode.Kval)
+		}
+
+		expValue = ps.Materials[matIndex].KsTex
+		if leftNode.UnionData[0] != expValue {
+			t.Fatalf("[mat %d - left child] expected Kval tex index to be %d; got %d", matIndex, expValue, leftNode.UnionData[matIndex])
+		}
+
+		expValue = ps.Materials[matIndex].NormalTex
+		if leftNode.UnionData[1] != expValue {
+			t.Fatalf("[mat %d - left child] expected Normal tex index to be %d; got %d", matIndex, expValue, leftNode.UnionData[1])
+		}
+
+		if leftNode.UnionData[3] != int32(scene.Specular) {
+			t.Fatalf("[mat %d - left child] expected BRDF type to be Specular; got %d", matIndex, leftNode.UnionData[3])
+		}
+	}
+
+	// Expect right node to be refractive
+	{
+		rightNode := sc.optimizedScene.MaterialNodeList[node.UnionData[1]]
+
+		if rightNode.Nval != ps.Materials[matIndex].Ni {
+			t.Fatalf("[mat %d - right child] expected Nval to be %f; got %f", matIndex, ps.Materials[matIndex].Ni, rightNode.Nval)
+		}
+
+		expValue = ps.Materials[matIndex].NiTex
+		if rightNode.UnionData[2] != expValue {
+			t.Fatalf("[mat %d - right child] expected Ni tex index to be %d; got %d", matIndex, expValue, rightNode.UnionData[2])
+		}
+
+		expValue = ps.Materials[matIndex].NormalTex
+		if rightNode.UnionData[1] != expValue {
+			t.Fatalf("[mat %d - right child] expected Normal tex index to be %d; got %d", matIndex, expValue, rightNode.UnionData[1])
+		}
+
+		if rightNode.UnionData[3] != int32(scene.Refractive) {
+			t.Fatalf("[mat %d - right child] expected BRDF type to be Refractive; got %d", matIndex, rightNode.UnionData[3])
+		}
+	}
+
+	// Fifth material should be emissive
+	matIndex = 4
+	node = sc.optimizedScene.MaterialNodeList[sc.optimizedScene.MaterialNodeRoots[matIndex]]
+
+	if !reflect.DeepEqual(node.Kval, ps.Materials[matIndex].Ke.Vec4(0)) {
+		t.Fatalf("[mat %d] expected Kval to be %#+v; got %#+v", matIndex, ps.Materials[matIndex].Ke, node.Kval)
+	}
+
+	expValue = ps.Materials[matIndex].NormalTex
+	if node.UnionData[1] != expValue {
+		t.Fatalf("[mat %d] expected Normal tex index to be %d; got %d", matIndex, expValue, node.UnionData[1])
+	}
+
+	if node.UnionData[3] != int32(scene.Emissive) {
+		t.Fatalf("[mat %d] expected BRDF type to be Emissive; got %d", matIndex, node.UnionData[3])
 	}
 }

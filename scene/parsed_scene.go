@@ -135,6 +135,26 @@ type ParsedMaterial struct {
 	NrTex     int32
 }
 
+// Return true if material contains a diffuse component.
+func (pm *ParsedMaterial) IsDiffuse() bool {
+	return pm.Kd.Len() > 0 || pm.KdTex != -1
+}
+
+// Return true if material contains a specular component.
+func (pm *ParsedMaterial) IsSpecular() bool {
+	return pm.Ks.Len() > 0 || pm.KsTex != -1
+}
+
+// Return true if material contains an emissive component.
+func (pm *ParsedMaterial) IsEmissive() bool {
+	return pm.Ke.Len() > 0 || pm.KeTex != -1
+}
+
+// Return true if material is refractive.
+func (pm *ParsedMaterial) IsRefractive() bool {
+	return pm.Ni != 0 || pm.NiTex != -1
+}
+
 // A texture image and its metadata.
 type ParsedTexture struct {
 	Format TextureFormat

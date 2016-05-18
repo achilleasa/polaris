@@ -81,7 +81,7 @@ type MeshInstance struct {
 }
 
 // Specification of material node blend functions.
-type MatNodeBlendFunc int
+type MatNodeBlendFunc int32
 
 const (
 	Mix MatNodeBlendFunc = iota
@@ -89,12 +89,13 @@ const (
 )
 
 // Specification of brdf types for material leaf nodes.
-type MatBrdfType int
+type MatBrdfType int32
 
 const (
 	Diffuse MatBrdfType = iota
 	Specular
 	Refractive
+	Emissive
 )
 
 // Materials are represented as a tree where nodes define a blending operation
@@ -104,26 +105,23 @@ const (
 // the node type.
 type MaterialNode struct {
 	// Specifies a color for this node. Depending on the BRDF type
-	// this can be diffuse, specular e.t.c.
+	// this can be diffuse, emissive e.t.c.
 	Kval types.Vec4
-
-	// Material refractive Index
-	IOR float32
 
 	// This field has different contents depending on the node type.
 	//
-	// For intermediate material nodes it contains a value for controlling blending
-	// if blend mode (UnionData[2] == Mix). For leaf nodes it contains a parameter
-	// that depends on the selected BRDF type. This can be reflectance, specularity, emission scaler e.t.c
+	// For intermediate material nodes it contains a value for controlling blending:
+	// - Mix: probability for selecting the left child
+	// - Fresnel: surface IOR
+	//
+	// For leafs it contains a BRDF-specific parameter like roughness e.t.c
 	Nval float32
 
-	// A coefficient for scaling the material contribution. Its value is
-	// calculated by multiplying the probabilities of selecting each intermediate
-	// node.
-	BlendCoeff float32
+	// Reserved space; used by the kernels as scratch space while evaluating materials
+	reserved [2]float32
 
-	// Small padding to keep fields aligned
-	padding float32
+	// Set to 1 if this is a node; 0 if this is a leaf
+	IsNode uint32
 
 	// This union like structure has different contents depending on the node
 	// type.
@@ -131,50 +129,58 @@ type MaterialNode struct {
 	// For intermediate material nodes:
 	// - UnionData[0] is the index of the left child
 	// - UnionData[1] is the index of the right child
-	// - Uniondata[2] specifies the blending function (mix, fresnel blend)
-	// - Uniondata[3] is unused
+	// - UnionData[2] points to the tex index that overrides NVal (-1 if unused)
+	// - Uniondata[3] specifies the blending function (mix, fresnel blend)
 	//
 	// For leaf nodes:
 	// - UnionData[0] points to the tex index that overrides Kval (-1 if unused)
 	// - UnionData[1] points to the tex index that serves as a normal map (-1 if unused)
 	// - UnionData[2] points to the tex index that overrides NVal (-1 if unused)
 	// - UnionData[3] specifies the BRDF type (diffuse, specular e.t.c)
-	UnionData [4]int
+	UnionData [4]int32
+}
+
+// Initialize material node.
+func (m *MaterialNode) Init() {
+	m.UnionData[0] = -1
+	m.UnionData[1] = -1
+	m.UnionData[2] = -1
+	m.UnionData[3] = -1
 }
 
 // Set left child node index.
-func (m *MaterialNode) SetLeftIndex(index int) {
-	m.UnionData[0] = index
+func (m *MaterialNode) SetLeftIndex(index uint32) {
+	m.UnionData[0] = int32(index)
 }
 
 // Set right child node index.
-func (m *MaterialNode) SetRightIndex(index int) {
-	m.UnionData[1] = index
+func (m *MaterialNode) SetRightIndex(index uint32) {
+	m.UnionData[1] = int32(index)
 }
 
 // Set node blend function.
 func (m *MaterialNode) SetBlendFunc(blendfunc MatNodeBlendFunc) {
-	m.UnionData[2] = int(blendfunc)
+	m.UnionData[3] = int32(blendfunc)
 }
 
 // Set Kval tex index.
-func (m *MaterialNode) SetKvalTex(texIndex int) {
+func (m *MaterialNode) SetKvalTex(texIndex int32) {
 	m.UnionData[0] = texIndex
 }
 
 // Set normal tex index.
-func (m *MaterialNode) SetNormalTex(texIndex int) {
+func (m *MaterialNode) SetNormalTex(texIndex int32) {
 	m.UnionData[1] = texIndex
 }
 
 // Set Nval tex index.
-func (m *MaterialNode) SetNvalTex(texIndex int) {
+func (m *MaterialNode) SetNvalTex(texIndex int32) {
 	m.UnionData[2] = texIndex
 }
 
 // Set leaf BRDF type.
 func (m *MaterialNode) SetBrdfType(brdfType MatBrdfType) {
-	m.UnionData[3] = int(brdfType)
+	m.UnionData[3] = int32(brdfType)
 }
 
 // The texture metadata. All texture data is stored as a contiguous memory block.
@@ -191,9 +197,10 @@ type TextureMetadata struct {
 }
 
 type Scene struct {
-	BvhNodeList      []BvhNode
-	MeshInstanceList []MeshInstance
-	MaterialNodeList []MaterialNode
+	BvhNodeList       []BvhNode
+	MeshInstanceList  []MeshInstance
+	MaterialNodeList  []MaterialNode
+	MaterialNodeRoots []uint32
 
 	// Texture definitions and the associated data.
 	TextureData     []byte

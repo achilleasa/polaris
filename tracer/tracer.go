@@ -1,17 +1,13 @@
 package tracer
 
-type ChangeType uint8
-
-const (
-	SetBvhNodes ChangeType = iota
-	SetPrimitivies
-	SetMaterials
-	SetEmissiveLightIndices
-	UpdateCamera
-)
+import "time"
 
 // A unit of work that is processed by a tracer.
 type BlockRequest struct {
+	// Frame dimensions
+	FrameW uint32
+	FrameH uint32
+
 	// Block start row and height.
 	BlockY uint32
 	BlockH uint32
@@ -37,35 +33,60 @@ type BlockRequest struct {
 
 // Tracer statistics.
 type Stats struct {
-	// The rendered block height
+	// The rendered block dimensions.
+	BlockW uint32
 	BlockH uint32
 
-	// The time for rendering this block (in nanoseconds)
-	BlockTime int64
+	// The time for applying queued scene changes.
+	UpdateTime time.Duration
+
+	// The time for rendering this block
+	RenderTime time.Duration
 }
+
+type Flag uint8
+
+// Tracer or-able flag list.
+const (
+	// Locally attached device
+	Local Flag = 1 << iota
+
+	// Remote device.
+	Remote = 1 << iota
+
+	// Supports GL interop.
+	GLInterop = 1 << iota
+)
+
+type UpdateType uint8
+
+// Supported update types.
+const (
+	UpdateScene UpdateType = iota
+	UpdateCamera
+)
 
 type Tracer interface {
 	// Get tracer id.
 	Id() string
 
+	// Get tracer flags.
+	Flags() Flag
+
+	// Get the computation speed estimate (in GFlops).
+	Speed() uint32
+
+	// Initialize tracer.
+	Init() error
+
 	// Shutdown and cleanup tracer.
 	Close()
-
-	// Get the tracers computation speed estimate compared to a
-	// baseline (cpu) impelemntation.
-	SpeedEstimate() float32
-
-	// Setup the tracer.
-	Setup(frameW, frameH uint32, accumBuffer []float32, frameBuffer []uint8) error
 
 	// Enqueue block request.
 	Enqueue(BlockRequest)
 
-	// Append a change to the tracer's update buffer.
-	AppendChange(ChangeType, interface{})
-
-	// Apply all pending changes from the update buffer.
-	ApplyPendingChanges() error
+	// Queue an update.
+	Update(UpdateType, interface{})
 
 	// Retrieve last frame statistics.
 	Stats() *Stats

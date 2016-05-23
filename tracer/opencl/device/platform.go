@@ -1,8 +1,9 @@
-package opencl
+package device
 
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"unsafe"
 
 	"github.com/achilleasa/gopencl/v1.2/cl"
@@ -21,7 +22,7 @@ type PlatformInfo struct {
 	Name       string
 	Vendor     string
 	Extensions string
-	Devices    DeviceList
+	Devices    []*Device
 }
 
 func (pl PlatformInfo) String() string {
@@ -47,7 +48,7 @@ func (pl PlatformInfo) String() string {
 }
 
 // Get information about supported opencl platforms and devices.
-func GetPlatformInfo() []PlatformInfo {
+func GetPlatformInfo() ([]PlatformInfo, error) {
 
 	pids := make([]cl.PlatformID, platformBufferSize)
 	data := make([]byte, dataBufferSize)
@@ -61,7 +62,7 @@ func GetPlatformInfo() []PlatformInfo {
 
 	infoList := make([]PlatformInfo, int(pidCount))
 	for pIdx := 0; pIdx < int(pidCount); pIdx++ {
-		infoList[pIdx].Devices = make(DeviceList, 0)
+		infoList[pIdx].Devices = make([]*Device, 0)
 
 		dataLen = 0
 		cl.GetPlatformInfo(pids[pIdx], cl.PLATFORM_PROFILE, dataBufferSize, unsafe.Pointer(&data[0]), &dataLen)
@@ -86,7 +87,7 @@ func GetPlatformInfo() []PlatformInfo {
 			cl.GetDeviceInfo(devices[dIdx], cl.DEVICE_NAME, dataBufferSize, unsafe.Pointer(&data[0]), &dataLen)
 			infoList[pIdx].Devices = append(
 				infoList[pIdx].Devices,
-				Device{
+				&Device{
 					Name: string(data[0 : dataLen-1]),
 					Id:   devices[dIdx],
 					Type: CpuDevice,
@@ -101,14 +102,47 @@ func GetPlatformInfo() []PlatformInfo {
 			cl.GetDeviceInfo(devices[dIdx], cl.DEVICE_NAME, dataBufferSize, unsafe.Pointer(&data[0]), &dataLen)
 			infoList[pIdx].Devices = append(
 				infoList[pIdx].Devices,
-				Device{
+				&Device{
 					Name: string(data[0 : dataLen-1]),
 					Id:   devices[dIdx],
 					Type: GpuDevice,
 				},
 			)
 		}
+
+		// Enumerate speed for all platform devices
+		for _, dev := range infoList[pIdx].Devices {
+			err := dev.detectSpeed()
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
-	return infoList
+	return infoList, nil
+}
+
+// Scan all available opencl platforms and select devices that match the given query.
+func SelectDevices(typeMask DeviceType, matchName string) ([]*Device, error) {
+	platforms, err := GetPlatformInfo()
+	if err != nil {
+		return nil, err
+	}
+	list := make([]*Device, 0)
+	for _, p := range platforms {
+		for _, d := range p.Devices {
+			// Match type
+			if d.Type&typeMask != d.Type {
+				continue
+			}
+
+			// Match name
+			if matchName != "" && !strings.Contains(d.Name, matchName) {
+				continue
+			}
+
+			list = append(list, d)
+		}
+	}
+	return list, nil
 }

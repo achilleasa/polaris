@@ -72,7 +72,7 @@ func (d Device) String() string {
 
 // Initialize device.
 func (d *Device) Init(programFile string) error {
-	var errPtr *int32
+	var errPtr int32
 
 	// Already initialized
 	if d.ctx != nil {
@@ -80,17 +80,17 @@ func (d *Device) Init(programFile string) error {
 	}
 
 	// Create context
-	d.ctx = cl.CreateContext(nil, 1, &d.Id, nil, nil, errPtr)
-	if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
+	d.ctx = cl.CreateContext(nil, 1, &d.Id, nil, nil, &errPtr)
+	if cl.ErrorCode(errPtr) != cl.SUCCESS {
 		defer d.Close()
-		return fmt.Errorf("opencl device (%s): could not create opencl context (errCode %d)", d.Name, cl.ErrorCode(*errPtr))
+		return fmt.Errorf("opencl device (%s): could not create opencl context (errCode %d)", d.Name, cl.ErrorCode(errPtr))
 	}
 
 	// Create command queue
-	d.cmdQueue = cl.CreateCommandQueue(*d.ctx, d.Id, 0, errPtr)
-	if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
+	d.cmdQueue = cl.CreateCommandQueue(*d.ctx, d.Id, 0, &errPtr)
+	if cl.ErrorCode(errPtr) != cl.SUCCESS {
 		defer d.Close()
-		return fmt.Errorf("opencl device (%s): could not create opencl context (errCode %d)", d.Name, cl.ErrorCode(*errPtr))
+		return fmt.Errorf("opencl device (%s): could not create opencl context (errCode %d)", d.Name, cl.ErrorCode(errPtr))
 	}
 
 	// Load program source
@@ -120,11 +120,11 @@ func (d *Device) Init(programFile string) error {
 		1,
 		&progSrc,
 		nil,
-		errPtr,
+		&errPtr,
 	)
-	if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
+	if cl.ErrorCode(errPtr) != cl.SUCCESS {
 		defer d.Close()
-		return fmt.Errorf("opencl device (%s): could not create program (errCode %d)", d.Name, cl.ErrorCode(*errPtr))
+		return fmt.Errorf("opencl device (%s): could not create program (errCode %d)", d.Name, cl.ErrorCode(errPtr))
 	}
 
 	errCode := cl.BuildProgram(
@@ -167,15 +167,15 @@ func (d *Device) Close() {
 
 // Load kernel by name.
 func (d *Device) Kernel(name string) (*Kernel, error) {
-	var errPtr *int32
+	var errPtr int32
 	kernelHandle := cl.CreateKernel(
 		d.program,
 		cl.Str(name+"\x00"),
-		errPtr,
+		&errPtr,
 	)
 
-	if errPtr != nil && cl.ErrorCode(*errPtr) != cl.SUCCESS {
-		return nil, fmt.Errorf("opencl device (%s): could not load kernelHandle %s (errCode %d)", d.Name, name, cl.ErrorCode(*errPtr))
+	if cl.ErrorCode(errPtr) != cl.SUCCESS {
+		return nil, fmt.Errorf("opencl device (%s): could not load kernelHandle %s (errCode %d)", d.Name, name, cl.ErrorCode(errPtr))
 	}
 
 	return &Kernel{
@@ -183,6 +183,14 @@ func (d *Device) Kernel(name string) (*Kernel, error) {
 		kernelHandle: kernelHandle,
 		name:         name,
 	}, nil
+}
+
+// Create an empty buffer.
+func (d *Device) Buffer(name string) *Buffer {
+	return &Buffer{
+		device: d,
+		name:   name,
+	}
 }
 
 // Detect device speed.

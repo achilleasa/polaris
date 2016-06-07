@@ -72,7 +72,7 @@ func (d Device) String() string {
 
 // Initialize device.
 func (d *Device) Init(programFile string) error {
-	var errPtr int32
+	var errCode cl.ErrorCode
 
 	// Already initialized
 	if d.ctx != nil {
@@ -80,17 +80,17 @@ func (d *Device) Init(programFile string) error {
 	}
 
 	// Create context
-	d.ctx = cl.CreateContext(nil, 1, &d.Id, nil, nil, &errPtr)
-	if cl.ErrorCode(errPtr) != cl.SUCCESS {
+	d.ctx = cl.CreateContext(nil, 1, &d.Id, nil, nil, (*int32)(&errCode))
+	if errCode != cl.SUCCESS {
 		defer d.Close()
-		return fmt.Errorf("opencl device (%s): could not create opencl context (errCode %d)", d.Name, cl.ErrorCode(errPtr))
+		return fmt.Errorf("opencl device (%s): could not create opencl context (error: %s; code %d)", d.Name, ErrorName(errCode), errCode)
 	}
 
 	// Create command queue
-	d.cmdQueue = cl.CreateCommandQueue(*d.ctx, d.Id, 0, &errPtr)
-	if cl.ErrorCode(errPtr) != cl.SUCCESS {
+	d.cmdQueue = cl.CreateCommandQueue(*d.ctx, d.Id, 0, (*int32)(&errCode))
+	if errCode != cl.SUCCESS {
 		defer d.Close()
-		return fmt.Errorf("opencl device (%s): could not create opencl context (errCode %d)", d.Name, cl.ErrorCode(errPtr))
+		return fmt.Errorf("opencl device (%s): could not create opencl context (error: %s; code %d)", d.Name, ErrorName(errCode), errCode)
 	}
 
 	// Load program source
@@ -120,14 +120,14 @@ func (d *Device) Init(programFile string) error {
 		1,
 		&progSrc,
 		nil,
-		&errPtr,
+		(*int32)(&errCode),
 	)
-	if cl.ErrorCode(errPtr) != cl.SUCCESS {
+	if errCode != cl.SUCCESS {
 		defer d.Close()
-		return fmt.Errorf("opencl device (%s): could not create program (errCode %d)", d.Name, cl.ErrorCode(errPtr))
+		return fmt.Errorf("opencl device (%s): could not create program (error: %s; code %d)", d.Name, ErrorName(errCode), errCode)
 	}
 
-	errCode := cl.BuildProgram(
+	errCode = cl.BuildProgram(
 		d.program,
 		1,
 		&d.Id,
@@ -141,7 +141,7 @@ func (d *Device) Init(programFile string) error {
 
 		cl.GetProgramBuildInfo(d.program, d.Id, cl.PROGRAM_BUILD_LOG, uint64(len(data)), unsafe.Pointer(&data[0]), &dataLen)
 		defer d.Close()
-		return fmt.Errorf("opencl device (%s): could not build kernel (errCode %d):\n%s", d.Name, errCode, string(data[0:dataLen-1]))
+		return fmt.Errorf("opencl device (%s): could not build kernel (error: %s; code %d):\n%s", d.Name, ErrorName(errCode), errCode, string(data[0:dataLen-1]))
 	}
 
 	return nil
@@ -167,15 +167,15 @@ func (d *Device) Close() {
 
 // Load kernel by name.
 func (d *Device) Kernel(name string) (*Kernel, error) {
-	var errPtr int32
+	var errCode cl.ErrorCode
 	kernelHandle := cl.CreateKernel(
 		d.program,
 		cl.Str(name+"\x00"),
-		&errPtr,
+		(*int32)(&errCode),
 	)
 
-	if cl.ErrorCode(errPtr) != cl.SUCCESS {
-		return nil, fmt.Errorf("opencl device (%s): could not load kernelHandle %s (errCode %d)", d.Name, name, cl.ErrorCode(errPtr))
+	if errCode != cl.SUCCESS {
+		return nil, fmt.Errorf("opencl device (%s): could not load kernel %s (error: %s; code %d)", d.Name, name, ErrorName(errCode), errCode)
 	}
 
 	return &Kernel{
@@ -198,11 +198,11 @@ func (d *Device) detectSpeed() error {
 	// Calculate theoretical device speed as: compute units * 2ops/cycle * clock speed
 	errCode := cl.GetDeviceInfo(d.Id, cl.DEVICE_MAX_COMPUTE_UNITS, 4, unsafe.Pointer(&d.compUnits), nil)
 	if errCode != cl.SUCCESS {
-		return fmt.Errorf("opencl device (%s): could not query MAX_COMPUTE_UNITS (errCode %d)", d.Name, errCode)
+		return fmt.Errorf("opencl device (%s): could not query MAX_COMPUTE_UNITS (error: %s; code %d)", d.Name, ErrorName(errCode), errCode)
 	}
 	errCode = cl.GetDeviceInfo(d.Id, cl.DEVICE_MAX_CLOCK_FREQUENCY, 4, unsafe.Pointer(&d.clockSpeed), nil)
 	if errCode != cl.SUCCESS {
-		return fmt.Errorf("opencl device (%s): could not query MAX_CLOCK_FREQUENCY (errCode %d)", d.Name, errCode)
+		return fmt.Errorf("opencl device (%s): could not query MAX_CLOCK_FREQUENCY (error: %s; code %d)", d.Name, ErrorName(errCode), errCode)
 	}
 	var opsPerCycle uint32 = 2
 	if d.Type == CpuDevice {
@@ -211,4 +211,106 @@ func (d *Device) detectSpeed() error {
 	d.Speed = d.compUnits * opsPerCycle * d.clockSpeed / 1000
 
 	return nil
+}
+
+// Return a textual description of an opencl error code.
+func ErrorName(errCode cl.ErrorCode) string {
+	switch errCode {
+	case 0:
+		return "SUCCESS"
+	case -1:
+		return "DEVICE_NOT_FOUND"
+	case -2:
+		return "DEVICE_NOT_AVAILABLE"
+	case -3:
+		return "COMPILER_NOT_AVAILABLE"
+	case -4:
+		return "MEM_OBJECT_ALLOCATION_FAILURE"
+	case -5:
+		return "OUT_OF_RESOURCES"
+	case -6:
+		return "OUT_OF_HOST_MEMORY"
+	case -7:
+		return "PROFILING_INFO_NOT_AVAILABLE"
+	case -8:
+		return "MEM_COPY_OVERLAP"
+	case -9:
+		return "IMAGE_FORMAT_MISMATCH"
+	case -10:
+		return "IMAGE_FORMAT_NOT_SUPPORTED"
+	case -11:
+		return "BUILD_PROGRAM_FAILURE"
+	case -12:
+		return "MAP_FAILURE"
+	case -30:
+		return "INVALID_VALUE"
+	case -31:
+		return "INVALID_DEVICE_TYPE"
+	case -32:
+		return "INVALID_PLATFORM"
+	case -33:
+		return "INVALID_DEVICE"
+	case -34:
+		return "INVALID_CONTEXT"
+	case -35:
+		return "INVALID_QUEUE_PROPERTIES"
+	case -36:
+		return "INVALID_COMMAND_QUEUE"
+	case -37:
+		return "INVALID_HOST_PTR"
+	case -38:
+		return "INVALID_MEM_OBJECT"
+	case -39:
+		return "INVALID_IMAGE_FORMAT_DESCRIPTOR"
+	case -40:
+		return "INVALID_IMAGE_SIZE"
+	case -41:
+		return "INVALID_SAMPLER"
+	case -42:
+		return "INVALID_BINARY"
+	case -43:
+		return "INVALID_BUILD_OPTIONS"
+	case -44:
+		return "INVALID_PROGRAM"
+	case -45:
+		return "INVALID_PROGRAM_EXECUTABLE"
+	case -46:
+		return "INVALID_KERNEL_NAME"
+	case -47:
+		return "INVALID_KERNEL_DEFINITION"
+	case -48:
+		return "INVALID_KERNEL"
+	case -49:
+		return "INVALID_ARG_INDEX"
+	case -50:
+		return "INVALID_ARG_VALUE"
+	case -51:
+		return "INVALID_ARG_SIZE"
+	case -52:
+		return "INVALID_KERNEL_ARGS"
+	case -53:
+		return "INVALID_WORK_DIMENSION"
+	case -54:
+		return "INVALID_WORK_GROUP_SIZE"
+	case -55:
+		return "INVALID_WORK_ITEM_SIZE"
+	case -56:
+		return "INVALID_GLOBAL_OFFSET"
+	case -57:
+		return "INVALID_EVENT_WAIT_LIST"
+	case -58:
+		return "INVALID_EVENT"
+	case -59:
+		return "INVALID_OPERATION"
+	case -60:
+		return "INVALID_GL_OBJECT"
+	case -61:
+		return "INVALID_BUFFER_SIZE"
+	case -62:
+		return "INVALID_MIP_LEVEL"
+	case -63:
+		return "INVALID_GLOBAL_WORK_SIZE"
+	default:
+		return fmt.Sprintf("unknown error code %d", errCode)
+	}
 }

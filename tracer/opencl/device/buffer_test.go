@@ -189,6 +189,47 @@ func TestDataReadWriteWithStructSlices(t *testing.T) {
 	}
 }
 
+func TestDataReadIntoSlice(t *testing.T) {
+	dev, err := createCpuDevice()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dev.Close()
+
+	type foo struct {
+		x    float32
+		name string
+	}
+
+	numFoos := 10
+	data := make([]foo, numFoos)
+	for i := 0; i < numFoos; i++ {
+		data[i].x = float32(i)
+		data[i].name = fmt.Sprintf("%d", i)
+	}
+
+	buf := dev.Buffer("test")
+	defer buf.Release()
+	err = buf.Allocate(len(data)*int(unsafe.Sizeof(data[0])), cl.MEM_READ_WRITE)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = buf.WriteData(data, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := buf.ReadDataIntoSlice(make([]foo, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataOut := d.([]foo)
+
+	if !reflect.DeepEqual(data, dataOut) {
+		t.Fatal("read data does not match written data")
+	}
+}
 func TestDataReadWriteOffsets(t *testing.T) {
 	dev, err := createCpuDevice()
 	if err != nil {

@@ -168,6 +168,21 @@ func (b *Buffer) ReadData(srcOffset, dstOffset, size int, hostBuffer interface{}
 	return nil
 }
 
+// Read all data from device buffer into a slice of the given type. This method
+// will allocate a new slice with enough capacity to fit the buffer data and
+// will panic if the buffer size is not a multiple of the slice element size.
+func (b *Buffer) ReadDataIntoSlice(sliceType interface{}) (interface{}, error) {
+	reflType := reflect.TypeOf(sliceType)
+	sliceItemSize := int(reflType.Elem().Size())
+	if b.Size()%sliceItemSize != 0 {
+		panic(fmt.Sprintf("buffer: bufSize (%d) %% sliceItemSize(%d) != 0", b.Size(), sliceItemSize))
+	}
+
+	numElements := b.Size() / sliceItemSize
+	slice := reflect.MakeSlice(reflType, numElements, numElements).Interface()
+	return slice, b.ReadData(0, 0, b.Size(), slice)
+}
+
 // Release buffer.
 func (b *Buffer) Release() {
 	if b.bufHandle != nil {

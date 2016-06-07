@@ -61,20 +61,21 @@ func (k *Kernel) SetArgs(args ...interface{}) error {
 			errCode = cl.SetKernelArg(k.kernelHandle, uint32(argIndex), 16, unsafe.Pointer(&v[0]))
 		default:
 			return fmt.Errorf(
-				"opencl device (%s): could not set arg %d for kernelHandle %s; unsupported arg type: %s",
+				"opencl device (%s): could not set arg %d for kernel %s; unsupported arg type: %s",
 				k.device.Name,
 				argIndex,
 				k.name,
-				reflect.TypeOf(arg).Name(),
+				reflect.TypeOf(arg).String(),
 			)
 		}
 
 		if errCode != cl.SUCCESS {
 			return fmt.Errorf(
-				"opencl device (%s): could not set arg %d for kernelHandle %s (errCode %d)",
+				"opencl device (%s): could not set arg %d for kernel %s (error: %s; code %d)",
 				k.device.Name,
 				argIndex,
 				k.name,
+				ErrorName(errCode),
 				errCode,
 			)
 		}
@@ -102,7 +103,7 @@ func (k *Kernel) Exec1D(offset, globalWorkSize, localWorkSize int) (time.Duratio
 		localSizePtr = (*uint64)(unsafe.Pointer(&k.localWorkSizes[0]))
 	}
 
-	// Run kernelHandle
+	// Run kernel
 	tick := time.Now()
 	errCode = cl.EnqueueNDRangeKernel(
 		k.device.cmdQueue,
@@ -116,13 +117,13 @@ func (k *Kernel) Exec1D(offset, globalWorkSize, localWorkSize int) (time.Duratio
 		nil,
 	)
 	if errCode != cl.SUCCESS {
-		return time.Duration(0), fmt.Errorf("opencl device (%s): unable to execute kernel %s (errCode %d)", k.device.Name, k.name, errCode)
+		return time.Duration(0), fmt.Errorf("opencl device (%s): unable to execute kernel %s (error: %s; code: %d)", k.device.Name, k.name, ErrorName(errCode), errCode)
 	}
 
 	// Wait for the kernelHandle to complete
 	errCode = cl.Finish(k.device.cmdQueue)
 	if errCode != cl.SUCCESS {
-		return time.Duration(0), fmt.Errorf("opencl device (%s): kernel %s did not complete successfully (errCode %d)", k.device.Name, k.name, errCode)
+		return time.Duration(0), fmt.Errorf("opencl device (%s): kernel %s did not complete successfully (error: %s; code: %d)", k.device.Name, k.name, ErrorName(errCode), errCode)
 	}
 
 	return time.Since(tick), nil
@@ -147,7 +148,7 @@ func (k *Kernel) Exec2D(offsetX, offsetY, globalWorkSizeX, globalWorkSizeY, loca
 		localSizePtr = (*uint64)(unsafe.Pointer(&k.localWorkSizes[0]))
 	}
 
-	// Run kernelHandle
+	// Run kernel
 	tick := time.Now()
 	errCode = cl.EnqueueNDRangeKernel(
 		k.device.cmdQueue,
@@ -161,13 +162,13 @@ func (k *Kernel) Exec2D(offsetX, offsetY, globalWorkSizeX, globalWorkSizeY, loca
 		nil,
 	)
 	if errCode != cl.SUCCESS {
-		return time.Duration(0), fmt.Errorf("opencl device (%s): unable to execute kernel %s (errCode %d)", k.device.Name, k.name, errCode)
+		return time.Duration(0), fmt.Errorf("opencl device (%s): unable to execute kernel %s (error: %s; code %d)", k.device.Name, k.name, ErrorName(errCode), errCode)
 	}
 
 	// Wait for the kernelHandle to complete
 	errCode = cl.Finish(k.device.cmdQueue)
 	if errCode != cl.SUCCESS {
-		return time.Duration(0), fmt.Errorf("opencl device (%s): kernel %s did not complete successfully (errCode %d)", k.device.Name, k.name, errCode)
+		return time.Duration(0), fmt.Errorf("opencl device (%s): kernel %s did not complete successfully (error: %s; code %d)", k.device.Name, k.name, ErrorName(errCode), errCode)
 	}
 
 	return time.Since(tick), nil

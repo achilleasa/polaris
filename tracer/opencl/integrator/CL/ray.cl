@@ -15,7 +15,6 @@ inline void rayNew(Ray *ray, float3 origin, float3 dir, float maxDist){
 	ray->dir.xyz = dir;
 }
 
-
 // Generate primary rays.
 __kernel void generatePrimaryRays(
 		__global Ray* rays, 
@@ -36,8 +35,8 @@ __kernel void generatePrimaryRays(
 	globalId.y = get_global_id(1);
 
 	if( globalId.x < frameW && globalId.y < frameH ){
-		uint index = (globalId.y * frameW) + globalId.x;
-		uint pixelIndex = index + (blockStartY * frameW);
+		uint index = morton2d(globalId);
+		uint pixelIndex = ((globalId.y + blockStartY) * frameW) + globalId.x;
 
 		// Get ray direction using trilinear interpolation
 		float2 texel = (float2)(globalId.x, globalId.y) * texelDims;

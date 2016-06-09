@@ -53,7 +53,7 @@ func TestGeneratePrimaryRays(t *testing.T) {
 	var x, y uint32
 	for y = 0; y < blockReq.FrameH; y++ {
 		for x = 0; x < blockReq.FrameW; x++ {
-			index := (y * blockReq.FrameW) + x
+			index := morton2d(x, y)
 			r := rayData[index]
 			if !types.ApproxEqual(r.origin.Vec3(), in.cameraEyePos, 0.001) {
 				t.Fatalf("ray(%d, %d) expected eye to be %v; got %v", x, y, in.cameraEyePos, r.origin.Vec3())
@@ -79,11 +79,30 @@ func TestGeneratePrimaryRays(t *testing.T) {
 			if p.status != 1 {
 				t.Fatalf("path(%d, %d) exepected status to be active(1); got %d", x, y, p.status)
 			}
-			if p.pixelIndex != index {
-				t.Fatalf("path(%d, %d) expected pixel index to be %d; got %d", x, y, index, p.pixelIndex)
+			expPixelIndex := (y * blockReq.FrameW) + x
+			if p.pixelIndex != expPixelIndex {
+				t.Fatalf("path(%d, %d) expected pixel index to be %d; got %d", x, y, expPixelIndex, p.pixelIndex)
 			}
 		}
 	}
+}
+
+func morton2d(x uint32, y uint32) uint32 {
+	mortonMasks2D := [5]uint32{0x0000FFFF, 0x00FF00FF, 0x0F0F0F0F, 0x33333333, 0x55555555}
+
+	x = (x | x<<16) & mortonMasks2D[0]
+	x = (x | x<<8) & mortonMasks2D[1]
+	x = (x | x<<4) & mortonMasks2D[2]
+	x = (x | x<<2) & mortonMasks2D[3]
+	x = (x | x<<1) & mortonMasks2D[4]
+
+	y = (y | y<<16) & mortonMasks2D[0]
+	y = (y | y<<8) & mortonMasks2D[1]
+	y = (y | y<<4) & mortonMasks2D[2]
+	y = (y | y<<2) & mortonMasks2D[3]
+	y = (y | y<<1) & mortonMasks2D[4]
+
+	return x | (y << 1)
 }
 
 func setupCamera(eye, look types.Vec3, blockReq *tracer.BlockRequest) *scene.Camera {

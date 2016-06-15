@@ -40,6 +40,15 @@ func Ident4() Mat4 {
 
 // Create a 4x4 scale matrix.
 func Scale4(scale Vec3) Mat4 {
+	if scale[0] == 0 {
+		scale[0] = 1.0
+	}
+	if scale[1] == 0 {
+		scale[1] = 1.0
+	}
+	if scale[2] == 0 {
+		scale[2] = 1.0
+	}
 	return Mat4{scale[0], 0, 0, 0, 0, scale[1], 0, 0, 0, 0, scale[2], 0, 0, 0, 0, 1}
 }
 

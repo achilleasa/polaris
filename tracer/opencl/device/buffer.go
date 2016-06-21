@@ -59,6 +59,9 @@ func (b *Buffer) AllocateToFitData(data interface{}, flags cl.MemFlags) error {
 	b.Release()
 
 	_, dataLen := getSliceData(data)
+	if dataLen == 0 {
+		return nil
+	}
 
 	b.bufHandle = cl.CreateBuffer(
 		*b.device.ctx,
@@ -88,6 +91,9 @@ func (b *Buffer) AllocateAndWriteData(data interface{}, flags cl.MemFlags) error
 	b.Release()
 
 	dataPtr, dataLen := getSliceData(data)
+	if dataLen == 0 {
+		return nil
+	}
 
 	b.bufHandle = cl.CreateBuffer(
 		*b.device.ctx,
@@ -112,6 +118,9 @@ func (b *Buffer) AllocateAndWriteData(data interface{}, flags cl.MemFlags) error
 func (b *Buffer) WriteData(data interface{}, offset int) error {
 
 	dataPtr, dataLen := getSliceData(data)
+	if dataLen == 0 {
+		return nil
+	}
 
 	if dataLen > b.size {
 		return fmt.Errorf("opencl device(%s): insufficient buffer space (%d) in %s for copying data of length %d", b.device.Name, b.size, b.name, dataLen)
@@ -206,7 +215,7 @@ func getSliceData(data interface{}) (unsafe.Pointer, int) {
 
 	sliceElemCount := reflVal.Len()
 	if sliceElemCount == 0 {
-		panic("getSliceData: supplied slice object is empty")
+		return nil, 0
 	}
 
 	return unsafe.Pointer(reflVal.Index(0).Addr().Pointer()),

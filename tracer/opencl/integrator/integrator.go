@@ -145,3 +145,21 @@ func (in *MonteCarlo) GeneratePrimaryRays(blockReq *tracer.BlockRequest) (time.D
 
 	return kernel.Exec2D(0, 0, int(blockReq.FrameW), int(blockReq.BlockH), 0, 0)
 }
+
+// Check for intersections
+func (in *MonteCarlo) RayIntersectionTest(numRays uint32) (time.Duration, error) {
+	kernel := in.kernels[rayIntersectionTest]
+
+	err := kernel.SetArgs(
+		in.buffers.Rays,
+		in.buffers.BvhNodes,
+		in.buffers.MeshInstances,
+		in.buffers.Vertices,
+		in.buffers.HitFlags,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return kernel.Exec1D(0, int(numRays), 0)
+}

@@ -1,0 +1,7 @@
+newmtl cube
+Kd 0.5880 0.5880 0.5880
+# map_Ka cube.png
+# map_Kd cube.png
+#
+newmtl foo
+Kd 0 0 0

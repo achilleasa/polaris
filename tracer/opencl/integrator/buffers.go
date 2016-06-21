@@ -10,8 +10,9 @@ import (
 
 // Size of buffer elements in bytes.
 const (
-	sizeofRay  = 32
-	sizeofPath = 32
+	sizeofRay     = 32
+	sizeofPath    = 32
+	sizeofHitFlag = 4 // uint32
 )
 
 type bufferSet struct {
@@ -37,6 +38,9 @@ type bufferSet struct {
 	// Primary/secondary rays and paths
 	Rays  *device.Buffer
 	Paths *device.Buffer
+
+	// Intesection tests
+	HitFlags *device.Buffer
 }
 
 // Allocate new buffer set.
@@ -53,8 +57,9 @@ func newBufferSet(dev *device.Device) (*bufferSet, error) {
 		UV:              dev.Buffer("uv"),
 		MaterialIndices: dev.Buffer("materialIndices"),
 		// Tracer data
-		Rays:  dev.Buffer("rays"),
-		Paths: dev.Buffer("paths"),
+		Rays:     dev.Buffer("rays"),
+		Paths:    dev.Buffer("paths"),
+		HitFlags: dev.Buffer("hitFlags"),
 	}, nil
 }
 
@@ -77,6 +82,10 @@ func (bs *bufferSet) Resize(frameW, frameH uint32) error {
 		return err
 	}
 	err = bs.Paths.Allocate(int(pixels*sizeofPath), cl.MEM_READ_WRITE)
+	if err != nil {
+		return err
+	}
+	err = bs.HitFlags.Allocate(int(pixels*sizeofHitFlag), cl.MEM_READ_WRITE)
 	if err != nil {
 		return err
 	}

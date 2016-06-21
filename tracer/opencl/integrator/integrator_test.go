@@ -1,9 +1,13 @@
 package integrator
 
 import (
+	"math"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/achilleasa/go-pathtrace/scene"
+	"github.com/achilleasa/go-pathtrace/scene/reader"
 	"github.com/achilleasa/go-pathtrace/tracer"
 	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
 	"github.com/achilleasa/go-pathtrace/types"
@@ -87,6 +91,80 @@ func TestGeneratePrimaryRays(t *testing.T) {
 	}
 }
 
+func TestRayIntersectionTest(t *testing.T) {
+	in := createTestIntegrator(t, "CPU")
+	defer in.Close()
+
+	sc := createTestScene(t)
+
+	err := in.UploadSceneData(sc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blockReq := &tracer.BlockRequest{
+		FrameW: 10,
+		FrameH: 1,
+		BlockY: 0,
+		BlockH: 1,
+	}
+
+	camera := setupCamera(types.Vec3{0, 0, 2}, types.Vec3{0, 0, 0}, blockReq)
+	err = in.UploadCameraData(camera)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = in.ResizeOutputFrame(blockReq.FrameW, blockReq.FrameH)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Generate rays
+	type ray struct {
+		origin types.Vec4
+		dir    types.Vec4
+	}
+	rays := []ray{
+		{
+			origin: types.Vec4{0.25, 0.25, 2, math.MaxFloat32},
+			dir:    types.Vec4{0, 0, -1, 0},
+		},
+		// This ray should intersect the translated cube instance
+		{
+			origin: types.Vec4{-1.0, 0, 2, math.MaxFloat32},
+			dir:    types.Vec4{0, 0, -1, 0},
+		},
+		// This ray should miss
+		{
+			origin: types.Vec4{-1.0, 1.0, 2, math.MaxFloat32},
+			dir:    types.Vec4{0, 0, -1, 0},
+		},
+		// This ray should miss due to max ray dist (W origin coord)
+		{
+			origin: types.Vec4{0.25, 0.25, 2, 1.49},
+			dir:    types.Vec4{0, 0, -1, 0},
+		},
+	}
+	err = in.buffers.Rays.WriteData(rays, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = in.RayIntersectionTest(uint32(len(rays)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hitFlags := readIntoSlice(t, in.buffers.HitFlags, make([]uint32, 0)).([]uint32)
+	expResults := []uint32{1, 1, 0, 0}
+	for resIndex, expRes := range expResults {
+		if hitFlags[resIndex] != expRes {
+			t.Fatalf("[ray %d] expected hit flag to be %d; got %d", resIndex, expRes, hitFlags[resIndex])
+		}
+	}
+}
+
 func morton2d(x uint32, y uint32) uint32 {
 	mortonMasks2D := [5]uint32{0x0000FFFF, 0x00FF00FF, 0x0F0F0F0F, 0x33333333, 0x55555555}
 
@@ -115,6 +193,17 @@ func setupCamera(eye, look types.Vec3, blockReq *tracer.BlockRequest) *scene.Cam
 	camera.Update()
 
 	return camera
+}
+
+func createTestScene(t *testing.T) *scene.Scene {
+	_, thisFile, _, _ := runtime.Caller(0)
+	thisDir := filepath.Dir(thisFile)
+
+	s, err := reader.ReadScene(filepath.Join(thisDir, "fixtures/cube.obj"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
 }
 
 func createTestIntegrator(t *testing.T, devName string) *MonteCarlo {

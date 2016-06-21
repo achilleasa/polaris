@@ -1,10 +1,10 @@
 package compiler
 
 import (
-	"log"
 	"math"
-	"os"
 	"time"
+
+	"github.com/achilleasa/go-pathtrace/log"
 
 	"github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/go-pathtrace/types"
@@ -36,7 +36,7 @@ type bvhStats struct {
 }
 
 type bvhBuilder struct {
-	logger *log.Logger
+	logger log.Logger
 
 	// Bvh nodes stored as a contiguous list
 	nodes []scene.BvhNode
@@ -65,7 +65,7 @@ type bvhBuilder struct {
 // if the incoming work length is <= minLeafItems.
 func BuildBVH(workList []BoundedVolume, minLeafItems int, leafCb BvhLeafCallback) []scene.BvhNode {
 	builder := &bvhBuilder{
-		logger:       log.New(os.Stdout, "bvhBuilder: ", log.LstdFlags),
+		logger:       log.New("bvhBuilder: ", log.LstdFlags),
 		nodes:        make([]scene.BvhNode, 0),
 		leafCb:       leafCb,
 		minLeafItems: minLeafItems,

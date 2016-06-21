@@ -3,10 +3,10 @@ package writer
 import (
 	"archive/zip"
 	"encoding/gob"
-	"log"
 	"os"
 	"time"
 
+	"github.com/achilleasa/go-pathtrace/log"
 	"github.com/achilleasa/go-pathtrace/scene"
 )
 
@@ -15,14 +15,14 @@ const (
 )
 
 type zipSceneWriter struct {
-	logger    *log.Logger
+	logger    log.Logger
 	sceneFile string
 }
 
 // Create a new zip scene writer
 func newZipSceneWriter(sceneFile string) *zipSceneWriter {
 	return &zipSceneWriter{
-		logger:    log.New(os.Stdout, "zipSceneWriter: ", log.LstdFlags),
+		logger:    log.New("zipSceneWriter: ", log.LstdFlags),
 		sceneFile: sceneFile,
 	}
 }

@@ -3,12 +3,12 @@ package reader
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/achilleasa/go-pathtrace/log"
 
 	scenePkg "github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/go-pathtrace/scene/compiler"
@@ -16,7 +16,7 @@ import (
 )
 
 type wavefrontSceneReader struct {
-	logger *log.Logger
+	logger log.Logger
 
 	// The parsed scene.
 	sceneGraph *scenePkg.ParsedScene
@@ -40,7 +40,7 @@ type wavefrontSceneReader struct {
 // Create a new text scene reader.
 func newWavefrontReader() *wavefrontSceneReader {
 	return &wavefrontSceneReader{
-		logger:         log.New(os.Stdout, "wavefrontSceneReader: ", log.LstdFlags),
+		logger:         log.New("wavefrontSceneReader: ", log.LstdFlags),
 		sceneGraph:     scenePkg.NewParsedScene(),
 		matNameToIndex: make(map[string]uint32, 0),
 		curMaterial:    -1,

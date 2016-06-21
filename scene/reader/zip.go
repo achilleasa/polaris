@@ -6,9 +6,9 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io/ioutil"
-	"log"
-	"os"
 	"time"
+
+	"github.com/achilleasa/go-pathtrace/log"
 
 	"github.com/achilleasa/go-pathtrace/scene"
 )
@@ -18,13 +18,13 @@ const (
 )
 
 type zipSceneReader struct {
-	logger *log.Logger
+	logger log.Logger
 }
 
 // Create a new zip scene writer
 func newZipSceneReader() *zipSceneReader {
 	return &zipSceneReader{
-		logger: log.New(os.Stdout, "zipSceneReader: ", log.LstdFlags),
+		logger: log.New("zipSceneReader: ", log.LstdFlags),
 	}
 }
 

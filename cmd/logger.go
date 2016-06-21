@@ -1,8 +1,5 @@
 package cmd
 
-import (
-	"log"
-	"os"
-)
+import "github.com/achilleasa/go-pathtrace/log"
 
-var logger = log.New(os.Stdout, "go-pathtrace: ", log.LstdFlags)
+var logger = log.New("go-pathtrace: ", log.LstdFlags)

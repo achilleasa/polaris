@@ -1,10 +1,5 @@
-typedef struct {
-	// origin.w stores the max allowed distance for intersection queries.
-	float4 origin;
-
-	// dir.w is currently unused.
-	float4 dir;
-} Ray;
+#ifndef RAY_CL
+#define RAY_CL
 
 void rayNew(Ray* ray, float3 origin, float3 dir, float maxDist);
 
@@ -57,3 +52,5 @@ __kernel void generatePrimaryRays(
 		paths[index] = path;
 	}
 }
+
+#endif

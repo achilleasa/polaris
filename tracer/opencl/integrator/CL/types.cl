@@ -66,4 +66,20 @@ typedef struct {
 	float4 transformMat[4];
 } MeshInstance;
 
+typedef struct {
+	// XYZ stores barycentric coords (w,u,v) of hit and 
+	// W stores distance from ray origin to hit (t)
+	float4 wuvt;
+	//
+	// Mesh instance that registered hit
+	uint meshInstance;
+
+	// Index to triangle that was intersected
+	uint triIndex;
+	
+	// padding
+	uint _reserved1;
+	uint _reserved2;
+} Intersection;
+
 #endif

@@ -165,6 +165,124 @@ func TestRayIntersectionTest(t *testing.T) {
 	}
 }
 
+func TestRayIntersectionQuery(t *testing.T) {
+	in := createTestIntegrator(t, "CPU")
+	defer in.Close()
+
+	sc := createTestScene(t)
+
+	err := in.UploadSceneData(sc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blockReq := &tracer.BlockRequest{
+		FrameW: 10,
+		FrameH: 1,
+		BlockY: 0,
+		BlockH: 1,
+	}
+
+	camera := setupCamera(types.Vec3{0, 0, 2}, types.Vec3{0, 0, 0}, blockReq)
+	err = in.UploadCameraData(camera)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = in.ResizeOutputFrame(blockReq.FrameW, blockReq.FrameH)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Generate rays
+	type ray struct {
+		origin types.Vec4
+		dir    types.Vec4
+	}
+	rays := []ray{
+		{
+			origin: types.Vec4{0.25, 0.25, 2, math.MaxFloat32},
+			dir:    types.Vec4{0, 0, -1, 0},
+		},
+		// This ray should intersect the translated cube instance
+		{
+			origin: types.Vec4{-1.0, 0, 2, math.MaxFloat32},
+			dir:    types.Vec4{0, 0, -1, 0},
+		},
+		// This ray should miss
+		{
+			origin: types.Vec4{-1.0, 1.0, 2, math.MaxFloat32},
+			dir:    types.Vec4{0, 0, -1, 0},
+		},
+		// This ray should miss due to max ray dist (W origin coord)
+		{
+			origin: types.Vec4{0.25, 0.25, 2, 1.49},
+			dir:    types.Vec4{0, 0, -1, 0},
+		},
+	}
+	err = in.buffers.Rays.WriteData(rays, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = in.RayIntersectionQuery(uint32(len(rays)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hitFlags := readIntoSlice(t, in.buffers.HitFlags, make([]uint32, 0)).([]uint32)
+	expResults := []uint32{1, 1, 0, 0}
+	for resIndex, expRes := range expResults {
+		if hitFlags[resIndex] != expRes {
+			t.Fatalf("[ray %d] expected hit flag to be %d; got %d", resIndex, expRes, hitFlags[resIndex])
+		}
+	}
+
+	type intersection struct {
+		wuvt         types.Vec4
+		meshInstance uint32
+		triIndex     uint32
+		_padding1    uint32
+		_padding2    uint32
+	}
+	intersections := readIntoSlice(t, in.buffers.Intersections, make([]intersection, 0)).([]intersection)
+	expIntersections := []intersection{
+		{
+			wuvt:         types.Vec4{0, 0, 0, 1.5},
+			meshInstance: 0,
+			triIndex:     3,
+		},
+		{
+			wuvt:         types.Vec4{0, 0, 0, 1.5},
+			meshInstance: 1,
+			triIndex:     2,
+		},
+	}
+	for expIndex, exp := range expIntersections {
+		target := intersections[expIndex]
+
+		// Test barycentric coordinate calculations
+		// Test that w = 1.0 - (u+v)
+		expW := float64(1.0 - (target.wuvt[1] + target.wuvt[2]))
+		if math.Abs(expW-float64(target.wuvt[0])) > 0.001 {
+			t.Fatalf("[intersection %d] expected w barycentric coord to be %f; got %f", expIndex, expW, target.wuvt[0])
+		}
+
+		// Test distance to hit
+		if math.Abs(float64(exp.wuvt[3]-target.wuvt[3])) > 0.001 {
+			t.Fatalf("[intersection %d] expected t to be %f; got %f", expIndex, exp.wuvt[3], target.wuvt[3])
+		}
+
+		if target.meshInstance != exp.meshInstance {
+			t.Fatalf("[intersection %d] expected intersected mesh instance to be %d; got %d", expIndex, exp.meshInstance, target.meshInstance)
+		}
+
+		if target.triIndex != exp.triIndex {
+			t.Fatalf("[intersection %d] expected intersected triangle index to be %d; got %d", expIndex, exp.triIndex, target.triIndex)
+		}
+	}
+}
+
 func morton2d(x uint32, y uint32) uint32 {
 	mortonMasks2D := [5]uint32{0x0000FFFF, 0x00FF00FF, 0x0F0F0F0F, 0x33333333, 0x55555555}
 

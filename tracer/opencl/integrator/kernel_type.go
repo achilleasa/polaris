@@ -8,6 +8,7 @@ type kernelType uint8
 const (
 	generatePrimaryRays kernelType = iota
 	rayIntersectionTest
+	rayIntersectionQuery
 	//
 	numKernels
 )
@@ -19,6 +20,8 @@ func (kt kernelType) String() string {
 		return "generatePrimaryRays"
 	case rayIntersectionTest:
 		return "rayIntersectionTest"
+	case rayIntersectionQuery:
+		return "rayIntersectionQuery"
 	default:
 		panic(fmt.Sprintf("Unsupported kernel type: %d", kt))
 	}

@@ -216,6 +216,121 @@ func benchmarkRayIntersectionTest(devName string, blockDim uint32, b *testing.B)
 	}
 }
 
+func BenchmarkCpuRayIntersectionQuery128(b *testing.B) {
+	benchmarkRayIntersectionQuery("CPU", 128, b)
+}
+
+func BenchmarkCpuRayIntersectionQuery256(b *testing.B) {
+	benchmarkRayIntersectionQuery("CPU", 256, b)
+}
+
+func BenchmarkCpuRayIntersectionQuery512(b *testing.B) {
+	benchmarkRayIntersectionQuery("CPU", 512, b)
+}
+
+func BenchmarkCpuRayIntersectionQuery1024(b *testing.B) {
+	benchmarkRayIntersectionQuery("CPU", 1024, b)
+}
+
+func BenchmarkIrisGpuRayIntersectionQuery128(b *testing.B) {
+	benchmarkRayIntersectionQuery("Iris", 128, b)
+}
+
+func BenchmarkIrisGpuRayIntersectionQuery256(b *testing.B) {
+	benchmarkRayIntersectionQuery("Iris", 256, b)
+}
+
+func BenchmarkIrisGpuRayIntersectionQuery512(b *testing.B) {
+	benchmarkRayIntersectionQuery("Iris", 512, b)
+}
+
+func BenchmarkIrisGpuRayIntersectionQuery1024(b *testing.B) {
+	benchmarkRayIntersectionQuery("Iris", 1024, b)
+}
+
+func BenchmarkAMDGpuRayIntersectionQuery128(b *testing.B) {
+	benchmarkRayIntersectionQuery("AMD", 128, b)
+}
+
+func BenchmarkAMDGpuRayIntersectionQuery256(b *testing.B) {
+	benchmarkRayIntersectionQuery("AMD", 256, b)
+}
+
+func BenchmarkAMDGpuRayIntersectionQuery512(b *testing.B) {
+	benchmarkRayIntersectionQuery("AMD", 512, b)
+}
+
+func BenchmarkAMDGpuRayIntersectionQuery1024(b *testing.B) {
+	benchmarkRayIntersectionQuery("AMD", 1024, b)
+}
+
+// Benchmark intersection test for a blockDim * blockDim rays.
+func benchmarkRayIntersectionQuery(devName string, blockDim uint32, b *testing.B) {
+	log.DefaultSink = ioutil.Discard
+	defer func() {
+		log.DefaultSink = os.Stdout
+	}()
+
+	in := createBenchIntegrator(b, devName)
+	defer in.Close()
+
+	sc := createBenchScene(b)
+
+	err := in.UploadSceneData(sc)
+	if err != nil {
+		b.Fatal(err)
+	}
+	blockReq := &tracer.BlockRequest{
+		FrameW: blockDim,
+		FrameH: blockDim,
+		BlockY: 0,
+		BlockH: blockDim,
+	}
+
+	camera := setupCamera(types.Vec3{0, 0, 2}, types.Vec3{0, 0, 0}, blockReq)
+	err = in.UploadCameraData(camera)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	err = in.ResizeOutputFrame(blockReq.FrameW, blockReq.FrameH)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// Generate rays
+	type ray struct {
+		origin types.Vec4
+		dir    types.Vec4
+	}
+	rays := make([]ray, blockDim*blockDim)
+	var rayIndex uint32
+	for rayIndex = 0; rayIndex < blockDim*blockDim; rayIndex++ {
+		rays[rayIndex] = ray{
+			origin: types.Vec4{
+				-1.5 + rand.Float32(),
+				-1.5 + rand.Float32(),
+				2,
+				math.MaxFloat32,
+			},
+			dir: types.Vec4{0, 0, -1, 0},
+		}
+	}
+
+	err = in.buffers.Rays.WriteData(rays, 0)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		_, err = in.RayIntersectionQuery(uint32(len(rays)))
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func createBenchIntegrator(b *testing.B, devName string) *MonteCarlo {
 	devList, err := device.SelectDevices(device.AllDevices, devName)
 	if err != nil {

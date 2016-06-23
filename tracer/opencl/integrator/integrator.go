@@ -146,7 +146,10 @@ func (in *MonteCarlo) GeneratePrimaryRays(blockReq *tracer.BlockRequest) (time.D
 	return kernel.Exec2D(0, 0, int(blockReq.FrameW), int(blockReq.BlockH), 0, 0)
 }
 
-// Check for intersections
+// Test for ray intersection. This method will update the hit buffer to indicate
+// whether each ray intersects with the scene geometry or not. This method is
+// much faster than an intersection query as it terminates on the first found
+// intersection and does not evaulate intersection data.
 func (in *MonteCarlo) RayIntersectionTest(numRays uint32) (time.Duration, error) {
 	kernel := in.kernels[rayIntersectionTest]
 
@@ -156,6 +159,26 @@ func (in *MonteCarlo) RayIntersectionTest(numRays uint32) (time.Duration, error)
 		in.buffers.MeshInstances,
 		in.buffers.Vertices,
 		in.buffers.HitFlags,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return kernel.Exec1D(0, int(numRays), 0)
+}
+
+// Calculate ray intersections and fill out the hit buffer and the intersection
+// buffer with intersection data for the closest ray/triangle intersection.
+func (in *MonteCarlo) RayIntersectionQuery(numRays uint32) (time.Duration, error) {
+	kernel := in.kernels[rayIntersectionQuery]
+
+	err := kernel.SetArgs(
+		in.buffers.Rays,
+		in.buffers.BvhNodes,
+		in.buffers.MeshInstances,
+		in.buffers.Vertices,
+		in.buffers.HitFlags,
+		in.buffers.Intersections,
 	)
 	if err != nil {
 		return 0, err

@@ -1,24 +1,5 @@
 package cmd
 
-import (
-	"image"
-	"image/png"
-	"os"
-	"runtime"
-	"strings"
-	"time"
-	"unsafe"
-
-	"github.com/achilleasa/go-pathtrace/renderer"
-	"github.com/achilleasa/go-pathtrace/scene"
-	"github.com/achilleasa/go-pathtrace/scene/io"
-	"github.com/achilleasa/go-pathtrace/tracer/opencl"
-	"github.com/achilleasa/go-pathtrace/types"
-	"github.com/codegangsta/cli"
-	"github.com/go-gl/gl/v2.1/gl"
-	"github.com/go-gl/glfw/v3.1/glfw"
-)
-
 const (
 	// Coefficients for converting delta cursor movements to yaw/pitch camera angles.
 	mouseSensitivityX float32 = 0.005
@@ -28,6 +9,7 @@ const (
 	cameraMoveSpeed float32 = 0.05
 )
 
+/*
 // Return the available opencl devices after applying the blacklist filters.
 func filteredDeviceList(ctx *cli.Context) []opencl.Device {
 	filteredList := make([]opencl.Device, 0)
@@ -71,7 +53,7 @@ func setupRenderer(ctx *cli.Context, invertY bool) (*renderer.Renderer, *scene.C
 	}
 
 	// Load scene
-	sc, err := io.ReadScene(ctx.Args().First())
+	sc, err := reader.ReadScene(ctx.Args().First())
 	if err != nil {
 		logger.Printf("error: %s", err.Error())
 		os.Exit(1)
@@ -284,4 +266,4 @@ func RenderInteractive(ctx *cli.Context) {
 		window.SwapBuffers()
 		glfw.PollEvents()
 	}
-}
+}*/

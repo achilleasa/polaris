@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"strings"
 
 	"github.com/achilleasa/go-pathtrace/scene/reader"
@@ -14,20 +15,20 @@ func CompileScene(ctx *cli.Context) {
 		sceneFile := ctx.Args().Get(idx)
 		if !strings.HasSuffix(sceneFile, ".obj") {
 			logger.Printf("skipping unsupported file %s", sceneFile)
-			continue
+			os.Exit(1)
 		}
 
 		sc, err := reader.ReadScene(sceneFile)
 		if err != nil {
 			logger.Printf("error: %s", err.Error())
-			continue
+			os.Exit(1)
 		}
 
 		zipFile := strings.Replace(sceneFile, ".obj", ".zip", -1)
 		err = writer.WriteScene(sc, zipFile)
 		if err != nil {
 			logger.Printf("error: %s", err.Error())
-			continue
+			os.Exit(1)
 		}
 	}
 }

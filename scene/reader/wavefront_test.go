@@ -313,6 +313,102 @@ f 1/1/1 2/2/2 -1/-1/-1
 	}
 }
 
+func TestParseSingleQuadFacedObject(t *testing.T) {
+	payload := `
+o testObj
+v 0 0 0
+v 1 0 0
+v 1 1 0
+v 0 1 0
+# Comment
+f 1 2 3 4
+`
+
+	res := mockResource(payload)
+	r := newWavefrontReader()
+	err := r.parse(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expMeshes := 1
+	if len(r.sceneGraph.Meshes) != expMeshes {
+		t.Fatalf("expected %d meshes to be parsed; got %d", expMeshes, len(r.sceneGraph.Meshes))
+	}
+
+	mesh0 := r.sceneGraph.Meshes[0]
+	expName := "testObj"
+	if mesh0.Name != expName {
+		t.Fatalf("expected mesh[0] name to be '%s'; got %s", expName, mesh0.Name)
+	}
+
+	expPrimitives := 2
+	if len(mesh0.Primitives) != expPrimitives {
+		t.Fatalf("expected mesh[0] to contain %d primitives; got %d", expPrimitives, len(mesh0.Primitives))
+	}
+
+	expMaterials := 1
+	if len(r.sceneGraph.Materials) != expMaterials {
+		t.Fatalf("expected scene to contain %d material(s); got %d", expMaterials, len(r.sceneGraph.Materials))
+	}
+
+	expPoints := []types.Vec3{
+		{0, 0, 0},
+		{1, 0, 0},
+		{1, 1, 0},
+	}
+	prim0 := mesh0.Primitives[0]
+	for idx, exp := range expPoints {
+		if !reflect.DeepEqual(prim0.Vertices[idx], exp) {
+			t.Fatalf("[prim 0] expected vertex %d to be %v; got %v", idx, exp, prim0.Vertices[idx])
+		}
+	}
+
+	expCenter := expPoints[0].Add(expPoints[1]).Add(expPoints[2]).Mul(1.0 / 3.0)
+
+	if !types.ApproxEqual(prim0.Center(), expCenter, 1e-3) {
+		t.Fatalf("[prim 0] expected face center to be %v; got %v", expCenter, prim0.Center())
+	}
+	expBBox := [2]types.Vec3{
+		{0, 0, 0},
+		{1, 1, 0},
+	}
+	bbox := prim0.BBox()
+	if !types.ApproxEqual(bbox[0], expBBox[0], 1e-3) {
+		t.Fatalf("[prim 0] expected bbox min to be %v; got %v", expBBox[0], bbox[0])
+	}
+	if !types.ApproxEqual(bbox[1], expBBox[1], 1e-3) {
+		t.Fatalf("[prim 0] expected bbox max to be %v; got %v", expBBox[1], bbox[1])
+	}
+
+	expPoints = []types.Vec3{
+		{0, 0, 0},
+		{1, 1, 0},
+		{0, 1, 0},
+	}
+	prim1 := mesh0.Primitives[1]
+	for idx, exp := range expPoints {
+		if !reflect.DeepEqual(prim1.Vertices[idx], exp) {
+			t.Fatalf("[prim 1] expected vertex %d to be %v; got %v", idx, exp, prim1.Vertices[idx])
+		}
+	}
+
+	expCenter = expPoints[0].Add(expPoints[1]).Add(expPoints[2]).Mul(1.0 / 3.0)
+	if !types.ApproxEqual(prim1.Center(), expCenter, 1e-3) {
+		t.Fatalf("[prim 1] expected face center to be %v; got %v", expCenter, prim1.Center())
+	}
+	expBBox = [2]types.Vec3{
+		{0, 0, 0},
+		{1, 1, 0},
+	}
+	bbox = prim1.BBox()
+	if !types.ApproxEqual(bbox[0], expBBox[0], 1e-3) {
+		t.Fatalf("[prim 1] expected bbox min to be %v; got %v", expBBox[0], bbox[0])
+	}
+	if !types.ApproxEqual(bbox[1], expBBox[1], 1e-3) {
+		t.Fatalf("[prim 1] expected bbox max to be %v; got %v", expBBox[1], bbox[1])
+	}
+}
 func TestMaterialLoaderMissingNewMaterialCommand(t *testing.T) {
 	payload := `Kd 1.0 1.0 1.0`
 	res := mockResource(payload)
@@ -462,18 +558,18 @@ newmtl foo
 map_Kd invalid.png
 `
 	res := mockResource(payload)
-	r := newWavefrontReader(res.Path())
+	r := newWavefrontReader()
 	err := r.parseMaterials(res)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(r.sceneGraph.textures) != 0 {
-		t.Fatalf("expected texture list to be empty; got %d items", len(r.sceneGraph.textures))
+	if len(r.sceneGraph.Textures) != 0 {
+		t.Fatalf("expected texture list to be empty; got %d items", len(r.sceneGraph.Textures))
 	}
 
-	mat := r.sceneGraph.materials[0]
-	if mat.kdTex != -1 {
-		t.Fatalf("expected kdTex to be -1 for missing texture; got %d", mat.kdTex)
+	mat := r.sceneGraph.Materials[0]
+	if mat.KdTex != -1 {
+		t.Fatalf("expected kdTex to be -1 for missing texture; got %d", mat.KdTex)
 	}
 }

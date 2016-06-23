@@ -211,7 +211,7 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 
 			r.sceneGraph.Meshes = append(r.sceneGraph.Meshes, scenePkg.NewParsedMesh(lineTokens[1]))
 		case "f":
-			prim, err := r.parseFace(lineTokens)
+			primList, err := r.parseFace(lineTokens)
 			if err != nil {
 				return r.emitError(res.Path(), lineNum, err.Error())
 			}
@@ -224,7 +224,7 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 			// Append primitive
 			meshIndex := len(r.sceneGraph.Meshes) - 1
 			r.sceneGraph.Meshes[meshIndex].MarkBBoxDirty()
-			r.sceneGraph.Meshes[meshIndex].Primitives = append(r.sceneGraph.Meshes[meshIndex].Primitives, prim)
+			r.sceneGraph.Meshes[meshIndex].Primitives = append(r.sceneGraph.Meshes[meshIndex].Primitives, primList...)
 		case "camera_fov":
 			r.sceneGraph.Camera.FOV, err = parseFloat32(lineTokens)
 			if err != nil {
@@ -349,20 +349,20 @@ func (r *wavefrontSceneReader) parseMeshInstance(lineTokens []string) (*scenePkg
 // Indices start from 1 and may be negative to indicate
 // an offset off the end of the vertex/uv list.
 //
-// This method only works with triangular faces and will return an error if a
-// face with more than 3 vertices is encountered.
-func (r *wavefrontSceneReader) parseFace(lineTokens []string) (*scenePkg.ParsedPrimitive, error) {
-	if len(lineTokens) != 4 {
-		return nil, fmt.Errorf("unsupported syntax for 'f'; expected 3 arguments for triangular face; got %d. Select the triangulation option in your exporter.", len(lineTokens)-1)
+// This method only works with triangular/quad faces and will return an error if a
+// face with more than 4 vertices is encountered.
+func (r *wavefrontSceneReader) parseFace(lineTokens []string) ([]*scenePkg.ParsedPrimitive, error) {
+	if len(lineTokens) < 4 || len(lineTokens) > 5 {
+		return nil, fmt.Errorf("unsupported syntax for 'f'; expected 3 arguments for triangular face or 4 arguments for a quad face; got %d. Select the triangulation option in your exporter.", len(lineTokens)-1)
 	}
 
-	var vertices [3]types.Vec3
-	var normals [3]types.Vec3
-	var uv [3]types.Vec2
+	var vertices [4]types.Vec3
+	var normals [4]types.Vec3
+	var uv [4]types.Vec2
 	var vOffset int
 	var err error
 	expIndices := 0
-	for arg := 0; arg < 3; arg++ {
+	for arg := 0; arg < len(lineTokens)-1; arg++ {
 		vTokens := strings.Split(lineTokens[arg+1], "/")
 
 		// The first arg defines the format for the following args
@@ -384,7 +384,7 @@ func (r *wavefrontSceneReader) parseFace(lineTokens []string) (*scenePkg.ParsedP
 		vertices[arg] = r.vertexList[vOffset]
 
 		// Parse UV coords if specified
-		if vTokens[1] != "" {
+		if expIndices > 1 && vTokens[1] != "" {
 			vOffset, err = selectFaceCoordIndex(vTokens[1], len(r.uvList))
 			if err != nil {
 				return nil, fmt.Errorf("could not parse tex coord for face argument %d: %s", arg, err.Error())
@@ -393,7 +393,7 @@ func (r *wavefrontSceneReader) parseFace(lineTokens []string) (*scenePkg.ParsedP
 		}
 
 		// Parse normal coords if specified
-		if vTokens[2] != "" {
+		if expIndices > 2 && vTokens[2] != "" {
 			vOffset, err = selectFaceCoordIndex(vTokens[2], len(r.normalList))
 			if err != nil {
 				return nil, fmt.Errorf("could not parse normal coord for face argument %d: %s", arg, err.Error())
@@ -407,21 +407,41 @@ func (r *wavefrontSceneReader) parseFace(lineTokens []string) (*scenePkg.ParsedP
 		r.curMaterial = r.defaultMaterial()
 	}
 
-	prim := &scenePkg.ParsedPrimitive{
-		Vertices:      vertices,
-		Normals:       normals,
-		UVs:           uv,
-		MaterialIndex: uint32(r.curMaterial),
+	// Assemble vertices into one or two primitives depending on whether we are parsing a triangular or a quad face
+	primitives := make([]*scenePkg.ParsedPrimitive, 0)
+	indiceList := [][3]int{{0, 1, 2}}
+	if len(lineTokens) == 5 {
+		indiceList = append(indiceList, [3]int{0, 2, 3})
 	}
-	prim.SetBBox(
-		[2]types.Vec3{
-			types.MinVec3(vertices[0], types.MinVec3(vertices[1], vertices[2])),
-			types.MaxVec3(vertices[0], types.MaxVec3(vertices[1], vertices[2])),
-		},
-	)
-	prim.SetCenter(vertices[0].Add(vertices[1]).Add(vertices[2]).Mul(1.0 / 3.0))
 
-	return prim, nil
+	var triVerts [3]types.Vec3
+	var triNormals [3]types.Vec3
+	var triUVs [3]types.Vec2
+	for _, indices := range indiceList {
+		// copy vertices for this triangle
+		for triIndex, selectIndex := range indices {
+			triVerts[triIndex] = vertices[selectIndex]
+			triNormals[triIndex] = normals[selectIndex]
+			triUVs[triIndex] = uv[selectIndex]
+		}
+
+		prim := &scenePkg.ParsedPrimitive{
+			Vertices:      triVerts,
+			Normals:       triNormals,
+			UVs:           triUVs,
+			MaterialIndex: uint32(r.curMaterial),
+		}
+		prim.SetBBox(
+			[2]types.Vec3{
+				types.MinVec3(triVerts[0], types.MinVec3(triVerts[1], triVerts[2])),
+				types.MaxVec3(triVerts[0], types.MaxVec3(triVerts[1], triVerts[2])),
+			},
+		)
+		prim.SetCenter(triVerts[0].Add(triVerts[1]).Add(triVerts[2]).Mul(1.0 / 3.0))
+		primitives = append(primitives, prim)
+	}
+
+	return primitives, nil
 }
 
 // Parse a wavefront material library.

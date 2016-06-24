@@ -10,6 +10,17 @@ import (
 	"github.com/achilleasa/go-pathtrace/types"
 )
 
+const (
+	// The BVH builder will not attempt to calculate split candidates
+	// if the node bbox along an axis is less than this threshold.
+	minSideLength float32 = 1e-3
+
+	// If the split step (calculated as side length / (1024 * depth+1))
+	// is less than this threshold the BVH builder will not evaluate
+	// split candidates.
+	minSplitStep float32 = 1e-5
+)
+
 // The BoundedVolume interface is implemented by all meshes/primitives that can
 // be partitioned by the bvh builder.
 type BoundedVolume interface {
@@ -65,7 +76,7 @@ type bvhBuilder struct {
 // if the incoming work length is <= minLeafItems.
 func BuildBVH(workList []BoundedVolume, minLeafItems int, leafCb BvhLeafCallback) []scene.BvhNode {
 	builder := &bvhBuilder{
-		logger:       log.New("bvhBuilder: ", log.LstdFlags),
+		logger:       log.New("bvhBuilder"),
 		nodes:        make([]scene.BvhNode, 0),
 		leafCb:       leafCb,
 		minLeafItems: minLeafItems,
@@ -77,9 +88,9 @@ func BuildBVH(workList []BoundedVolume, minLeafItems int, leafCb BvhLeafCallback
 
 	start := time.Now()
 	builder.partition(workList, 0)
-	builder.logger.Printf(
+	builder.logger.Debugf(
 		"BVH tree build time: %d ms, maxDepth: %d, nodes: %d, leafs: %d\n",
-		time.Since(start).Nanoseconds()/1000000,
+		time.Since(start).Nanoseconds()/1e6,
 		builder.stats.maxDepth, builder.stats.nodes, builder.stats.leafs,
 	)
 	return builder.nodes
@@ -119,12 +130,15 @@ func (b *bvhBuilder) partition(workList []BoundedVolume, depth int) uint32 {
 	// Run axis split tests in parallel
 	for axis := 0; axis < 3; axis++ {
 		// Skip axis if bbox dimension is too small
-		if side[axis] < 1e-4 {
+		if side[axis] < minSideLength {
 			continue
 		}
 
 		// We want the split steps to become more granular the deeper we go
 		splitStep := side[axis] / (1024.0 / float32(depth+1))
+		if splitStep < minSplitStep {
+			continue
+		}
 
 		for splitPoint := node.Min[axis]; splitPoint < node.Max[axis]; splitPoint += splitStep {
 			candidate := bvhSplitCandidate{

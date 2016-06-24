@@ -4,14 +4,29 @@ import (
 	"os"
 
 	"github.com/achilleasa/go-pathtrace/cmd"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 )
 
 func main() {
+	cli.VersionFlag = cli.BoolFlag{
+		Name:  "version",
+		Usage: "print only the version",
+	}
+
 	app := cli.NewApp()
 	app.Name = "go-pathtrace"
 	app.Usage = "render scenes using path tracing"
 	app.Version = "0.0.1"
+	app.Flags = []cli.Flag{
+		cli.BoolFlag{
+			Name:  "v",
+			Usage: "enable verbose logging",
+		},
+		cli.BoolFlag{
+			Name:  "vv",
+			Usage: "enable even more verbose logging",
+		},
+	}
 	app.Commands = []cli.Command{
 		{
 			Name:  "compile",

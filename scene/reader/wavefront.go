@@ -40,7 +40,7 @@ type wavefrontSceneReader struct {
 // Create a new text scene reader.
 func newWavefrontReader() *wavefrontSceneReader {
 	return &wavefrontSceneReader{
-		logger:         log.New("wavefrontSceneReader: ", log.LstdFlags),
+		logger:         log.New("wavefront scene reader"),
 		sceneGraph:     scenePkg.NewParsedScene(),
 		matNameToIndex: make(map[string]uint32, 0),
 		curMaterial:    -1,
@@ -53,7 +53,7 @@ func newWavefrontReader() *wavefrontSceneReader {
 
 // Read scene definition.
 func (r *wavefrontSceneReader) Read(sceneRes *resource) (*scenePkg.Scene, error) {
-	r.logger.Printf("parsing scene from %s", sceneRes.Path())
+	r.logger.Noticef(`parsing scene from "%s"`, sceneRes.Path())
 	start := time.Now()
 
 	// Parse scene
@@ -67,7 +67,7 @@ func (r *wavefrontSceneReader) Read(sceneRes *resource) (*scenePkg.Scene, error)
 		r.createDefaultMeshInstances()
 	}
 
-	r.logger.Printf("parsed scene in %d ms", time.Since(start).Nanoseconds()/1000000)
+	r.logger.Noticef("parsed scene in %d ms", time.Since(start).Nanoseconds()/1e6)
 
 	// Compile scene into an optimized, gpu-friendly format
 	return compiler.Compile(r.sceneGraph)
@@ -150,7 +150,7 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 			continue
 		case "call", "mtllib":
 			if len(lineTokens) != 2 {
-				return r.emitError(res.Path(), lineNum, "unsupported syntax for '%s'; expected 1 argument; got %d", lineTokens[0], len(lineTokens)-1)
+				return r.emitError(res.Path(), lineNum, `unsupported syntax for "%s"; expected 1 argument; got %d`, lineTokens[0], len(lineTokens)-1)
 			}
 
 			r.pushFrame(fmt.Sprintf("referenced from %s:%d [%s]", res.Path(), lineNum, lineTokens[0]))
@@ -174,14 +174,14 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 			r.popFrame()
 		case "usemtl":
 			if len(lineTokens) != 2 {
-				return r.emitError(res.Path(), lineNum, "unsupported syntax for 'usemtl'; expected 1 argument; got %d", len(lineTokens)-1)
+				return r.emitError(res.Path(), lineNum, `unsupported syntax for 'usemtl'; expected 1 argument; got %d`, len(lineTokens)-1)
 			}
 
 			// Lookup material
 			matName := lineTokens[1]
 			matIndex, exists := r.matNameToIndex[matName]
 			if !exists {
-				return r.emitError(res.Path(), lineNum, "undefined material with name '%s'", matName)
+				return r.emitError(res.Path(), lineNum, `undefined material with name "%s"`, matName)
 			}
 
 			// Activate material
@@ -206,7 +206,7 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 			r.uvList = append(r.uvList, v)
 		case "g", "o":
 			if len(lineTokens) < 2 {
-				return r.emitError(res.Path(), lineNum, "unsupported syntax for '%s'; expected 1 argument for object name; got %d", lineTokens[0], len(lineTokens)-1)
+				return r.emitError(res.Path(), lineNum, `unsupported syntax for "%s"; expected 1 argument for object name; got %d`, lineTokens[0], len(lineTokens)-1)
 			}
 
 			r.verifyLastParsedMesh()
@@ -263,6 +263,7 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 func (r *wavefrontSceneReader) verifyLastParsedMesh() {
 	lastMeshIndex := len(r.sceneGraph.Meshes) - 1
 	if lastMeshIndex >= 0 && len(r.sceneGraph.Meshes[lastMeshIndex].Primitives) == 0 {
+		r.logger.Warningf(`dropping mesh "%s" as it contains no polygons`, r.sceneGraph.Meshes[lastMeshIndex].Name)
 		r.sceneGraph.Meshes = r.sceneGraph.Meshes[:lastMeshIndex]
 	}
 }
@@ -275,7 +276,7 @@ func (r *wavefrontSceneReader) verifyLastParsedMesh() {
 // - sX, sY, sZ	      : scale
 func (r *wavefrontSceneReader) parseMeshInstance(lineTokens []string) (*scenePkg.ParsedMeshInstance, error) {
 	if len(lineTokens) != 11 {
-		return nil, fmt.Errorf("unsupported syntax for 'instance'; expected 10 arguments: mesh_name tX tY tZ yaw pitch roll sX sY sZ; got %d", len(lineTokens)-1)
+		return nil, fmt.Errorf(`unsupported syntax for "instance"; expected 10 arguments: mesh_name tX tY tZ yaw pitch roll sX sY sZ; got %d`, len(lineTokens)-1)
 	}
 
 	// Find object by name
@@ -289,7 +290,7 @@ func (r *wavefrontSceneReader) parseMeshInstance(lineTokens []string) (*scenePkg
 	}
 
 	if meshIndex == -1 {
-		return nil, fmt.Errorf("unknown mesh with name '%s'", meshName)
+		return nil, fmt.Errorf(`unknown mesh with name "%s"`, meshName)
 	}
 
 	var translation, rotation, scale types.Vec3
@@ -363,7 +364,7 @@ func (r *wavefrontSceneReader) parseMeshInstance(lineTokens []string) (*scenePkg
 // face with more than 4 vertices is encountered.
 func (r *wavefrontSceneReader) parseFace(lineTokens []string) ([]*scenePkg.ParsedPrimitive, error) {
 	if len(lineTokens) < 4 || len(lineTokens) > 5 {
-		return nil, fmt.Errorf("unsupported syntax for 'f'; expected 3 arguments for triangular face or 4 arguments for a quad face; got %d. Select the triangulation option in your exporter.", len(lineTokens)-1)
+		return nil, fmt.Errorf(`unsupported syntax for "f"; expected 3 arguments for triangular face or 4 arguments for a quad face; got %d. Select the triangulation option in your exporter`, len(lineTokens)-1)
 	}
 
 	var vertices [4]types.Vec3
@@ -459,6 +460,8 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 	var lineNum int = 0
 	var err error
 
+	r.logger.Infof(`parsing material library "%s"`, res.Path())
+
 	scanner := bufio.NewScanner(res)
 
 	var curMaterial *scenePkg.ParsedMaterial = nil
@@ -476,12 +479,12 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 			continue
 		case "newmtl":
 			if len(lineTokens) != 2 {
-				return r.emitError(res.Path(), lineNum, "unsupported syntax for 'newmtl'; expected 1 argument; got %d", len(lineTokens)-1)
+				return r.emitError(res.Path(), lineNum, `unsupported syntax for "newmtl"; expected 1 argument; got %d`, len(lineTokens)-1)
 			}
 
 			matName = lineTokens[1]
 			if _, exists := r.matNameToIndex[matName]; exists {
-				return r.emitError(res.Path(), lineNum, "material '%s' already defined", matName)
+				return r.emitError(res.Path(), lineNum, `material "%s" already defined`, matName)
 			}
 
 			// Allocate new material and add it to library
@@ -490,7 +493,7 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 			r.matNameToIndex[matName] = uint32(len(r.sceneGraph.Materials) - 1)
 		default:
 			if curMaterial == nil {
-				return r.emitError(res.Path(), lineNum, "got '%s' without a 'newmtl'", lineTokens[0])
+				return r.emitError(res.Path(), lineNum, `got "%s" without a "newmtl"`, lineTokens[0])
 			}
 
 			switch lineTokens[0] {
@@ -539,7 +542,7 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 				if err != nil {
 					// Ignore missing textures
 					if strings.Contains(err.Error(), "no such file or directory") {
-						r.logger.Printf("warning: ignoring missing texture %s", lineTokens[1])
+						r.logger.Warningf(`ignoring missing texture "%s"`, lineTokens[1])
 						continue
 					}
 
@@ -594,7 +597,7 @@ func selectFaceCoordIndex(indexToken string, coordListLen int) (int, error) {
 // Parse a float scalar value.
 func parseFloat32(lineTokens []string) (float32, error) {
 	if len(lineTokens) < 2 {
-		return 0, fmt.Errorf("unsupported syntax for '%s'; expected 1 argument; got %d", lineTokens[0], len(lineTokens)-1)
+		return 0, fmt.Errorf(`unsupported syntax for "%s"; expected 1 argument; got %d`, lineTokens[0], len(lineTokens)-1)
 	}
 
 	val, err := strconv.ParseFloat(lineTokens[1], 32)
@@ -608,7 +611,7 @@ func parseFloat32(lineTokens []string) (float32, error) {
 // Parse a Vec3 row.
 func parseVec3(lineTokens []string) (types.Vec3, error) {
 	if len(lineTokens) < 4 {
-		return types.Vec3{}, fmt.Errorf("unsupported syntax for '%s'; expected 3 arguments; got %d", lineTokens[0], len(lineTokens)-1)
+		return types.Vec3{}, fmt.Errorf(`unsupported syntax for "%s"; expected 3 arguments; got %d`, lineTokens[0], len(lineTokens)-1)
 	}
 
 	v := types.Vec3{}
@@ -625,7 +628,7 @@ func parseVec3(lineTokens []string) (types.Vec3, error) {
 // Parse a Vec2 row.
 func parseVec2(lineTokens []string) (types.Vec2, error) {
 	if len(lineTokens) < 3 {
-		return types.Vec2{}, fmt.Errorf("unsupported syntax for '%s'; expected 2 arguments; got %d", lineTokens[0], len(lineTokens)-1)
+		return types.Vec2{}, fmt.Errorf(`unsupported syntax for "%s"; expected 2 arguments; got %d`, lineTokens[0], len(lineTokens)-1)
 	}
 
 	v := types.Vec2{}

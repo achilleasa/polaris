@@ -1,6 +1,9 @@
 package compiler
 
 import (
+	"time"
+
+	"github.com/achilleasa/go-pathtrace/log"
 	"github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/go-pathtrace/types"
 )
@@ -12,6 +15,7 @@ const (
 type sceneCompiler struct {
 	parsedScene    *scene.ParsedScene
 	optimizedScene *scene.Scene
+	logger         log.Logger
 }
 
 // Compile a scene representation parsed by a scene reader into a GPU-friendly
@@ -20,9 +24,14 @@ func Compile(parsedScene *scene.ParsedScene) (*scene.Scene, error) {
 	compiler := &sceneCompiler{
 		parsedScene:    parsedScene,
 		optimizedScene: &scene.Scene{},
+		logger:         log.New("scene compiler"),
 	}
 
-	err := compiler.bakeTextures()
+	start := time.Now()
+	compiler.logger.Noticef("compiling scene")
+
+	var err error
+	err = compiler.bakeTextures()
 	if err != nil {
 		return nil, err
 	}
@@ -42,12 +51,16 @@ func Compile(parsedScene *scene.ParsedScene) (*scene.Scene, error) {
 		return nil, err
 	}
 
+	compiler.logger.Noticef("compiled scene in %d ms", time.Since(start).Nanoseconds()/1e6)
 	return compiler.optimizedScene, nil
 }
 
 // Allocate a contiguous memory block for all texture data and initialize the
 // scene's texture metadata so that they point to the proper index inside the block.
 func (sc *sceneCompiler) bakeTextures() error {
+	start := time.Now()
+	sc.logger.Noticef("processing %d textures", len(sc.parsedScene.Textures))
+
 	// Find how much memory we need. To ensure proper memory alignment we pad
 	// each texture's data len so its a multiple of a qword
 	var totalDataLen uint32 = 0
@@ -59,7 +72,6 @@ func (sc *sceneCompiler) bakeTextures() error {
 	sc.optimizedScene.TextureMetadata = make([]scene.TextureMetadata, len(sc.parsedScene.Textures))
 	var offset uint32 = 0
 	for index, tex := range sc.parsedScene.Textures {
-
 		sc.optimizedScene.TextureMetadata[index].Format = tex.Format
 		sc.optimizedScene.TextureMetadata[index].Width = tex.Width
 		sc.optimizedScene.TextureMetadata[index].Height = tex.Height
@@ -70,6 +82,7 @@ func (sc *sceneCompiler) bakeTextures() error {
 		offset += uint32(align4(len(tex.Data)))
 	}
 
+	sc.logger.Noticef("processed textures in %d ms", time.Since(start).Nanoseconds()/1e6)
 	return nil
 }
 
@@ -77,8 +90,11 @@ func (sc *sceneCompiler) bakeTextures() error {
 // the mesh instances. An additional BVH tree is also generated for each
 // defined scene mesh. Each mesh instance points to the root BVH node of a mesh.
 func (sc *sceneCompiler) partitionGeometry() error {
+	start := time.Now()
+	sc.logger.Notice("partitioning geometry")
 
 	// Partition mesh instances so that each instance ends up in its own BVH leaf.
+	sc.logger.Infof("building scene BVH tree (%d meshes, %d mesh instances)", len(sc.parsedScene.Meshes), len(sc.parsedScene.MeshInstances))
 	volList := make([]BoundedVolume, len(sc.parsedScene.MeshInstances))
 	for index, mi := range sc.parsedScene.MeshInstances {
 		volList[index] = mi
@@ -117,6 +133,7 @@ func (sc *sceneCompiler) partitionGeometry() error {
 			volList[index] = prim
 		}
 
+		sc.logger.Infof(`building BVH tree for "%s" (%d primitices)`, pm.Name, len(pm.Primitives))
 		bvhNodes := BuildBVH(volList, minPrimitivesPerLeaf, func(node *scene.BvhNode, workList []BoundedVolume) {
 			node.SetPrimitives(primOffset, uint32(len(workList)))
 
@@ -153,6 +170,8 @@ func (sc *sceneCompiler) partitionGeometry() error {
 		sc.optimizedScene.BvhNodeList = append(sc.optimizedScene.BvhNodeList, bvhNodes...)
 	}
 
+	sc.logger.Infof("processing %d mesh instances", len(sc.parsedScene.MeshInstances))
+
 	// Process each mesh instance
 	sc.optimizedScene.MeshInstanceList = make([]scene.MeshInstance, len(sc.parsedScene.MeshInstances))
 	for index, pmi := range sc.parsedScene.MeshInstances {
@@ -164,12 +183,17 @@ func (sc *sceneCompiler) partitionGeometry() error {
 		mi.Transform = pmi.Transform.Inv()
 	}
 
+	sc.logger.Noticef("partitioned geometry in %d ms", time.Since(start).Nanoseconds()/1e6)
+
 	return nil
 }
 
 // Convert material definitions into a node-based structure that models a
 // layered material.
 func (sc *sceneCompiler) createLayeredMaterialTrees() error {
+	start := time.Now()
+	sc.logger.Noticef("processing %d materials", len(sc.parsedScene.Materials))
+
 	sc.optimizedScene.MaterialNodeList = make([]scene.MaterialNode, 0)
 	sc.optimizedScene.MaterialNodeRoots = make([]uint32, len(sc.parsedScene.Materials))
 
@@ -177,6 +201,7 @@ func (sc *sceneCompiler) createLayeredMaterialTrees() error {
 	var node scene.MaterialNode
 
 	for matIndex, mat := range sc.parsedScene.Materials {
+		sc.logger.Infof(`processing material "%s"`, mat.Name)
 		nextNodeIndex = uint32(len(sc.optimizedScene.MaterialNodeList))
 		sc.optimizedScene.MaterialNodeRoots[matIndex] = nextNodeIndex
 
@@ -261,6 +286,7 @@ func (sc *sceneCompiler) createLayeredMaterialTrees() error {
 		}
 	}
 
+	sc.logger.Noticef("processed materials in %d ms", time.Since(start).Nanoseconds()/1e6)
 	return nil
 }
 

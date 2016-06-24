@@ -22,14 +22,14 @@ type zipSceneWriter struct {
 // Create a new zip scene writer
 func newZipSceneWriter(sceneFile string) *zipSceneWriter {
 	return &zipSceneWriter{
-		logger:    log.New("zipSceneWriter: ", log.LstdFlags),
+		logger:    log.New("zip scene writer"),
 		sceneFile: sceneFile,
 	}
 }
 
 // Write scene definition to zip file.
 func (w *zipSceneWriter) Write(sc *scene.Scene) error {
-	w.logger.Printf("writing compressed scene to %s", w.sceneFile)
+	w.logger.Noticef(`writing compressed scene to "%s"`, w.sceneFile)
 	start := time.Now()
 
 	var err error
@@ -51,6 +51,6 @@ func (w *zipSceneWriter) Write(sc *scene.Scene) error {
 		return err
 	}
 
-	w.logger.Printf("compressed scene in %d ms", time.Since(start).Nanoseconds()/1000000)
+	w.logger.Noticef("compressed scene in %d ms", time.Since(start).Nanoseconds()/1e6)
 	return nil
 }

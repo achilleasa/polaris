@@ -48,10 +48,10 @@ type clTracer struct {
 
 // Create a new opencl tracer.
 func newTracer(id string, device *device.Device) (tracer.Tracer, error) {
-	loggerPrefix := fmt.Sprintf("opencl tracer (%s): ", device.Name)
+	loggerName := fmt.Sprintf("opencl tracer (%s)", device.Name)
 
 	tr := &clTracer{
-		logger:       log.New(loggerPrefix, log.LstdFlags),
+		logger:       log.New(loggerName),
 		id:           id,
 		integrator:   integrator.NewMonteCarloIntegrator(device),
 		blockReqChan: make(chan tracer.BlockRequest, 0),
@@ -130,7 +130,7 @@ func (tr *clTracer) Enqueue(blockReq tracer.BlockRequest) {
 	case tr.blockReqChan <- blockReq:
 	default:
 		// drop the request if worker is not listening
-		tr.logger.Printf("request processor did not receive block request")
+		tr.logger.Error("request processor did not receive block request")
 	}
 }
 

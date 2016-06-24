@@ -96,6 +96,8 @@ func setupRenderer(ctx *cli.Context, invertY bool) (*renderer.Renderer, *scene.C
 
 // Render still frame.
 func RenderFrame(ctx *cli.Context) {
+	setupLogging(ctx)
+
 	// Get render params
 	spp := uint32(ctx.Int("spp"))
 	imgFile := ctx.String("out")
@@ -132,6 +134,8 @@ func RenderFrame(ctx *cli.Context) {
 // Use opengl to render a continuously updating view of the renderer's frame
 // buffer contents.
 func RenderInteractive(ctx *cli.Context) {
+	setupLogging(ctx)
+
 	// Get render params
 	frameW := int32(ctx.Int("width"))
 	frameH := int32(ctx.Int("height"))

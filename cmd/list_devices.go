@@ -3,21 +3,21 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"os"
 
 	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 )
 
 // List available opencl devices.
-func ListDevices(ctx *cli.Context) {
+func ListDevices(ctx *cli.Context) error {
+	setupLogging(ctx)
+
 	var storage []byte
 	buf := bytes.NewBuffer(storage)
 
 	clPlatforms, err := device.GetPlatformInfo()
 	if err != nil {
-		logger.Printf("error: could not list devices: %s", err.Error())
-		os.Exit(1)
+		return fmt.Errorf("could not list devices: %s", err.Error())
 	}
 
 	buf.WriteString(fmt.Sprintf("\nSystem provides %d opencl platform(s):\n\n", len(clPlatforms)))
@@ -28,5 +28,6 @@ func ListDevices(ctx *cli.Context) {
 		}
 	}
 
-	logger.Print(buf.String())
+	fmt.Printf(buf.String())
+	return nil
 }

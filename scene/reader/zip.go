@@ -24,13 +24,13 @@ type zipSceneReader struct {
 // Create a new zip scene writer
 func newZipSceneReader() *zipSceneReader {
 	return &zipSceneReader{
-		logger: log.New("zipSceneReader: ", log.LstdFlags),
+		logger: log.New("zip reader"),
 	}
 }
 
 // Read scene definition from zip file.
 func (p *zipSceneReader) Read(sceneRes *resource) (*scene.Scene, error) {
-	p.logger.Printf("parsing compiled scene from %s", sceneRes.Path())
+	p.logger.Noticef(`parsing compiled scene from "%s"`, sceneRes.Path())
 	start := time.Now()
 
 	// zip package requires a reader implementing ReaderAt. To work around
@@ -50,7 +50,7 @@ func (p *zipSceneReader) Read(sceneRes *resource) (*scene.Scene, error) {
 		switch f.Name {
 		case dataFile:
 		default:
-			p.logger.Printf("unknown file %s in scene zip file; skipping", f.Name)
+			p.logger.Warningf("unknown file %s in scene zip file; skipping", f.Name)
 			continue
 		}
 
@@ -66,6 +66,6 @@ func (p *zipSceneReader) Read(sceneRes *resource) (*scene.Scene, error) {
 		}
 	}
 
-	p.logger.Printf("loaded scene in %d ms", time.Since(start).Nanoseconds()/1000000)
+	p.logger.Noticef("loaded scene in %d ms", time.Since(start).Nanoseconds()/1000000)
 	return sc, nil
 }

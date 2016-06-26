@@ -2,8 +2,6 @@ package integrator
 
 import (
 	"io/ioutil"
-	"math"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,6 +13,12 @@ import (
 	"github.com/achilleasa/go-pathtrace/tracer"
 	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
 	"github.com/achilleasa/go-pathtrace/types"
+)
+
+var (
+	benchCameraEye   = types.Vec3{-1053.478, 92.0336, -22.42906}
+	benchCameraLook  = types.Vec3{-1, 0, 0}
+	benchCachedScene *scene.Scene
 )
 
 func BenchmarkCpuGeneratePrimaryRays128(b *testing.B) {
@@ -66,9 +70,9 @@ func BenchmarkAMDGpuGeneratePrimaryRays1024(b *testing.B) {
 }
 
 func benchmarkGeneratePrimaryRays(devName string, frameSize uint32, b *testing.B) {
-	log.DefaultSink = ioutil.Discard
+	log.SetSink(ioutil.Discard)
 	defer func() {
-		log.DefaultSink = os.Stdout
+		log.SetSink(os.Stdout)
 	}()
 
 	in := createBenchIntegrator(b, devName)
@@ -151,9 +155,9 @@ func BenchmarkAMDGpuRayIntersectionTest1024(b *testing.B) {
 
 // Benchmark intersection test for a blockDim * blockDim rays.
 func benchmarkRayIntersectionTest(devName string, blockDim uint32, b *testing.B) {
-	log.DefaultSink = ioutil.Discard
+	log.SetSink(ioutil.Discard)
 	defer func() {
-		log.DefaultSink = os.Stdout
+		log.SetSink(os.Stdout)
 	}()
 
 	in := createBenchIntegrator(b, devName)
@@ -172,7 +176,7 @@ func benchmarkRayIntersectionTest(devName string, blockDim uint32, b *testing.B)
 		BlockH: blockDim,
 	}
 
-	camera := setupCamera(types.Vec3{0, 0, 2}, types.Vec3{0, 0, 0}, blockReq)
+	camera := setupCamera(benchCameraEye, benchCameraLook, blockReq)
 	err = in.UploadCameraData(camera)
 	if err != nil {
 		b.Fatal(err)
@@ -183,33 +187,14 @@ func benchmarkRayIntersectionTest(devName string, blockDim uint32, b *testing.B)
 		b.Fatal(err)
 	}
 
-	// Generate rays
-	type ray struct {
-		origin types.Vec4
-		dir    types.Vec4
-	}
-	rays := make([]ray, blockDim*blockDim)
-	var rayIndex uint32
-	for rayIndex = 0; rayIndex < blockDim*blockDim; rayIndex++ {
-		rays[rayIndex] = ray{
-			origin: types.Vec4{
-				-1.5 + rand.Float32(),
-				-1.5 + rand.Float32(),
-				2,
-				math.MaxFloat32,
-			},
-			dir: types.Vec4{0, 0, -1, 0},
-		}
-	}
-
-	err = in.buffers.Rays.WriteData(rays, 0)
+	_, err = in.GeneratePrimaryRays(blockReq)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_, err = in.RayIntersectionTest(uint32(len(rays)))
+		_, err = in.RayIntersectionTest(blockReq.FrameW * blockReq.FrameH)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -266,9 +251,9 @@ func BenchmarkAMDGpuRayIntersectionQuery1024(b *testing.B) {
 
 // Benchmark intersection test for a blockDim * blockDim rays.
 func benchmarkRayIntersectionQuery(devName string, blockDim uint32, b *testing.B) {
-	log.DefaultSink = ioutil.Discard
+	log.SetSink(ioutil.Discard)
 	defer func() {
-		log.DefaultSink = os.Stdout
+		log.SetSink(os.Stdout)
 	}()
 
 	in := createBenchIntegrator(b, devName)
@@ -287,7 +272,7 @@ func benchmarkRayIntersectionQuery(devName string, blockDim uint32, b *testing.B
 		BlockH: blockDim,
 	}
 
-	camera := setupCamera(types.Vec3{0, 0, 2}, types.Vec3{0, 0, 0}, blockReq)
+	camera := setupCamera(benchCameraEye, benchCameraLook, blockReq)
 	err = in.UploadCameraData(camera)
 	if err != nil {
 		b.Fatal(err)
@@ -298,33 +283,14 @@ func benchmarkRayIntersectionQuery(devName string, blockDim uint32, b *testing.B
 		b.Fatal(err)
 	}
 
-	// Generate rays
-	type ray struct {
-		origin types.Vec4
-		dir    types.Vec4
-	}
-	rays := make([]ray, blockDim*blockDim)
-	var rayIndex uint32
-	for rayIndex = 0; rayIndex < blockDim*blockDim; rayIndex++ {
-		rays[rayIndex] = ray{
-			origin: types.Vec4{
-				-1.5 + rand.Float32(),
-				-1.5 + rand.Float32(),
-				2,
-				math.MaxFloat32,
-			},
-			dir: types.Vec4{0, 0, -1, 0},
-		}
-	}
-
-	err = in.buffers.Rays.WriteData(rays, 0)
+	_, err = in.GeneratePrimaryRays(blockReq)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_, err = in.RayIntersectionQuery(uint32(len(rays)))
+		_, err = in.RayIntersectionQuery(blockReq.FrameW * blockReq.FrameH)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -351,12 +317,22 @@ func createBenchIntegrator(b *testing.B, devName string) *MonteCarlo {
 }
 
 func createBenchScene(b *testing.B) *scene.Scene {
+	if benchCachedScene != nil {
+		return benchCachedScene
+	}
+
 	_, thisFile, _, _ := runtime.Caller(0)
 	thisDir := filepath.Dir(thisFile)
 
-	s, err := reader.ReadScene(filepath.Join(thisDir, "fixtures/cube.obj"))
+	var err error
+	sceneFile := filepath.Join(thisDir, "/../../../../go-pathtrace-scenes/crytek-sponza/sponza.zip")
+	if _, err = os.Stat(sceneFile); os.IsNotExist(err) {
+		b.Log("warning: no local scene data available; falling back to streaming from GH. To speed up future benchmarks consider running: go get github.com/achilleasa/go-pathtrace-scenes\n")
+		sceneFile = "https://github.com/achilleasa/go-pathtrace-scenes/raw/master/crytek-sponza/sponza.zip"
+	}
+	benchCachedScene, err = reader.ReadScene(sceneFile)
 	if err != nil {
 		b.Fatal(err)
 	}
-	return s
+	return benchCachedScene
 }

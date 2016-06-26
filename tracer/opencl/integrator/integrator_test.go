@@ -83,7 +83,7 @@ func TestGeneratePrimaryRays(t *testing.T) {
 			if p.status != 1 {
 				t.Fatalf("path(%d, %d) exepected status to be active(1); got %d", x, y, p.status)
 			}
-			expPixelIndex := (y * blockReq.FrameW) + x
+			expPixelIndex := (y * blockReq.FrameW * 4) + x
 			if p.pixelIndex != expPixelIndex {
 				t.Fatalf("path(%d, %d) expected pixel index to be %d; got %d", x, y, expPixelIndex, p.pixelIndex)
 			}

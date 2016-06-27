@@ -2,6 +2,7 @@
 #define MATRIX_CL 
 
 float3 mul4x1(float3 vec, float4 mat[4]);
+float3 mul3x1(float3 vec, float4 mat[4]);
 
 // Transform vector with a 4x4 matrix.
 float3 mul4x1(float3 vec, float4 mat[4]){

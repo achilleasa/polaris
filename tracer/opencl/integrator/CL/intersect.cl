@@ -13,8 +13,8 @@
 #define BVH_TRIANGLE_COUNT(node) (node->numTriangles.w)
 
 float intersectRayNode(Ray* ray, __global BvhNode* node);
-bool rayMeshIntersectionTest( Ray ray, MeshInstance meshInstance, __global BvhNode* bvhNodes, __global float4* vertexList, __global BvhNode **nodeStack, uchar stackStartIndex);
-bool rayMeshIntersectionQuery( Ray ray, MeshInstance meshInstance, __global BvhNode* bvhNodes, __global float4* vertexList, __global BvhNode **nodeStack, uchar stackStartIndex, Intersection *intersection);
+bool rayMeshIntersectionTest( Ray ray, MeshInstance meshInstance, __global BvhNode* bvhNodes, __global float4* vertexList);
+bool rayMeshIntersectionQuery( Ray ray, MeshInstance meshInstance, __global BvhNode* bvhNodes, __global float4* vertexList, Intersection *intersection);
 
 float intersectRayNode(Ray* ray, __global BvhNode* node){
 	float3 invDir = native_recip(ray->dir.xyz);
@@ -35,9 +35,7 @@ bool rayMeshIntersectionTest(
 		Ray ray,
 		MeshInstance meshInstance,
 		__global BvhNode* bvhNodes,
-		__global float4* vertexList,
-		__global BvhNode **nodeStack,
-		uchar stackStartIndex
+		__global float4* vertexList
 		){
 
 	// Transform ray by mesh instance matrix. Note we do not apply translation
@@ -45,7 +43,8 @@ bool rayMeshIntersectionTest(
 	ray.origin.xyz = mul4x1(ray.origin.xyz, meshInstance.transformMat);
 	ray.dir.xyz = mul3x1(ray.dir.xyz, meshInstance.transformMat);
 
-	uint stackIndex = stackStartIndex;
+	uchar stackIndex = 0;
+	__global BvhNode *nodeStack[BVH_MAX_STACK_SIZE];
 	__global BvhNode *curNode = bvhNodes + meshInstance.bvhRoot;
 
 	for(;;){
@@ -85,7 +84,7 @@ bool rayMeshIntersectionTest(
 			}
 
 			// No hit; pop next pointer of the stack
-			if( stackIndex == stackStartIndex ){
+			if( stackIndex == 0){
 				return false;
 			}
 			curNode = nodeStack[--stackIndex];
@@ -108,7 +107,7 @@ bool rayMeshIntersectionTest(
 				nodeStack[stackIndex++] = lHitDist < rHitDist ? rChild : lChild;
 			} else {
 				// Just pop the next pointer of the stack
-				if(stackIndex == stackStartIndex){
+				if(stackIndex == 0){
 					return false;
 				}
 				curNode = nodeStack[--stackIndex];
@@ -138,7 +137,7 @@ __kernel void rayIntersectionTest(
 
 	for(;;){
 		if(BVH_IS_LEAF(curNode)){
-			if( rayMeshIntersectionTest(ray, BVH_MESH_INSTANCE(curNode), bvhNodes, vertexList, &nodeStack, stackIndex)){
+			if( rayMeshIntersectionTest(ray, BVH_MESH_INSTANCE(curNode), bvhNodes, vertexList)){
 				hitFlag[threadId] = 1;
 				return;
 			}
@@ -184,8 +183,6 @@ bool rayMeshIntersectionQuery(
 		MeshInstance meshInstance,
 		__global BvhNode* bvhNodes,
 		__global float4* vertexList,
-		__global BvhNode **nodeStack,
-		uchar stackStartIndex,
 		Intersection *intersection
 		){
 
@@ -194,7 +191,8 @@ bool rayMeshIntersectionQuery(
 	ray.origin.xyz = mul4x1(ray.origin.xyz, meshInstance.transformMat);
 	ray.dir.xyz = mul3x1(ray.dir.xyz, meshInstance.transformMat);
 
-	uint stackIndex = stackStartIndex;
+	uchar stackIndex = 0;
+	__global BvhNode *nodeStack[BVH_MAX_STACK_SIZE];
 	__global BvhNode *curNode = bvhNodes + meshInstance.bvhRoot;
 
 	bool foundIntersection = false;
@@ -245,7 +243,7 @@ bool rayMeshIntersectionQuery(
 			}
 
 			// pop next pointer of the stack
-			if( stackIndex == stackStartIndex ){
+			if( stackIndex == 0 ){
 				return foundIntersection;
 			}
 			curNode = nodeStack[--stackIndex];
@@ -268,7 +266,7 @@ bool rayMeshIntersectionQuery(
 				nodeStack[stackIndex++] = lHitDist < rHitDist ? rChild : lChild;
 			} else {
 				// Just pop the next pointer of the stack
-				if(stackIndex == stackStartIndex){
+				if(stackIndex == 0){
 					return foundIntersection;
 				}
 				curNode = nodeStack[--stackIndex];
@@ -301,7 +299,7 @@ __kernel void rayIntersectionQuery(
 
 	for(;;){
 		if(BVH_IS_LEAF(curNode)){
-			if( rayMeshIntersectionQuery(ray, BVH_MESH_INSTANCE(curNode), bvhNodes, vertexList, &nodeStack, stackIndex, &intersection)){
+			if( rayMeshIntersectionQuery(ray, BVH_MESH_INSTANCE(curNode), bvhNodes, vertexList, &intersection)){
 				hitFlag[threadId] = 1;
 				intersection.meshInstance = BVH_MESH_INSTANCE_ID(curNode);
 			}

@@ -209,6 +209,7 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 				return r.emitError(res.Path(), lineNum, "unsupported syntax for '%s'; expected 1 argument for object name; got %d", lineTokens[0], len(lineTokens)-1)
 			}
 
+			r.verifyLastParsedMesh()
 			r.sceneGraph.Meshes = append(r.sceneGraph.Meshes, scenePkg.NewParsedMesh(lineTokens[1]))
 		case "f":
 			primList, err := r.parseFace(lineTokens)
@@ -254,7 +255,16 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 		}
 	}
 
+	r.verifyLastParsedMesh()
 	return nil
+}
+
+// Drop the last parsed mesh if it contains no primitives.
+func (r *wavefrontSceneReader) verifyLastParsedMesh() {
+	lastMeshIndex := len(r.sceneGraph.Meshes) - 1
+	if lastMeshIndex >= 0 && len(r.sceneGraph.Meshes[lastMeshIndex].Primitives) == 0 {
+		r.sceneGraph.Meshes = r.sceneGraph.Meshes[:lastMeshIndex]
+	}
 }
 
 // Parse mesh instance definition. Definitions use the following format:

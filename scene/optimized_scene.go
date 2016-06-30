@@ -15,10 +15,10 @@ import "github.com/achilleasa/go-pathtrace/types"
 //
 type BvhNode struct {
 	Min   types.Vec3
-	lData int32
+	LData int32
 
 	Max   types.Vec3
-	rData int32
+	RData int32
 }
 
 // Set bounding box.
@@ -29,40 +29,40 @@ func (n *BvhNode) SetBBox(bbox [2]types.Vec3) {
 
 // Set left and right child node indices.
 func (n *BvhNode) SetChildNodes(left, right uint32) {
-	n.lData = int32(left)
-	n.rData = int32(right)
+	n.LData = int32(left)
+	n.RData = int32(right)
 }
 
 // Set mesh instance index.
 func (n *BvhNode) SetMeshIndex(index uint32) {
-	n.lData = -int32(index)
+	n.LData = -int32(index)
 }
 
 // Get Mesh index.
 func (n *BvhNode) GetMeshIndex() (index uint32) {
-	return uint32(-n.lData)
+	return uint32(-n.LData)
 }
 
 // Set primitive index and count.
 func (n *BvhNode) SetPrimitives(firstPrimIndex, count uint32) {
-	n.lData = -int32(firstPrimIndex)
-	n.rData = int32(count)
+	n.LData = -int32(firstPrimIndex)
+	n.RData = int32(count)
 }
 
 // Get primitive index and count.
 func (n *BvhNode) GetPrimitives() (firstPrimIndex, count uint32) {
-	return uint32(-n.lData), uint32(n.rData)
+	return uint32(-n.LData), uint32(n.RData)
 }
 
 // Add offset to indices of child nodes.
 func (n *BvhNode) OffsetChildNodes(offset int32) {
 	// Ignore leafs
-	if n.lData <= 0 {
+	if n.LData <= 0 {
 		return
 	}
 
-	n.lData += offset
-	n.rData += offset
+	n.LData += offset
+	n.RData += offset
 }
 
 // The MeshInstance structure allows us to apply a transformation matrix to

@@ -63,7 +63,10 @@ typedef struct {
 	uint _reserved2;
 
 	// inverted mesh transformation matrix for transforming rays to mesh space
-	float4 transformMat[4];
+	float4 transformMat0;
+	float4 transformMat1;
+	float4 transformMat2;
+	float4 transformMat3;
 } MeshInstance;
 
 typedef struct {

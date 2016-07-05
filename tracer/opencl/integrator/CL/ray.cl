@@ -31,7 +31,7 @@ __kernel void generatePrimaryRays(
 
 	if( globalId.x < frameW && globalId.y < frameH ){
 		uint index = morton2d(globalId);
-		uint pixelIndex = ((globalId.y + blockStartY) * frameW) + globalId.x;
+		uint pixelIndex = ((globalId.y + blockStartY) * frameW << 2) + (globalId.x << 2);
 
 		// Get ray direction using trilinear interpolation
 		float2 texel = (float2)(globalId.x, globalId.y) * texelDims;
@@ -45,7 +45,7 @@ __kernel void generatePrimaryRays(
 
 		Ray ray;
 		Path path;
-		rayNew(&ray,  eyePos, dir.xyz, -1.0f);
+		rayNew(&ray,  eyePos, dir.xyz, FLT_MAX);
 		pathNew(&path, PATH_ACTIVE, pixelIndex);
 
 		rays[index] = ray;

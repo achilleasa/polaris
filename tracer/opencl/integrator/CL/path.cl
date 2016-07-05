@@ -7,7 +7,7 @@ void pathMulThroughput(__global Path *path, float3 fragColor);
 
 // Initialize path.
 inline void pathNew(Path *path, uint status, uint pixelIndex){
-	path->throughput = (float3)(1.0, 1.0, 1.0);
+	path->throughput = (float3)(1.0f, 1.0f, 1.0f);
 	path->status = status;
 	path->pixelIndex = pixelIndex;
 }

@@ -118,6 +118,10 @@ as an argument to the render command.`,
 				},
 			},
 		},
+		{
+			Name:   "debug",
+			Action: cmd.Debug,
+		},
 	}
 
 	app.Run(os.Args)

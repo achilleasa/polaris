@@ -13,7 +13,7 @@ import (
 )
 
 func TestFloat32Parser(t *testing.T) {
-	expError := "unsupported syntax for 'v'; expected 1 argument; got 0"
+	expError := `unsupported syntax for "v"; expected 1 argument; got 0`
 	_, err := parseFloat32([]string{"v"})
 	if err == nil || err.Error() != expError {
 		t.Fatalf("expected to get %s; got %v", expError, err)
@@ -35,7 +35,7 @@ func TestFloat32Parser(t *testing.T) {
 }
 
 func TestVec2Parser(t *testing.T) {
-	expError := "unsupported syntax for 'v'; expected 2 arguments; got 0"
+	expError := `unsupported syntax for "v"; expected 2 arguments; got 0`
 	_, err := parseVec2([]string{"v"})
 	if err == nil || err.Error() != expError {
 		t.Fatalf("expected to get %s; got %v", expError, err)
@@ -58,7 +58,7 @@ func TestVec2Parser(t *testing.T) {
 }
 
 func TestVec3Parser(t *testing.T) {
-	expError := "unsupported syntax for 'v'; expected 3 arguments; got 0"
+	expError := `unsupported syntax for "v"; expected 3 arguments; got 0`
 	_, err := parseVec3([]string{"v"})
 	if err == nil || err.Error() != expError {
 		t.Fatalf("expected to get %s; got %v", expError, err)
@@ -414,7 +414,7 @@ func TestMaterialLoaderMissingNewMaterialCommand(t *testing.T) {
 	res := mockResource(payload)
 	err := newWavefrontReader().parseMaterials(res)
 
-	expError := "[embedded: 1] error: got 'Kd' without a 'newmtl'"
+	expError := `[embedded: 1] error: got "Kd" without a "newmtl"`
 	if err == nil || err.Error() != expError {
 		t.Fatalf("expected to get error: %s; got %v", expError, err)
 	}
@@ -427,7 +427,7 @@ func TestMaterialLoaderInvalidVec3Param(t *testing.T) {
 	res := mockResource(payload)
 	err := newWavefrontReader().parseMaterials(res)
 
-	expError := "[embedded: 3] error: unsupported syntax for 'Kd'; expected 3 arguments; got 1"
+	expError := `[embedded: 3] error: unsupported syntax for "Kd"; expected 3 arguments; got 1`
 	if err == nil || err.Error() != expError {
 		t.Fatalf("expected to get error: %s; got %v", expError, err)
 	}
@@ -440,7 +440,7 @@ func TestMaterialLoaderInvalidScalarParam(t *testing.T) {
 	res := mockResource(payload)
 	err := newWavefrontReader().parseMaterials(res)
 
-	expError := "[embedded: 3] error: unsupported syntax for 'Ni'; expected 1 argument; got 0"
+	expError := `[embedded: 3] error: unsupported syntax for "Ni"; expected 1 argument; got 0`
 	if err == nil || err.Error() != expError {
 		t.Fatalf("expected to get error: %s; got %v", expError, err)
 	}

@@ -152,6 +152,7 @@ func (sc *sceneCompiler) partitionGeometry() error {
 
 				sc.optimizedScene.UvList[vertexOffset+0] = prim.UVs[0]
 				sc.optimizedScene.UvList[vertexOffset+1] = prim.UVs[1]
+				sc.optimizedScene.UvList[vertexOffset+2] = prim.UVs[2]
 
 				// Lookup root material node for primitive material index
 				sc.optimizedScene.MaterialIndex[primOffset] = sc.optimizedScene.MaterialNodeRoots[prim.MaterialIndex]

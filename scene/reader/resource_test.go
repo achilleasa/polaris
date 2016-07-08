@@ -112,7 +112,7 @@ func TestRgba8Texture(t *testing.T) {
 	}
 
 	if tex.Format != scene.Rgba8 {
-		t.Fatalf("expected tex format to be %d; got %d", scene.Rgb8, tex.Format)
+		t.Fatalf("expected tex format to be %d; got %d", scene.Rgba8, tex.Format)
 	}
 
 	expLen := 4
@@ -138,8 +138,8 @@ func TestRgb32Texture(t *testing.T) {
 		t.Fatalf("expected tex dims to be 1x1; got %dx%d", tex.Width, tex.Height)
 	}
 
-	if tex.Format != scene.Rgba32 {
-		t.Fatalf("expected tex format to be %d; got %d", scene.Rgb32, tex.Format)
+	if tex.Format != scene.Rgba32F {
+		t.Fatalf("expected tex format to be %d; got %d", scene.Rgba32F, tex.Format)
 	}
 
 	expLen := 4 * 4
@@ -174,8 +174,8 @@ func TestStreamHttpTexture(t *testing.T) {
 		t.Fatalf("expected tex dims to be 1x1; got %dx%d", tex.Width, tex.Height)
 	}
 
-	if tex.Format != scene.Rgba32 {
-		t.Fatalf("expected tex format to be %d; got %d", scene.Rgb32, tex.Format)
+	if tex.Format != scene.Rgba32F {
+		t.Fatalf("expected tex format to be %d; got %d", scene.Rgba32F, tex.Format)
 	}
 
 	expLen := 4 * 4

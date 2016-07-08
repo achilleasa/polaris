@@ -4,9 +4,7 @@ type TextureFormat uint32
 
 const (
 	Luminance8 TextureFormat = iota
-	Luminance32
-	Rgb8
+	Luminance32F
 	Rgba8
-	Rgb32
-	Rgba32
+	Rgba32F
 )

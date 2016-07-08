@@ -132,20 +132,16 @@ func newTexture(res *resource) (*scene.ParsedTexture, error) {
 		switch spec.NumChannels() {
 		case 1:
 			texFmt = scene.Luminance8
-		case 3:
-			texFmt = scene.Rgb8
-		case 4:
+		default:
 			texFmt = scene.Rgba8
 		}
 	default:
-		convertTo = oiio.TypeUint
+		convertTo = oiio.TypeFloat
 		switch spec.NumChannels() {
 		case 1:
-			texFmt = scene.Luminance32
-		case 3:
-			texFmt = scene.Rgb32
-		case 4:
-			texFmt = scene.Rgba32
+			texFmt = scene.Luminance32F
+		default:
+			texFmt = scene.Rgba32F
 		}
 	}
 
@@ -165,9 +161,43 @@ func newTexture(res *resource) (*scene.ParsedTexture, error) {
 	// Cast data to []byte
 	switch t := imgData.(type) {
 	case []uint8:
+		// convert to rgba as this makes addressing in opencl much easier
+		if spec.NumChannels() == 3 {
+			tData := make([]byte, texture.Width*texture.Height*4)
+			wOffset := 0
+			for rOffset := 0; rOffset < len(t); {
+				tData[wOffset] = t[rOffset]
+				tData[wOffset+1] = t[rOffset+1]
+				tData[wOffset+2] = t[rOffset+2]
+				tData[wOffset+3] = 255
+
+				rOffset += 3
+				wOffset += 4
+			}
+
+			t = tData
+		}
+
 		texture.Data = t
-	case []uint:
-		// Fetch slice header and adjust len/capacity (1 uint32 = 4 bytes)
+	case []float32:
+		// convert to rgba as this makes addressing in opencl much easier
+		if spec.NumChannels() == 3 {
+			tData := make([]float32, texture.Width*texture.Height*4)
+			wOffset := 0
+			for rOffset := 0; rOffset < len(t); {
+				tData[wOffset] = t[rOffset]
+				tData[wOffset+1] = t[rOffset+1]
+				tData[wOffset+2] = t[rOffset+2]
+				tData[wOffset+3] = 1.0
+
+				rOffset += 3
+				wOffset += 4
+			}
+
+			t = tData
+		}
+
+		// Fetch slice header and adjust len/capacity (1 float32 = 4 bytes)
 		header := *(*reflect.SliceHeader)(unsafe.Pointer(&t))
 		header.Len <<= 2
 		header.Cap <<= 2

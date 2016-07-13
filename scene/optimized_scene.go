@@ -88,11 +88,11 @@ const (
 	Fresnel
 )
 
-// Specification of brdf types for material leaf nodes.
-type MatBrdfType int32
+// Specification of bxdf types for material leaf nodes.
+type MatBxdfType int32
 
 const (
-	Diffuse MatBrdfType = iota
+	Diffuse MatBxdfType = 1 << iota
 	Specular
 	Refractive
 	Emissive
@@ -179,7 +179,7 @@ func (m *MaterialNode) SetNvalTex(texIndex int32) {
 }
 
 // Set leaf BRDF type.
-func (m *MaterialNode) SetBrdfType(brdfType MatBrdfType) {
+func (m *MaterialNode) SetBrdfType(brdfType MatBxdfType) {
 	m.UnionData[3] = int32(brdfType)
 }
 

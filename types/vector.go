@@ -143,6 +143,21 @@ func (v Vec4) Normalize() Vec4 {
 	return Vec4{v[0] * l, v[1] * l, v[2] * l, v[3] * l}
 }
 
+// Return max vector component
+func (v Vec4) MaxComponent() float32 {
+	out := v[0]
+	if v[1] > out {
+		out = v[1]
+	}
+	if v[2] > out {
+		out = v[2]
+	}
+	if v[3] > out {
+		out = v[3]
+	}
+	return out
+}
+
 // Extract the top-left 3x3 matrix from a 4x4 matrix.
 func (m Mat4) Mat3() Mat3 {
 	return Mat3{

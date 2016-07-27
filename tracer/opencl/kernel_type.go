@@ -1,4 +1,4 @@
-package integrator
+package opencl
 
 import "fmt"
 
@@ -6,9 +6,20 @@ type kernelType uint8
 
 // The list of kernels that implement the tracer.
 const (
+	// camera kernels
 	generatePrimaryRays kernelType = iota
+	// intersection kernels
 	rayIntersectionTest
 	rayIntersectionQuery
+	packetIntersectionQuery
+	// pt kernels
+	shadeHits
+	shadeMisses
+	accumulateEmissiveSamples
+	// hdr kernels
+	tonemapSimpleReinhard
+	// utils
+	clearAccumulator
 	//
 	numKernels
 )
@@ -22,6 +33,18 @@ func (kt kernelType) String() string {
 		return "rayIntersectionTest"
 	case rayIntersectionQuery:
 		return "rayIntersectionQuery"
+	case packetIntersectionQuery:
+		return "packetIntersectionQuery"
+	case shadeHits:
+		return "shadeHits"
+	case shadeMisses:
+		return "shadeMisses"
+	case accumulateEmissiveSamples:
+		return "accumulateEmissiveSamples"
+	case tonemapSimpleReinhard:
+		return "tonemapSimpleReinhard"
+	case clearAccumulator:
+		return "clearAccumulator"
 	default:
 		panic(fmt.Sprintf("Unsupported kernel type: %d", kt))
 	}

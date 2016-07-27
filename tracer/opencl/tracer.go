@@ -2,6 +2,8 @@ package opencl
 
 import (
 	"fmt"
+	"path"
+	"runtime"
 	"sync"
 	"time"
 
@@ -9,8 +11,9 @@ import (
 	"github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/go-pathtrace/tracer"
 	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
-	"github.com/achilleasa/go-pathtrace/tracer/opencl/integrator"
 )
+
+type pipelineStage func(tr *clTracer, blockReq *tracer.BlockRequest) (time.Duration, error)
 
 type clTracer struct {
 	logger log.Logger
@@ -18,13 +21,14 @@ type clTracer struct {
 	sync.Mutex
 	wg sync.WaitGroup
 
+	// The device associated with this tracer instance.
+	device *device.Device
+
+	// The allocated device resources.
+	resources *deviceResources
+
 	// The tracer id.
 	id string
-
-	// The output frame dimensions. We track them down so we can
-	// resize our buffers if the frame dimensions change
-	frameW uint32
-	frameH uint32
 
 	// A buffer for queuing updates. Updates are grouped by type and
 	// latest updates always overwrite the previous ones.
@@ -36,28 +40,32 @@ type clTracer struct {
 	// A channel for signaling the worker to exit.
 	closeChan chan struct{}
 
-	// Statistics for last rendered frame
+	// Statistics for last rendered frame.
 	stats *tracer.Stats
 
-	// The path integrator that implements the tracer.
-	integrator *integrator.MonteCarlo
+	// The tracer rendering pipeline.
+	pipeline []pipelineStage
 
-	// Device speed in Gflops
+	// Device speed in Gflops.
 	speed uint32
+
+	// The uploaded optimized scene data.
+	sceneData *scene.Scene
 }
 
 // Create a new opencl tracer.
-func newTracer(id string, device *device.Device) (tracer.Tracer, error) {
+func NewTracer(id string, device *device.Device) (tracer.Tracer, error) {
 	loggerName := fmt.Sprintf("opencl tracer (%s)", device.Name)
 
 	tr := &clTracer{
 		logger:       log.New(loggerName),
+		device:       device,
 		id:           id,
-		integrator:   integrator.NewMonteCarloIntegrator(device),
 		blockReqChan: make(chan tracer.BlockRequest, 0),
 		updateBuffer: make(map[tracer.UpdateType]interface{}, 0),
 		stats:        &tracer.Stats{},
 		speed:        device.Speed,
+		pipeline:     make([]pipelineStage, 0),
 	}
 
 	return tr, nil
@@ -79,16 +87,34 @@ func (tr *clTracer) Speed() uint32 {
 }
 
 // Initialize tracer
-func (tr *clTracer) Init() error {
+func (tr *clTracer) Init(frameW, frameH uint32, stages ...tracer.Stage) error {
 	var err error
 	tr.Lock()
 	defer tr.Unlock()
 
-	// Init integrator
-	err = tr.integrator.Init()
+	// Init device
+	_, thisFile, _, _ := runtime.Caller(0)
+	pathToMainKernel := path.Join(path.Dir(thisFile), relativePathToMainKernel)
+	err = tr.device.Init(pathToMainKernel)
 	if err != nil {
 		tr.cleanup()
 		return err
+	}
+
+	// Load kernels and allocate buffers
+	tr.resources, err = newDeviceResources(frameW, frameH, tr.device)
+	if err != nil {
+		tr.cleanup()
+		return err
+	}
+
+	// Attach pipeline stages
+	for _, stageFn := range stages {
+		err = stageFn(tr)
+		if err != nil {
+			tr.cleanup()
+			return err
+		}
 	}
 
 	// Start worker
@@ -118,10 +144,19 @@ func (tr *clTracer) cleanup() {
 		close(tr.closeChan)
 	}
 
-	// Cleanup integrator resources
-	if tr.integrator != nil {
-		tr.integrator.Close()
+	// Cleanup allocated resources
+	if tr.resources != nil {
+		tr.resources.Close()
+		tr.resources = nil
 	}
+
+	// Shutdown device
+	if tr.device != nil {
+		tr.device.Close()
+		tr.device = nil
+	}
+
+	tr.sceneData = nil
 }
 
 // Enqueue block request.
@@ -144,15 +179,27 @@ func (tr *clTracer) Stats() *tracer.Stats {
 	return tr.stats
 }
 
+// Upload scene data.
+func (tr *clTracer) UploadSceneData(sc *scene.Scene) error {
+	tr.sceneData = sc
+	return tr.resources.buffers.UploadSceneData(sc)
+}
+
+// Upload camera data.
+func (tr *clTracer) UploadCameraData(camera *scene.Camera) error {
+	tr.sceneData.Camera = camera
+	return nil
+}
+
 // Commit queued changes.
 func (tr *clTracer) commitUpdates() error {
 	var err error
 	for updateType, data := range tr.updateBuffer {
 		switch updateType {
 		case tracer.UpdateScene:
-			err = tr.integrator.UploadSceneData(data.(*scene.Scene))
+			err = tr.UploadSceneData(data.(*scene.Scene))
 		case tracer.UpdateCamera:
-			err = tr.integrator.UploadCameraData(data.(*scene.Camera))
+			err = tr.UploadCameraData(data.(*scene.Camera))
 		default:
 			return fmt.Errorf("unsupported update type %d", updateType)
 		}
@@ -196,18 +243,6 @@ func (tr *clTracer) startWorker() {
 					tr.stats.UpdateTime = time.Since(startTime)
 				}
 
-				// check if we need to resize our buffers
-				if tr.frameW != blockReq.FrameW || tr.frameH != blockReq.FrameH {
-					err = tr.integrator.ResizeOutputFrame(blockReq.FrameW, blockReq.FrameH)
-					if err != nil {
-						blockReq.ErrChan <- err
-						continue
-					}
-
-					tr.frameW = blockReq.FrameW
-					tr.frameH = blockReq.FrameH
-				}
-
 				// Render block and reply with our completion status
 				err = tr.renderBlock(&blockReq)
 				if err != nil {
@@ -234,5 +269,19 @@ func (tr *clTracer) startWorker() {
 
 // Render block.
 func (tr *clTracer) renderBlock(blockReq *tracer.BlockRequest) error {
-	return fmt.Errorf("renderBlock: not implemented")
+	var err error
+
+	if tr.sceneData == nil {
+		return ErrNoSceneData
+	}
+
+	// Execute pipeline
+	for _, stage := range tr.pipeline {
+		_, err = stage(tr, blockReq)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

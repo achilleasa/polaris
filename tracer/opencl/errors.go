@@ -17,4 +17,6 @@ var (
 	ErrKernelExecutionFailed  = errors.New("opencl tracer: kernel execution failed")
 	ErrUnsupportedChangeType  = errors.New("opencl tracer: unsupported change type")
 	ErrInvalidChangeData      = errors.New("opencl tracer: invalid data type for change")
+	ErrInvalidOption          = errors.New("opencl tracer: invalid tracer option")
+	ErrNoSceneData            = errors.New("opencl tracer: no scene data uploaded")
 )

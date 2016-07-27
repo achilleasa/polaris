@@ -158,6 +158,16 @@ func (m *MaterialNode) SetRightIndex(index uint32) {
 	m.UnionData[1] = int32(index)
 }
 
+// Get left child node index.
+func (m *MaterialNode) GetLeftIndex() uint32 {
+	return uint32(m.UnionData[0])
+}
+
+// Get right child node index.
+func (m *MaterialNode) GetRightIndex() uint32 {
+	return uint32(m.UnionData[1])
+}
+
 // Set node blend function.
 func (m *MaterialNode) SetBlendFunc(blendfunc MatNodeBlendFunc) {
 	m.UnionData[3] = int32(blendfunc)
@@ -166,6 +176,11 @@ func (m *MaterialNode) SetBlendFunc(blendfunc MatNodeBlendFunc) {
 // Set Kval tex index.
 func (m *MaterialNode) SetKvalTex(texIndex int32) {
 	m.UnionData[0] = texIndex
+}
+
+// Get Kval tex index.
+func (m *MaterialNode) GetKvalTex() int32 {
+	return m.UnionData[0]
 }
 
 // Set normal tex index.
@@ -178,9 +193,14 @@ func (m *MaterialNode) SetNvalTex(texIndex int32) {
 	m.UnionData[2] = texIndex
 }
 
-// Set leaf BRDF type.
-func (m *MaterialNode) SetBrdfType(brdfType MatBxdfType) {
-	m.UnionData[3] = int32(brdfType)
+// Set leaf BxDF type.
+func (m *MaterialNode) SetBxdfType(bxdfType MatBxdfType) {
+	m.UnionData[3] = int32(bxdfType)
+}
+
+// Get leaf BxDF type.
+func (m *MaterialNode) GetBxdfType() MatBxdfType {
+	return MatBxdfType(m.UnionData[3])
 }
 
 // The texture metadata. All texture data is stored as a contiguous memory block.
@@ -196,11 +216,39 @@ type TextureMetadata struct {
 	DataOffset uint32
 }
 
+// The type of an emissive primitive.
+type EmissivePrimitiveType uint32
+
+const (
+	AreaLight EmissivePrimitiveType = iota
+	EnvironmentLight
+)
+
+// An emissive primitive.
+type EmissivePrimitive struct {
+	// A transformation matrix for converting the primitive vertices from
+	// local space to world space.
+	Transform types.Mat4
+
+	// The area of the emissive primitive.
+	Area float32
+
+	// The triangle index for this emissive.
+	PrimitiveIndex uint32
+
+	// The material node index for this emissive.
+	MaterialNodeIndex uint32
+
+	// The type of the emissive primitive.
+	Type EmissivePrimitiveType
+}
+
 type Scene struct {
-	BvhNodeList       []BvhNode
-	MeshInstanceList  []MeshInstance
-	MaterialNodeList  []MaterialNode
-	MaterialNodeRoots []uint32
+	BvhNodeList        []BvhNode
+	MeshInstanceList   []MeshInstance
+	MaterialNodeList   []MaterialNode
+	MaterialNodeRoots  []uint32
+	EmissivePrimitives []EmissivePrimitive
 
 	// Texture definitions and the associated data.
 	TextureData     []byte
@@ -211,6 +259,11 @@ type Scene struct {
 	NormalList    []types.Vec4
 	UvList        []types.Vec2
 	MaterialIndex []uint32
+
+	// Indices to material nodes used for storing the scene global
+	// properties such as diffuse and emissive colors.
+	SceneDiffuseMatIndex  uint32
+	SceneEmissiveMatIndex uint32
 
 	// The scene camera.
 	Camera *Camera

@@ -1,15 +1,5 @@
 package renderer
 
-import (
-	"image"
-	"math/rand"
-	"sync"
-	"time"
-
-	"github.com/achilleasa/go-pathtrace/scene"
-	"github.com/achilleasa/go-pathtrace/tracer"
-)
-
 type SamplesPerPixel uint32
 
 const (
@@ -17,6 +7,7 @@ const (
 	AutoSamplesPerPixel SamplesPerPixel = iota
 )
 
+/*
 type Renderer struct {
 	// A lock for synchronizing access to the framebuffer.
 	sync.Mutex
@@ -200,4 +191,4 @@ func (r *Renderer) UpdateCamera() {
 	for _, tr := range r.tracers {
 		tr.AppendChange(tracer.UpdateCamera, r.scene.Camera)
 	}
-}
+}*/

@@ -373,6 +373,7 @@ func (r *wavefrontSceneReader) parseFace(lineTokens []string) ([]*scenePkg.Parse
 	var vOffset int
 	var err error
 	expIndices := 0
+	hasNormals := false
 	for arg := 0; arg < len(lineTokens)-1; arg++ {
 		vTokens := strings.Split(lineTokens[arg+1], "/")
 
@@ -410,12 +411,24 @@ func (r *wavefrontSceneReader) parseFace(lineTokens []string) ([]*scenePkg.Parse
 				return nil, fmt.Errorf("could not parse normal coord for face argument %d: %s", arg, err.Error())
 			}
 			normals[arg] = r.normalList[vOffset]
+			hasNormals = true
 		}
 	}
 
 	// If no material defined select the default
 	if r.curMaterial < 0 {
 		r.curMaterial = r.defaultMaterial()
+	}
+
+	// If no normals are available generate them from the vertices
+	if !hasNormals {
+		e01 := vertices[1].Sub(vertices[0])
+		e02 := vertices[2].Sub(vertices[0])
+		faceNormal := e01.Cross(e02).Normalize()
+		normals[0] = faceNormal
+		normals[1] = faceNormal
+		normals[2] = faceNormal
+		normals[3] = faceNormal
 	}
 
 	// Assemble vertices into one or two primitives depending on whether we are parsing a triangular or a quad face

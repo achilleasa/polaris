@@ -1,6 +1,10 @@
 package tracer
 
-import "time"
+import (
+	"time"
+
+	"github.com/achilleasa/go-pathtrace/scene"
+)
 
 // A unit of work that is processed by a tracer.
 type BlockRequest struct {
@@ -25,10 +29,10 @@ type BlockRequest struct {
 	FrameCount uint32
 
 	// A channel to signal on block completion with the number of completed rows.
-	DoneChan chan<- uint32
+	DoneChan chan uint32
 
 	// A channel to signal if an error occurs.
-	ErrChan chan<- error
+	ErrChan chan error
 }
 
 // Tracer statistics.
@@ -66,6 +70,9 @@ const (
 	UpdateCamera
 )
 
+// Alias for a function that can be used to attach a pipeline stage to the tracer.
+type Stage func(tracer Tracer) error
+
 type Tracer interface {
 	// Get tracer id.
 	Id() string
@@ -77,7 +84,7 @@ type Tracer interface {
 	Speed() uint32
 
 	// Initialize tracer.
-	Init() error
+	Init(frameW, frameH uint32, stages ...Stage) error
 
 	// Shutdown and cleanup tracer.
 	Close()
@@ -90,4 +97,10 @@ type Tracer interface {
 
 	// Retrieve last frame statistics.
 	Stats() *Stats
+
+	// Upload scene data.
+	UploadSceneData(sc *scene.Scene) error
+
+	// Upload camera data.
+	UploadCameraData(sc *scene.Camera) error
 }

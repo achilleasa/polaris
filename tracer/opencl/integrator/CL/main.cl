@@ -1,6 +1,0 @@
-#include "types.cl"
-#include "matrix.cl"
-#include "morton.cl"
-#include "path.cl"
-#include "ray.cl"
-#include "intersect.cl"

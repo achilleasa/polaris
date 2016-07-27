@@ -1,19 +1,11 @@
-#ifndef RAY_CL
-#define RAY_CL
-
-void rayNew(Ray* ray, float3 origin, float3 dir, float maxDist);
-
-// Initialize ray.
-inline void rayNew(Ray *ray, float3 origin, float3 dir, float maxDist){
-	ray->origin.xyz = origin;
-	ray->origin.w = maxDist;
-	ray->dir.xyz = dir;
-}
+#ifndef CAMERA_KERNEL_CL
+#define CAMERA_KERNEL_CL
 
 // Generate primary rays.
 __kernel void generatePrimaryRays(
-		__global Ray* rays, 
-		__global Path* paths,
+		__global Ray *rays, 
+		__global int *numRays,
+		__global Path *paths,
 		const float4 frustrumTL,
 		const float4 frustrumTR,
 		const float4 frustrumBL,
@@ -29,12 +21,16 @@ __kernel void generatePrimaryRays(
 	globalId.x = get_global_id(0);
 	globalId.y = get_global_id(1);
 
+	if(globalId.x == 0 && globalId.y == 0){
+		*numRays = get_global_size(0) * get_global_size(1);
+	}
+
 	if( globalId.x < frameW && globalId.y < frameH ){
 		uint index = morton2d(globalId);
-		uint pixelIndex = ((globalId.y + blockStartY) * frameW << 2) + (globalId.x << 2);
+		uint pixelIndex = ((globalId.y + blockStartY) * frameW) + globalId.x;
 
 		// Get ray direction using trilinear interpolation
-		float2 texel = (float2)(globalId.x, globalId.y) * texelDims;
+		float2 texel = ((float2)(globalId.x, globalId.y) + 0.5f) * texelDims;
 		float4 dir = normalize(
 			mix(
 				mix(frustrumTL, frustrumBL, texel.y),
@@ -43,13 +39,8 @@ __kernel void generatePrimaryRays(
 			)
 		);
 
-		Ray ray;
-		Path path;
-		rayNew(&ray,  eyePos, dir.xyz, FLT_MAX);
-		pathNew(&path, PATH_ACTIVE, pixelIndex);
-
-		rays[index] = ray;
-		paths[index] = path;
+		rayNew(rays + index,  eyePos, dir.xyz, FLT_MAX, index);
+		pathNew(paths + index, PATH_ACTIVE, pixelIndex);
 	}
 }
 

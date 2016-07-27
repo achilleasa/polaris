@@ -1,9 +1,7 @@
-#ifndef INTERSECT_CL
-#define INTERSECT_CL
+#ifndef INTERSECT_KERNEL_CL
+#define INTERSECT_KERNEL_CL
 
 #define MAX_ITERATIONS 10000
-
-#define INTERSECTION_EPSILON 0.001f
 
 #define BVH_MAX_STACK_SIZE 32
 
@@ -22,11 +20,14 @@
 #define RAY_VISIT_RIGHT_NODE 2
 #define RAY_VISIT_BOTH_NODES 3
 
+void printIntersection(Intersection *intersection);
+
 // Test for ray intersections with scene geometry and set an ouput flag to indicate
 // intersections. This method does not calculate any intersection details so its
 // cheaper to use for general intersection queries (e.g light occlusion)
 __kernel void rayIntersectionTest(
 		__global Ray* rays,
+		__global const int *numRays,
 		__global BvhNode* bvhNodes,
 		__global MeshInstance* meshInstances,
 		__global float4* vertexList,
@@ -36,7 +37,10 @@ __kernel void rayIntersectionTest(
 	Intersection intersection;
 	intersection.wuvt.w = FLT_MAX;
 
-	uint globalId = get_global_id(0);
+	int globalId = get_global_id(0);
+	if(globalId >= *numRays){
+		return;
+	}
 
 	int stackIndex;
 	int meshBvhStackStartIndex;
@@ -58,7 +62,7 @@ __kernel void rayIntersectionTest(
 	Ray	ray = rays[globalId];
 	float3 origRayOrigin = ray.origin.xyz;
 	float3 origRayDir = ray.dir.xyz;
-	
+
 	// Setup stack
 	stackIndex = 0;
 	meshBvhStackStartIndex = -1;
@@ -97,7 +101,7 @@ __kernel void rayIntersectionTest(
 					if (fabs(det) < INTERSECTION_EPSILON){
 						continue;
 					}
-						
+
 					float invDet = native_recip(det);
 
 					// Calculate barycentric coords
@@ -143,7 +147,7 @@ __kernel void rayIntersectionTest(
 			minmax = fmin( fmin(rmax.x, rmax.y), rmax.z);
 			maxmin = fmax( fmax(rmin.x, rmin.y), rmin.z);
 			float rHitDist = minmax < 0 || maxmin > minmax ? FLT_MAX : (maxmin >= ray.origin.w ? FLT_MAX : maxmin);
-			
+
 			int wantLeft = lHitDist < FLT_MAX ? 1 : 0;
 			int wantRight = rHitDist < FLT_MAX ? 1 : 0;
 
@@ -156,8 +160,8 @@ __kernel void rayIntersectionTest(
 				continue;
 			} 
 		} 
-		
- 		if(stackIndex == 0){
+
+		if(stackIndex == 0){
 			// We are done
 			hitFlag[globalId] = 0;
 			return;
@@ -177,6 +181,7 @@ __kernel void rayIntersectionTest(
 // intersections and also emits intersection data for any found intersections.
 __kernel void rayIntersectionQuery(
 		__global Ray* rays,
+		__global const int *numRays,
 		__global BvhNode* bvhNodes,
 		__global MeshInstance* meshInstances,
 		__global float4* vertexList,
@@ -187,7 +192,10 @@ __kernel void rayIntersectionQuery(
 	Intersection intersection;
 	intersection.wuvt.w = FLT_MAX;
 
-	uint globalId = get_global_id(0);
+	int globalId = get_global_id(0);
+	if(globalId >= *numRays){
+		return;
+	}
 
 	int stackIndex;
 	int meshBvhStackStartIndex;
@@ -198,7 +206,7 @@ __kernel void rayIntersectionQuery(
 	MeshInstance meshInstance;
 
 	// triangle intersection vars
-	 float3 v0, edge01, edge02;
+	float3 v0, edge01, edge02;
 
 	// Node bbox and leaf primitive intersection vars
 	float3 invDir, tmin, tmax, rmin, rmax;
@@ -209,7 +217,7 @@ __kernel void rayIntersectionQuery(
 	Ray	ray = rays[globalId];
 	float3 origRayOrigin = ray.origin.xyz;
 	float3 origRayDir = ray.dir.xyz;
-	
+
 	// Setup stack
 	stackIndex = 0;
 	meshBvhStackStartIndex = -1;
@@ -248,7 +256,7 @@ __kernel void rayIntersectionQuery(
 					if (fabs(det) < INTERSECTION_EPSILON){
 						continue;
 					}
-						
+
 					float invDet = native_recip(det);
 
 					// Calculate barycentric coords
@@ -271,7 +279,7 @@ __kernel void rayIntersectionQuery(
 								u,
 								v,
 								t
-						);
+								);
 						intersection.triIndex = vIndex / 3;
 						intersection.meshInstance = meshInstanceId;
 					}
@@ -300,22 +308,22 @@ __kernel void rayIntersectionQuery(
 			minmax = fmin( fmin(rmax.x, rmax.y), rmax.z);
 			maxmin = fmax( fmax(rmin.x, rmin.y), rmin.z);
 			float rHitDist = minmax < 0 || maxmin > minmax ? FLT_MAX : (maxmin >= ray.origin.w ? FLT_MAX : maxmin);
-			
+
 			int wantLeft = lHitDist < FLT_MAX ? 1 : 0;
 			int wantRight = rHitDist < FLT_MAX ? 1 : 0;
-			
+
 			if( wantLeft && wantRight ){
 				nodeStack[stackIndex++] = wantLeft ? BVH_RIGHT_CHILD(curNode) : BVH_LEFT_CHILD(curNode);
 				curNode = wantLeft ? childNodes[0] : childNodes[1];
-				
+
 				continue;
 			} else if(wantLeft || wantRight){
 				curNode = wantLeft ? childNodes[0] : childNodes[1];
 				continue;
 			} 
 		} 
-		
- 		if(stackIndex == 0){
+
+		if(stackIndex == 0){
 			// We are done
 			hitFlag[globalId] = intersection.wuvt.w < FLT_MAX ? 1 : 0;
 			intersections[globalId] = intersection;
@@ -338,6 +346,7 @@ __kernel void rayIntersectionQuery(
 // operations are handled by the first thread in the local thread group.
 __kernel void packetIntersectionQuery(
 		__global Ray* rays,
+		__global const int *numRays,
 		__global BvhNode* bvhNodes,
 		__global MeshInstance* meshInstances,
 		__global float4* vertexList,
@@ -348,8 +357,11 @@ __kernel void packetIntersectionQuery(
 	Intersection intersection;
 	intersection.wuvt.w = FLT_MAX;
 
-	uint globalId = get_global_id(0);
-	uint localId = get_local_id(0);
+	int globalId = get_global_id(0);
+	if (globalId >= *numRays){
+		return;
+	}
+	int localId = get_local_id(0);
 
 	// Shared data for all threads
 	__local int stackIndex;
@@ -373,7 +385,7 @@ __kernel void packetIntersectionQuery(
 	Ray	ray = rays[globalId];
 	float3 origRayOrigin = ray.origin.xyz;
 	float3 origRayDir = ray.dir.xyz;
-	
+
 	// Thread 0 manages the stack; set initial values
 	if(localId == 0){
 		stackIndex = 0;
@@ -429,17 +441,17 @@ __kernel void packetIntersectionQuery(
 						float t = dot(edge02, qVec) * invDet;
 
 						if (u >= 0.0f && 
-							u <= 1.0f && 
-							v >= 0.0f && 
-							u+v <= 1.0f && 
-							t > INTERSECTION_EPSILON && 
-							t < intersection.wuvt.w){
+								u <= 1.0f && 
+								v >= 0.0f && 
+								u+v <= 1.0f && 
+								t > INTERSECTION_EPSILON && 
+								t < intersection.wuvt.w){
 							intersection.wuvt = (float4)(
 									1.0f - (u+v),
 									u,
 									v,
 									t
-							);
+									);
 							intersection.triIndex = vIndex / 3;
 							intersection.meshInstance = meshInstanceId;
 						}
@@ -477,7 +489,7 @@ __kernel void packetIntersectionQuery(
 			minmax = fmin( fmin(rmax.x, rmax.y), rmax.z);
 			maxmin = fmax( fmax(rmin.x, rmin.y), rmin.z);
 			float rHitDist = minmax < 0 || maxmin > minmax ? FLT_MAX : (maxmin >= ray.origin.w ? FLT_MAX : maxmin);
-			
+
 			// If scratchMemory[i] is TRUE then at least one ray wants to:
 			// [0] visit none of the nodes
 			// [1] visit only left node
@@ -501,7 +513,7 @@ __kernel void packetIntersectionQuery(
 				// run a parallel reduction on scratchMemory. We are using
 				// sequential addressing to avoid bank conflicts
 				// see: https://docs.nvidia.com/cuda/samples/6_Advanced/reduction/doc/reduction.pdf
-				for (unsigned int s=HALF_RAY_PACKET_SIZE; s>0; s>>=1) {
+				for (int s=HALF_RAY_PACKET_SIZE; s>0; s>>=1) {
 					if (localId < s) {
 						scratchMemory[localId] += scratchMemory[localId + s];
 					}
@@ -525,8 +537,8 @@ __kernel void packetIntersectionQuery(
 				continue;
 			} 
 		} 
-		
- 		if(stackIndex == 0){
+
+		if(stackIndex == 0){
 			// We are done
 			hitFlag[globalId] = intersection.wuvt.w < FLT_MAX ? 1 : 0;
 			intersections[globalId] = intersection;
@@ -535,7 +547,7 @@ __kernel void packetIntersectionQuery(
 			// If we exited from a bottom bvh tree we need to restore our ray
 			ray.origin.xyz = origRayOrigin;
 			ray.dir.xyz = origRayDir;
-			
+
 			if(localId == 0 ){
 				meshBvhStackStartIndex = -1;
 			}
@@ -550,6 +562,16 @@ __kernel void packetIntersectionQuery(
 
 		barrier(CLK_LOCAL_MEM_FENCE);
 	}
+}
+
+void printIntersection(Intersection *inter){
+	printf("[tid: %03d] intersection (barycentric: %2.2v3hlf, t: %f, meshInstance: %d, triIndex: %d)\n", 
+			get_global_id(0),
+			inter->wuvt.xyz,
+			inter->wuvt.w,
+			inter->meshInstance,
+			inter->triIndex
+		  );
 }
 
 #endif

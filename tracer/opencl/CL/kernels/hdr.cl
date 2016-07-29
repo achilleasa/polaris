@@ -12,11 +12,11 @@ __kernel void tonemapSimpleReinhard(
 			int globalId = get_global_id(0);
 
 			// Apply tone-mapping
-			float3 v = accumulator[globalId];
-			v *= exposure / (1.0f + v / exposure);
+			float3 hdrColor = accumulator[globalId] * exposure;
+			float3 mapped = hdrColor / (hdrColor + 1.0f);
 
 			// Apply gamma correction and scale
-			float3 normalizedOutput = native_powr(v, 1.0f / 2.2f) * 255.0f;
+			float3 normalizedOutput = pow(mapped, 1.0f / 2.2f) * 255.0f;
 
 			frameBuffer[paths[globalId].pixelIndex] = (uchar4)(
 					(uchar)normalizedOutput.r,

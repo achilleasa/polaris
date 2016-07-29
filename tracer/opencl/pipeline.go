@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/png"
 	"math"
+	"math/rand"
 	"os"
 	"time"
 
@@ -80,7 +81,7 @@ func MonteCarloIntegrator(numBounces uint32) tracer.Stage {
 				tr.logger.Noticef("[bounce %02d] intersected rays: %d", bounce, readCounter(tr.resources, activeRayBuf))
 
 				// Shade hits
-				_, err = tr.resources.ShadeHits(bounce, 0, numEmissives, activeRayBuf, numPixels)
+				_, err = tr.resources.ShadeHits(bounce, rand.Uint32(), numEmissives, activeRayBuf, numPixels)
 				if err != nil {
 					return time.Since(start), err
 				}
@@ -259,6 +260,11 @@ func debugEmissiveSamples(dr *deviceResources, blockReq *tracer.BlockRequest, im
 	}
 	paths := data.([]rayPath)
 
+	// Set alpha channel for all pixels
+	for i := 3; i < len(im.Pix); i += 4 {
+		im.Pix[i] = 255
+	}
+
 	numRays := int(readCounter(dr, 2))
 	for rayIndex := 0; rayIndex < numRays; rayIndex++ {
 		pathIndex := int(rays[rayIndex].dir[3])
@@ -267,7 +273,6 @@ func debugEmissiveSamples(dr *deviceResources, blockReq *tracer.BlockRequest, im
 		im.Pix[offset] = uint8(scaledThroughput[0])
 		im.Pix[offset+1] = uint8(scaledThroughput[1])
 		im.Pix[offset+2] = uint8(scaledThroughput[2])
-		im.Pix[offset+3] = 255 // alpha
 	}
 
 	return time.Since(start), png.Encode(f, im)

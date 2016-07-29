@@ -14,7 +14,8 @@ const (
 	packetIntersectionQuery
 	// pt kernels
 	shadeHits
-	shadeMisses
+	shadePrimaryRayMisses
+	shadeIndirectRayMisses
 	accumulateEmissiveSamples
 	// hdr kernels
 	tonemapSimpleReinhard
@@ -37,8 +38,10 @@ func (kt kernelType) String() string {
 		return "packetIntersectionQuery"
 	case shadeHits:
 		return "shadeHits"
-	case shadeMisses:
-		return "shadeMisses"
+	case shadePrimaryRayMisses:
+		return "shadePrimaryRayMisses"
+	case shadeIndirectRayMisses:
+		return "shadeIndirectRayMisses"
 	case accumulateEmissiveSamples:
 		return "accumulateEmissiveSamples"
 	case tonemapSimpleReinhard:

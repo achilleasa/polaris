@@ -198,9 +198,35 @@ func (dr *deviceResources) ShadeHits(bounce, randSeed, numEmissives, rayBufferIn
 	return kernel.Exec1D(0, numPixels, 0)
 }
 
-// Shade ray misses by sampling the scene background.
-func (dr *deviceResources) ShadeMisses(diffuseMatNodeIndex, rayBufferIndex uint32, numPixels int) (time.Duration, error) {
-	kernel := dr.kernels[shadeMisses]
+// Shade primary ray misses by sampling the scene background. This kernel samples
+// the background color or envmap using the ray direction and sets the
+// accumulator to the sampled value.
+func (dr *deviceResources) ShadePrimaryRayMisses(diffuseMatNodeIndex, rayBufferIndex uint32, numPixels int) (time.Duration, error) {
+	kernel := dr.kernels[shadePrimaryRayMisses]
+
+	err := kernel.SetArgs(
+		dr.buffers.Rays[rayBufferIndex],
+		dr.buffers.RayCounters[rayBufferIndex],
+		dr.buffers.Paths,
+		dr.buffers.HitFlags,
+		dr.buffers.MaterialNodes,
+		diffuseMatNodeIndex,
+		dr.buffers.TextureMetadata,
+		dr.buffers.Textures,
+		dr.buffers.Accumulator,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return kernel.Exec1D(0, numPixels, 0)
+}
+
+// Shade indirect ray misses by sampling the scene background. The main difference
+// with ShadePrimaryRayMisses is that this kernel multiplies the path throughput
+// with the bg sample and adds that to the accumulator.
+func (dr *deviceResources) ShadeIndirectRayMisses(diffuseMatNodeIndex, rayBufferIndex uint32, numPixels int) (time.Duration, error) {
+	kernel := dr.kernels[shadePrimaryRayMisses]
 
 	err := kernel.SetArgs(
 		dr.buffers.Rays[rayBufferIndex],

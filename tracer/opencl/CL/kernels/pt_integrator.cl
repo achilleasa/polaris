@@ -97,13 +97,17 @@ __kernel void shadeHits(
 		MaterialNode materialNode;
 		matSelectNode(&surface, &materialNode, materialNodes);
 
-		// Check if we hit an emissive node
+		// Check if we hit an emissive node. If so, we need to accumulate implicit
+		// light and terminate the path.
 		if( MAT_IS_EMISSIVE(materialNode) ){
-			// Emissive is facing ray and this is the first bounce we need to sample
-			// the light and add its contribution to the output. 
-			if( inRayDotSurfNormal > 0 ){
-				accumulator[rayPathIndex] += curPathThroughput * matGetSample3f(surface.uv, materialNode.kval, materialNode.kvalTex, texMeta, texData);
+			// If this is the first bounce we just need to add the emissive sample to the accumulator.
+			// Otherwise, we arrived at this emissive via an indirect ray so we also need to take cos(theta) into account.
+			emissiveSample = curPathThroughput * matGetSample3f(surface.uv, materialNode.kval, materialNode.kvalTex, texMeta, texData);
+			if(bounce != 0){
+				emissiveSample *= inRayDotSurfNormal;
 			}
+
+			accumulator[rayPathIndex] += emissiveSample;
 		} else {
 			// Get BXDF sample and generate outgoing ray based on surface BXDF
 			bxdfSample = bxdfGetSample(
@@ -197,8 +201,8 @@ __kernel void shadeHits(
 	}
 }
 
-// Shade ray misses by sampling the scene background.
-__kernel void shadeMisses(
+// Shade primary ray misses by sampling the scene background.
+__kernel void shadePrimaryRayMisses(
 		__global Ray *rays,
 		__global const int *numRays,
 		__global Path *paths,
@@ -224,8 +228,41 @@ __kernel void shadeMisses(
 	int rayPathIndex;
 	float2 uv = rayToLatLongUV(rayGetDirAndPathIndex(rays + globalId, &rayPathIndex));
 
-	pathMulThroughput(paths + rayPathIndex, (float3)(0.0f, 0.0f, 0.0f));
-	accumulator[rayPathIndex] = matGetSample3f(uv, matNode.kval, matNode.kvalTex, texMeta, texData);
+	float3 kd = matGetSample3f(uv, matNode.kval, matNode.kvalTex, texMeta, texData);
+	accumulator[rayPathIndex] += kd;
+}
+
+// Shade indirect ray misses by sampling the scene background.
+__kernel void shadeIndirectRayMisses(
+		__global Ray *rays,
+		__global const int *numRays,
+		__global Path *paths,
+		__global uint *hitFlags,
+		__global MaterialNode *materialNodes,
+		const uint sceneDiffuseMatNodeIndex,
+		// Texture data
+		__global TextureMetadata *texMeta,
+		__global uchar *texData,
+		// Output
+		__global float3 *accumulator
+		){
+
+	int globalId = get_global_id(0);
+
+	// If this thread is inactive or we hit something then ignore
+	if( globalId >= *numRays || hitFlags[globalId] ){
+		return;
+	}
+
+	// Just sample global env map or use scene bg color
+	MaterialNode matNode = materialNodes[sceneDiffuseMatNodeIndex];
+	int rayPathIndex;
+	float2 uv = rayToLatLongUV(rayGetDirAndPathIndex(rays + globalId, &rayPathIndex));
+
+	// As this is an indirect ray we need to multiply the path throughput with the diffuse sample
+	// and accumulate that.
+	float3 kd = matGetSample3f(uv, matNode.kval, matNode.kvalTex, texMeta, texData);
+	accumulator[rayPathIndex] += paths[rayPathIndex].throughput * kd;
 }
 
 // Accumulate emissive samples for emissive surfaces that are not occluded.

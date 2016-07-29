@@ -34,7 +34,7 @@ float3 environmentLightGetSample(
 	float2 uv = rayToLatLongUV(*outRayDir);
 	MaterialNode matNode = materialNodes[emissive->matNodeIndex];
 
-	return matGetSample3f(uv, matNode.kval, matNode.kvalTex, texMeta, texData) * cosTheta * C_1_PI;
+	return matGetSample3f(uv, matNode.kval, matNode.kvalTex, texMeta, texData) * C_1_PI;
 }
 
 float environmentLightGetPdf(
@@ -64,41 +64,52 @@ float3 areaLightGetSample(
 		float *distToEmissive
 		){
 
-	// Select a random point on the emissive and get its *world* xyz/normal coordinates
-	float3 wuv = (float3)(1.0f - (randSample.x + randSample.y), randSample);
+	// Select a random point on the emissive with PDF=1/area and get its *world* xyz/normal coordinates
+	float r1sqrt = native_sqrt(randSample.x);
+	float ru = (1.0f - randSample.y) * r1sqrt;
+	float rv = randSample.y * r1sqrt;
+	float3 wuv = (float3)(1.0f - ru - rv, ru, rv);
 	int offset = emissive->triIndex * 3;
 
 	float3 emissivePoint = mul4x1(
 			(wuv.x * vertices[offset] + wuv.y * vertices[offset+1] + wuv.z * vertices[offset+2]).xyz,
-		    emissive->transformMat0,
+			emissive->transformMat0,
 			emissive->transformMat1,
 			emissive->transformMat2,
 			emissive->transformMat3
-	);
+			);
 
 	float3 emissiveNormal = mul4x1(
 			(wuv.x * normals[offset] + wuv.y * normals[offset+1] + wuv.z * normals[offset+2]).xyz,
-		    emissive->transformMat0,
+			emissive->transformMat0,
 			emissive->transformMat1,
 			emissive->transformMat2,
 			emissive->transformMat3
-	);
+			);
 
 	float2 emissiveUV = wuv.x * uv[offset] + 
-		        wuv.y * uv[offset+1] + 
-				wuv.z * uv[offset+2];
+		wuv.y * uv[offset+1] + 
+		wuv.z * uv[offset+2];
 
 
-	// The selection PDF depends on the projected solid angle given by:
-	// dot(outRayDir, emissiveNormal) * area / distToEmissive * distToEmissive
 	float3 emissiveRay = emissivePoint - surface->point;
 	float squaredDistToLight = dot(emissiveRay, emissiveRay);
 	*outRayDir = normalize(emissiveRay);
-	*pdf = dot(*outRayDir, emissiveNormal) * emissive->area / squaredDistToLight;
 	*distToEmissive = native_sqrt(squaredDistToLight);
 
-	MaterialNode matNode = materialNodes[emissive->matNodeIndex];
-	return matGetSample3f(emissiveUV, matNode.kval, matNode.kvalTex, texMeta, texData) * dot(surface->normal, *outRayDir);
+	float nDotOutRay = dot(emissiveNormal, -*outRayDir);
+	if( nDotOutRay > 0.0f ){
+		*pdf = 1.0f / emissive->area;
+
+		// convert from area to solid angle using formula (25) from total compedium:
+		// ω = cos(θy) / dist^2
+		MaterialNode matNode = materialNodes[emissive->matNodeIndex];
+		float3 ke = matGetSample3f(emissiveUV, matNode.kval, matNode.kvalTex, texMeta, texData);
+		return ke * nDotOutRay / squaredDistToLight;
+	}
+
+	*pdf = 0.0f;
+	return (float3)(0.0f, 0.0f, 0.0f);
 }
 
 // Given a pre-calculated bounce ray, calculate a PDF for hitting this 
@@ -128,7 +139,7 @@ float areaLightGetPdf(
 	if (fabs(det) < INTERSECTION_EPSILON){
 		return 0.0f;
 	}
-		
+
 	float invDet = native_recip(det);
 
 	// Calculate barycentric coords
@@ -149,7 +160,8 @@ float areaLightGetPdf(
 		return 0.0f;
 	}
 
-	return dot(outRayDir, cross(edge01, edge02)) * emissive->area / t * t;
+	float nDotOutRay = dot(normalize(cross(edge01, edge02)), -outRayDir);
+	return (t * t) / (nDotOutRay * emissive->area);
 }
 
 

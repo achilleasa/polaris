@@ -10,7 +10,7 @@
 
 float3 bxdfGetSample(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 inRayDir, float3 *outRayDir, float *pdf);
 float bxdfGetPdf(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir );
-float3 bxdfValue(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir); 
+float3 bxdfEval(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir); 
 
 // Sample BXDF for this surface and material and also generate a bounce ray
 // with a PDF that approximates the material BXDF.
@@ -52,7 +52,7 @@ float bxdfGetPdf(
 
 // Given a pre-calculated bounce ray evaluate the BXDF for the surface based on 
 // the surface material, inRayDir and outRayDir
-float3 bxdfValue(
+float3 bxdfEval(
 		Surface *surface, 
 		MaterialNode *matNode, 
 		__global TextureMetadata *texMeta, 
@@ -62,7 +62,7 @@ float3 bxdfValue(
 ){
 	switch(matNode->bxdfType){
 		case BXDF_TYPE_DIFFUSE:
-			return lambertDiffuseValue(surface, matNode, texMeta, texData, outRayDir);
+			return lambertDiffuseEval(surface, matNode, texMeta, texData, outRayDir);
 	}
 
 	return (float3)(0.0f, 0.0f, 0.0f);

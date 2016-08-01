@@ -42,6 +42,9 @@ func Debug(ctx *cli.Context) error {
 		return err
 	}
 
+	// Update projection matrix
+	sc.Camera.SetupProjection(float32(frameW) / float32(frameH))
+
 	// Setup tracer
 	dev, err := findDevice([]string{"AMD", "CPU", "Iris", "CPU"})
 	if err != nil {
@@ -50,54 +53,45 @@ func Debug(ctx *cli.Context) error {
 	}
 	logger.Noticef(`using device "%s"`, dev.Name)
 
-	tr, _ := opencl.NewTracer("tr-0", dev)
-	err = tr.Init(
-		frameW,
-		frameH,
-		// Stages
-		opencl.ClearAccumulator(),
-		opencl.PerspectiveCamera(),
-		opencl.MonteCarloIntegrator(3),
-		opencl.TonemapSimpleReinhard(3.5),
-		opencl.DebugFrameBuffer("debug-fb.png"),
-	)
+	// Setup pipeline
+	pipeline := opencl.DefaultPipeline(3, 1.5)
+	pipeline.PostProcess = append(pipeline.PostProcess, opencl.DebugFrameBuffer("debug-fb.png"))
+
+	tr, _ := opencl.NewTracer("tr-0", dev, pipeline)
+	err = tr.Init()
 	if err != nil {
 		logger.Error(err)
 		return err
 	}
 	defer tr.Close()
 
-	blockReq := tracer.BlockRequest{
-		FrameW:   frameW,
-		FrameH:   frameH,
-		BlockY:   0,
-		BlockH:   frameH,
-		DoneChan: make(chan uint32, 0),
-		ErrChan:  make(chan error, 0),
+	// Queue state changes
+	tr.UpdateState(tracer.Synchronous, tracer.FrameDimensions, [2]uint32{frameW, frameH})
+	tr.UpdateState(tracer.Synchronous, tracer.SceneData, sc)
+	tr.UpdateState(tracer.Synchronous, tracer.CameraData, sc.Camera)
+
+	// Setup block
+	blockReq := &tracer.BlockRequest{
+		FrameW:          frameW,
+		FrameH:          frameH,
+		BlockX:          0,
+		BlockY:          0,
+		BlockW:          frameW,
+		BlockH:          frameH,
+		SamplesPerPixel: 1,
 	}
 
-	// Upload data
-	err = tr.UploadSceneData(sc)
+	// Render
+	_, err = tr.Trace(blockReq)
+	if err != nil {
+		logger.Error(err)
+		return err
+	}
+	_, err = tr.SyncFramebuffer(blockReq)
 	if err != nil {
 		logger.Error(err)
 		return err
 	}
 
-	sc.Camera.SetupProjection(float32(blockReq.FrameW) / float32(blockReq.FrameH))
-	err = tr.UploadCameraData(sc.Camera)
-	if err != nil {
-		logger.Error(err)
-		return err
-	}
-
-	// Run pipeline
-	tr.Enqueue(blockReq)
-	select {
-	case <-blockReq.DoneChan:
-		logger.Notice("Done")
-		return nil
-	case err := <-blockReq.ErrChan:
-		logger.Error(err)
-		return err
-	}
+	return nil
 }

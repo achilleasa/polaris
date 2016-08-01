@@ -23,7 +23,7 @@ type deviceResources struct {
 }
 
 // Using the supplied device as a target, load and compile all defined kernels.
-func newDeviceResources(frameW, frameH uint32, dev *device.Device) (*deviceResources, error) {
+func newDeviceResources(dev *device.Device) (*deviceResources, error) {
 	var err error
 
 	if dev == nil {
@@ -31,11 +31,8 @@ func newDeviceResources(frameW, frameH uint32, dev *device.Device) (*deviceResou
 	}
 
 	// Allocate buffers
-	dr := &deviceResources{}
-	dr.buffers, err = newBufferSet(frameW, frameH, dev)
-	if err != nil {
-		dr.Close()
-		return nil, err
+	dr := &deviceResources{
+		buffers: newBufferSet(dev),
 	}
 
 	// Load all kernels
@@ -51,6 +48,11 @@ func newDeviceResources(frameW, frameH uint32, dev *device.Device) (*deviceResou
 	}
 
 	return dr, nil
+}
+
+// Resize buffers to fit frame size.
+func (dr *deviceResources) ResizeBuffers(frameW, frameH uint32) error {
+	return dr.buffers.Resize(frameW, frameH)
 }
 
 // Release all allocated resources.
@@ -269,11 +271,13 @@ func (dr *deviceResources) AccumulateEmissiveSamples(rayBufferIndex uint32, numP
 func (dr *deviceResources) TonemapSimpleReinhard(blockReq *tracer.BlockRequest, exposure float32) (time.Duration, error) {
 	kernel := dr.kernels[tonemapSimpleReinhard]
 	numPixels := int(blockReq.FrameW * blockReq.BlockH)
+	sampleWeight := float32(1.0 / float32(blockReq.AccumulatedSamples+blockReq.SamplesPerPixel))
 
 	err := kernel.SetArgs(
 		dr.buffers.Accumulator,
 		dr.buffers.Paths,
 		dr.buffers.FrameBuffer,
+		sampleWeight,
 		exposure,
 	)
 	if err != nil {

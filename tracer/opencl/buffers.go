@@ -60,8 +60,8 @@ type bufferSet struct {
 }
 
 // Allocate new buffer set.
-func newBufferSet(frameW, frameH uint32, dev *device.Device) (*bufferSet, error) {
-	bs := &bufferSet{
+func newBufferSet(dev *device.Device) *bufferSet {
+	return &bufferSet{
 		// Output
 		FrameBuffer: dev.Buffer("frameBuffer"),
 		// Scene data
@@ -92,8 +92,6 @@ func newBufferSet(frameW, frameH uint32, dev *device.Device) (*bufferSet, error)
 			dev.Buffer("numRays2"),
 		},
 	}
-
-	return bs, bs.resize(frameW, frameH)
 }
 
 // Release all buffers.
@@ -114,7 +112,7 @@ func (bs *bufferSet) Release() {
 }
 
 // Resize frame-related buffers to the given frame dimensions.
-func (bs *bufferSet) resize(frameW, frameH uint32) error {
+func (bs *bufferSet) Resize(frameW, frameH uint32) error {
 	var err error
 	pixels := frameW * frameH
 

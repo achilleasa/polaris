@@ -1,19 +1,17 @@
 package tracer
 
-import (
-	"time"
-
-	"github.com/achilleasa/go-pathtrace/scene"
-)
+import "time"
 
 // A unit of work that is processed by a tracer.
 type BlockRequest struct {
-	// Frame dimensions
+	// Frame dimensions.
 	FrameW uint32
 	FrameH uint32
 
-	// Block start row and height.
+	// Block dimensions.
+	BlockX uint32
 	BlockY uint32
+	BlockW uint32
 	BlockH uint32
 
 	// The number of emitted rays per traced pixel.
@@ -26,13 +24,7 @@ type BlockRequest struct {
 	Seed uint32
 
 	// Number of sequential rendered frames from current camera position.
-	FrameCount uint32
-
-	// A channel to signal on block completion with the number of completed rows.
-	DoneChan chan uint32
-
-	// A channel to signal if an error occurs.
-	ErrChan chan error
+	AccumulatedSamples uint32
 }
 
 // Tracer statistics.
@@ -62,16 +54,22 @@ const (
 	GLInterop = 1 << iota
 )
 
-type UpdateType uint8
+type UpdateMode uint8
 
-// Supported update types.
+// Supported update type.
 const (
-	UpdateScene UpdateType = iota
-	UpdateCamera
+	Synchronous UpdateMode = iota
+	Asynchronous
 )
 
-// Alias for a function that can be used to attach a pipeline stage to the tracer.
-type Stage func(tracer Tracer) error
+type ChangeType uint8
+
+// Supported update data.
+const (
+	FrameDimensions ChangeType = iota
+	SceneData
+	CameraData
+)
 
 type Tracer interface {
 	// Get tracer id.
@@ -84,23 +82,21 @@ type Tracer interface {
 	Speed() uint32
 
 	// Initialize tracer.
-	Init(frameW, frameH uint32, stages ...Stage) error
+	Init() error
 
 	// Shutdown and cleanup tracer.
 	Close()
 
-	// Enqueue block request.
-	Enqueue(BlockRequest)
-
-	// Queue an update.
-	Update(UpdateType, interface{})
-
 	// Retrieve last frame statistics.
 	Stats() *Stats
 
-	// Upload scene data.
-	UploadSceneData(sc *scene.Scene) error
+	// Update tracer state.
+	UpdateState(UpdateMode, ChangeType, interface{}) (time.Duration, error)
 
-	// Upload camera data.
-	UploadCameraData(sc *scene.Camera) error
+	// Process block request.
+	Trace(*BlockRequest) (time.Duration, error)
+
+	// Run post-process filters to the accumulated trace data and
+	// update the output frame buffer.
+	SyncFramebuffer(*BlockRequest) (time.Duration, error)
 }

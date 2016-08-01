@@ -6,13 +6,14 @@ __kernel void tonemapSimpleReinhard(
 	__global float3 *accumulator,
 	__global Path *paths,
 	__global uchar4 *frameBuffer,
+	const float sampleWeight,
 	const float exposure
 		){
 
 			int globalId = get_global_id(0);
 
 			// Apply tone-mapping
-			float3 hdrColor = accumulator[globalId] * exposure;
+			float3 hdrColor = accumulator[globalId] * sampleWeight * exposure;
 			float3 mapped = hdrColor / (hdrColor + 1.0f);
 
 			// Apply gamma correction and scale

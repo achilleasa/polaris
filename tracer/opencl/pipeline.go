@@ -1,7 +1,6 @@
 package opencl
 
 import (
-	"fmt"
 	"image"
 	"image/png"
 	"math"
@@ -13,121 +12,137 @@ import (
 	"github.com/achilleasa/go-pathtrace/types"
 )
 
-func appendPipeline(stage pipelineStage) tracer.Stage {
-	return func(t tracer.Tracer) error {
-		tr, ok := t.(*clTracer)
-		if !ok {
-			return ErrInvalidOption
-		}
+// An alias for functions that can be used as part of the rendering pipeline.
+type PipelineStage func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error)
 
-		tr.pipeline = append(tr.pipeline, stage)
-		return nil
+// The list of pluggable of stages that are used to render the scene.
+type Pipeline struct {
+	// Reset the tracer state. This stage is executed whenever the camera
+	// is moved or the sample counter is reset.
+	Reset PipelineStage
+
+	// This stage is executed whenever the tracer generates a new set
+	// of primary rays. Depending on the samples per pixel this stage
+	// may be invoked more than once.
+	PrimaryRayGenerator PipelineStage
+
+	// This stage implements an integrator function to trace the primary
+	// rays and add their contribution into the accumulation buffer.
+	Integrator PipelineStage
+
+	// A set of post-processing stages that are executed prior to
+	// rendering the final frame.
+	PostProcess []PipelineStage
+}
+
+func DefaultPipeline(numBounces uint32, exposure float32) *Pipeline {
+	return &Pipeline{
+		Reset:               ClearAccumulator(),
+		PrimaryRayGenerator: PerspectiveCamera(),
+		Integrator:          MonteCarloIntegrator(numBounces),
+		PostProcess: []PipelineStage{
+			TonemapSimpleReinhard(exposure),
+		},
 	}
 }
 
 // Clear the accumulator buffer.
-func ClearAccumulator() tracer.Stage {
-	return appendPipeline(
-		func(tr *clTracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
-			return tr.resources.ClearAccumulator(blockReq)
-		},
-	)
+func ClearAccumulator() PipelineStage {
+	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
+		return tr.resources.ClearAccumulator(blockReq)
+	}
 }
 
 // Use a perspective camera for the primary ray generation stage.
-func PerspectiveCamera() tracer.Stage {
-	return appendPipeline(
-		func(tr *clTracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
-			return tr.resources.GeneratePrimaryRays(blockReq, tr.sceneData.Camera.Position, tr.sceneData.Camera.Frustrum)
-		},
-	)
+func PerspectiveCamera() PipelineStage {
+	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
+		return tr.resources.GeneratePrimaryRays(blockReq, tr.cameraPosition, tr.cameraFrustrum)
+	}
 }
 
 // Apply simple Reinhard tone-mapping.
-func TonemapSimpleReinhard(exposure float32) tracer.Stage {
-	return appendPipeline(
-		func(tr *clTracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
-			return tr.resources.TonemapSimpleReinhard(blockReq, exposure)
-		},
-	)
+func TonemapSimpleReinhard(exposure float32) PipelineStage {
+	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
+		return tr.resources.TonemapSimpleReinhard(blockReq, exposure)
+	}
 }
 
 // Use a montecarlo pathtracer implementation.
-func MonteCarloIntegrator(numBounces uint32) tracer.Stage {
-	return appendPipeline(
-		func(tr *clTracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
-			var err error
+func MonteCarloIntegrator(numBounces uint32) PipelineStage {
+	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
+		var err error
 
-			start := time.Now()
-			numPixels := int(blockReq.FrameW * blockReq.BlockH)
-			numEmissives := uint32(len(tr.sceneData.EmissivePrimitives))
+		start := time.Now()
+		numPixels := int(blockReq.FrameW * blockReq.BlockH)
+		numEmissives := uint32(len(tr.sceneData.EmissivePrimitives))
 
-			var activeRayBuf uint32 = 0
+		var activeRayBuf uint32 = 0
 
-			// Intersect primary rays outside of the loop
-			// TODO: Use packet query
-			_, err = tr.resources.RayIntersectionQuery(activeRayBuf, numPixels)
-			if err != nil {
-				return time.Since(start), err
-			}
-
+		// Intersect primary rays outside of the loop
+		// TODO: Use packet query
+		_, err = tr.resources.RayIntersectionQuery(activeRayBuf, numPixels)
+		if err != nil {
+			return time.Since(start), err
+		}
+		/*
 			_, err = debugPrimaryRayIntersections(tr.resources, blockReq, "debug-00-primary-intersections.png")
 			if err != nil {
 				return time.Since(start), err
 			}
+		*/
 
-			var bounce uint32
-			for bounce = 0; bounce < numBounces; bounce++ {
-				tr.logger.Noticef("[bounce %02d] intersected rays: %d", bounce, readCounter(tr.resources, activeRayBuf))
+		var bounce uint32
+		for bounce = 0; bounce < numBounces; bounce++ {
+			tr.logger.Noticef("[bounce %02d] intersected rays: %d", bounce, readCounter(tr.resources, activeRayBuf))
 
-				// Shade hits
-				_, err = tr.resources.ShadeHits(bounce, rand.Uint32(), numEmissives, activeRayBuf, numPixels)
-				if err != nil {
-					return time.Since(start), err
-				}
+			// Shade hits
+			_, err = tr.resources.ShadeHits(bounce, rand.Uint32(), numEmissives, activeRayBuf, numPixels)
+			if err != nil {
+				return time.Since(start), err
+			}
 
-				// Shade misses on first bounce
-				if bounce == 0 {
-					_, err = tr.resources.ShadeMisses(tr.sceneData.SceneDiffuseMatIndex, activeRayBuf, numPixels)
-					if err != nil {
-						return time.Since(start), err
-					}
-				}
+			// Shade misses
+			if bounce == 0 {
+				_, err = tr.resources.ShadePrimaryRayMisses(tr.sceneData.SceneDiffuseMatIndex, activeRayBuf, numPixels)
+			} else {
+				_, err = tr.resources.ShadeIndirectRayMisses(tr.sceneData.SceneDiffuseMatIndex, activeRayBuf, numPixels)
+			}
+			if err != nil {
+				return time.Since(start), err
+			}
 
+			tr.logger.Noticef("[bounce %02d] generated indirect rays: %d", bounce, readCounter(tr.resources, 1-activeRayBuf))
+			tr.logger.Noticef("[bounce %02d] generated occlusion rays: %d", bounce, readCounter(tr.resources, 2))
+			/*
 				_, err = debugThroughput(tr.resources, blockReq, fmt.Sprintf("debug-01-throughput-bounce-%d.png", bounce))
 				if err != nil {
 					return time.Since(start), err
 				}
 
-				_, err = debugEmissiveSamples(tr.resources, blockReq, fmt.Sprintf("debug-01-emissive-samples-bounce-%d.png", bounce))
-				if err != nil {
-					return time.Since(start), err
-				}
-
-				tr.logger.Noticef("[bounce %02d] generated indirect rays: %d", bounce, readCounter(tr.resources, 1-activeRayBuf))
-				tr.logger.Noticef("[bounce %02d] generated occlusion rays: %d", bounce, readCounter(tr.resources, 2))
-
-				// Process intersections for occlusion rays and accumulate emissive samples for non occluded paths
-				_, err = tr.resources.RayIntersectionTest(2, numPixels)
-				if err != nil {
-					return time.Since(start), err
-				}
-				_, err = tr.resources.AccumulateEmissiveSamples(2, numPixels)
-				if err != nil {
-					return time.Since(start), err
-				}
-
-				// Process intersections for indirect rays
-				activeRayBuf = 1 - activeRayBuf
-				_, err = tr.resources.RayIntersectionQuery(activeRayBuf, numPixels)
-				if err != nil {
-					return time.Since(start), err
-				}
+					_, err = debugEmissiveSamples(tr.resources, blockReq, fmt.Sprintf("debug-01-emissive-samples-bounce-%d.png", bounce))
+					if err != nil {
+						return time.Since(start), err
+					}
+			*/
+			// Process intersections for occlusion rays and accumulate emissive samples for non occluded paths
+			_, err = tr.resources.RayIntersectionTest(2, numPixels)
+			if err != nil {
+				return time.Since(start), err
+			}
+			_, err = tr.resources.AccumulateEmissiveSamples(2, numPixels)
+			if err != nil {
+				return time.Since(start), err
 			}
 
-			return time.Since(start), nil
-		},
-	)
+			// Process intersections for indirect rays
+			activeRayBuf = 1 - activeRayBuf
+			_, err = tr.resources.RayIntersectionQuery(activeRayBuf, numPixels)
+			if err != nil {
+				return time.Since(start), err
+			}
+		}
+		return time.Since(start), nil
+	}
 }
 
 type ray struct {
@@ -279,27 +294,25 @@ func debugEmissiveSamples(dr *deviceResources, blockReq *tracer.BlockRequest, im
 }
 
 // Dump a copy of the RGBA framebuffer.
-func DebugFrameBuffer(imgFile string) tracer.Stage {
-	return appendPipeline(
-		func(tr *clTracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
-			start := time.Now()
-			f, err := os.Create(imgFile)
-			if err != nil {
-				return time.Since(start), err
-			}
-			defer f.Close()
+func DebugFrameBuffer(imgFile string) PipelineStage {
+	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
+		start := time.Now()
+		f, err := os.Create(imgFile)
+		if err != nil {
+			return time.Since(start), err
+		}
+		defer f.Close()
 
-			im := image.NewRGBA(image.Rect(0, 0, int(blockReq.FrameW), int(blockReq.FrameH)))
+		im := image.NewRGBA(image.Rect(0, 0, int(blockReq.FrameW), int(blockReq.FrameH)))
 
-			pix, err := tr.resources.buffers.FrameBuffer.ReadDataIntoSlice(make([]uint8, 0))
-			if err != nil {
-				return time.Since(start), err
-			}
-			im.Pix = pix.([]uint8)
+		pix, err := tr.resources.buffers.FrameBuffer.ReadDataIntoSlice(make([]uint8, 0))
+		if err != nil {
+			return time.Since(start), err
+		}
+		im.Pix = pix.([]uint8)
 
-			return time.Since(start), png.Encode(f, im)
-		},
-	)
+		return time.Since(start), png.Encode(f, im)
+	}
 }
 
 func readCounter(dr *deviceResources, counterIndex uint32) uint32 {

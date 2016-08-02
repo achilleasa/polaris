@@ -14,7 +14,8 @@ __kernel void generatePrimaryRays(
 		const float2 texelDims,
 		const int blockStartY,
 		const uint frameW,
-		const uint frameH
+		const uint frameH,
+		const uint randSeed
 		){
 
 	uint2 globalId;
@@ -29,8 +30,19 @@ __kernel void generatePrimaryRays(
 		uint index = morton2d(globalId);
 		uint pixelIndex = ((globalId.y + blockStartY) * frameW) + globalId.x;
 
+		// Apply stratified sampling using a tent filter. This will wrap our
+		// random numbers in the [-1, 1] range. X and Y point to the top corner
+		// of the current texel so we need to add a bit of offset to get the coords
+		// into the [-0.5, 1.5] range.
+		uint2 rndState = globalId + randSeed;
+		float2 sample0 = randomGetSample2f(&rndState);
+		float2 offset = (float2)(
+				sample0.x < 0.5f ? native_sqrt(2.0f * sample0.x) - 0.5f : 1.5f - native_sqrt(2.0f - 2.0f * sample0.x),
+				sample0.y < 0.5f ? native_sqrt(2.0f * sample0.y) - 0.5f : 1.5f - native_sqrt(2.0f - 2.0f * sample0.y)
+		);
+		float2 texel = ((float2)(globalId.x, globalId.y) + offset) * texelDims;
+
 		// Get ray direction using trilinear interpolation
-		float2 texel = ((float2)(globalId.x, globalId.y) + 0.5f) * texelDims;
 		float4 dir = normalize(
 			mix(
 				mix(frustrumTL, frustrumBL, texel.y),

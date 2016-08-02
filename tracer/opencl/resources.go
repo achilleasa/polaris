@@ -109,6 +109,7 @@ func (dr *deviceResources) GeneratePrimaryRays(blockReq *tracer.BlockRequest, ca
 		blockReq.BlockY,
 		blockReq.FrameW,
 		blockReq.FrameH,
+		blockReq.Seed,
 	)
 	if err != nil {
 		return 0, err

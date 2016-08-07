@@ -1,15 +1,29 @@
 package opencl
 
 import (
+	"fmt"
 	"image"
 	"image/png"
-	"math"
 	"math/rand"
 	"os"
 	"time"
 
 	"github.com/achilleasa/go-pathtrace/tracer"
-	"github.com/achilleasa/go-pathtrace/types"
+)
+
+// Debug flags.
+type DebugFlag uint16
+
+const (
+	Off                         DebugFlag = 0
+	PrimaryRayIntersectionDepth           = 1 << iota
+	PrimaryRayIntersectionNormals
+	AllEmissiveSamples
+	VisibleEmissiveSamples
+	OccludedEmissiveSamples
+	Throughput
+	Accumulator
+	FrameBuffer
 )
 
 // An alias for functions that can be used as part of the rendering pipeline.
@@ -35,15 +49,21 @@ type Pipeline struct {
 	PostProcess []PipelineStage
 }
 
-func DefaultPipeline(numBounces uint32, exposure float32) *Pipeline {
-	return &Pipeline{
+func DefaultPipeline(debugFlags DebugFlag, numBounces uint32, exposure float32) *Pipeline {
+	pipeline := &Pipeline{
 		Reset:               ClearAccumulator(),
 		PrimaryRayGenerator: PerspectiveCamera(),
-		Integrator:          MonteCarloIntegrator(numBounces),
+		Integrator:          MonteCarloIntegrator(debugFlags, numBounces),
 		PostProcess: []PipelineStage{
 			TonemapSimpleReinhard(exposure),
 		},
 	}
+
+	if debugFlags&FrameBuffer == FrameBuffer {
+		pipeline.PostProcess = append(pipeline.PostProcess, DebugFrameBuffer("debug-fb.png"))
+	}
+
+	return pipeline
 }
 
 // Clear the accumulator buffer.
@@ -68,7 +88,7 @@ func TonemapSimpleReinhard(exposure float32) PipelineStage {
 }
 
 // Use a montecarlo pathtracer implementation.
-func MonteCarloIntegrator(numBounces uint32) PipelineStage {
+func MonteCarloIntegrator(debugFlags DebugFlag, numBounces uint32) PipelineStage {
 	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
 		var err error
 
@@ -84,17 +104,25 @@ func MonteCarloIntegrator(numBounces uint32) PipelineStage {
 		if err != nil {
 			return time.Since(start), err
 		}
-		/*
-			_, err = debugPrimaryRayIntersections(tr.resources, blockReq, "debug-00-primary-intersections.png")
+
+		if debugFlags&PrimaryRayIntersectionDepth == PrimaryRayIntersectionDepth {
+			_, err = tr.resources.DebugPrimaryRayIntersectionDepth(blockReq)
+			err = dumpDebugBuffer(err, tr.resources, blockReq.FrameW, blockReq.FrameH, "debug-primary-intersection-depth.png")
 			if err != nil {
 				return time.Since(start), err
 			}
-		*/
+		}
+
+		if debugFlags&PrimaryRayIntersectionNormals == PrimaryRayIntersectionNormals {
+			_, err = tr.resources.DebugPrimaryRayIntersectionNormals(blockReq)
+			err = dumpDebugBuffer(err, tr.resources, blockReq.FrameW, blockReq.FrameH, "debug-primary-intersection-normals.png")
+			if err != nil {
+				return time.Since(start), err
+			}
+		}
 
 		var bounce uint32
 		for bounce = 0; bounce < numBounces; bounce++ {
-			tr.logger.Noticef("[bounce %02d] intersected rays: %d", bounce, readCounter(tr.resources, activeRayBuf))
-
 			// Shade hits
 			_, err = tr.resources.ShadeHits(bounce, rand.Uint32(), numEmissives, activeRayBuf, numPixels)
 			if err != nil {
@@ -111,27 +139,55 @@ func MonteCarloIntegrator(numBounces uint32) PipelineStage {
 				return time.Since(start), err
 			}
 
-			tr.logger.Noticef("[bounce %02d] generated indirect rays: %d", bounce, readCounter(tr.resources, 1-activeRayBuf))
-			tr.logger.Noticef("[bounce %02d] generated occlusion rays: %d", bounce, readCounter(tr.resources, 2))
-			/*
-				_, err = debugThroughput(tr.resources, blockReq, fmt.Sprintf("debug-01-throughput-bounce-%d.png", bounce))
+			if debugFlags&Throughput == Throughput {
+				_, err = tr.resources.DebugThroughput(blockReq)
+				err = dumpDebugBuffer(err, tr.resources, blockReq.FrameW, blockReq.FrameH, fmt.Sprintf("debug-throughput-%03d.png", bounce))
 				if err != nil {
 					return time.Since(start), err
 				}
+			}
 
-					_, err = debugEmissiveSamples(tr.resources, blockReq, fmt.Sprintf("debug-01-emissive-samples-bounce-%d.png", bounce))
-					if err != nil {
-						return time.Since(start), err
-					}
-			*/
 			// Process intersections for occlusion rays and accumulate emissive samples for non occluded paths
-			_, err = tr.resources.RayIntersectionTest(2, numPixels)
+			_, err := tr.resources.RayIntersectionTest(2, numPixels)
 			if err != nil {
 				return time.Since(start), err
 			}
+
 			_, err = tr.resources.AccumulateEmissiveSamples(2, numPixels)
 			if err != nil {
 				return time.Since(start), err
+			}
+
+			if debugFlags&AllEmissiveSamples == AllEmissiveSamples {
+				_, err = tr.resources.DebugEmissiveSamples(blockReq, 0, 0)
+				err = dumpDebugBuffer(err, tr.resources, blockReq.FrameW, blockReq.FrameH, fmt.Sprintf("debug-emissive-all-%03d.png", bounce))
+				if err != nil {
+					return time.Since(start), err
+				}
+			}
+
+			if debugFlags&VisibleEmissiveSamples == VisibleEmissiveSamples {
+				_, err = tr.resources.DebugEmissiveSamples(blockReq, 1, 0)
+				err = dumpDebugBuffer(err, tr.resources, blockReq.FrameW, blockReq.FrameH, fmt.Sprintf("debug-emissive-vis-%03d.png", bounce))
+				if err != nil {
+					return time.Since(start), err
+				}
+			}
+
+			if debugFlags&OccludedEmissiveSamples == OccludedEmissiveSamples {
+				_, err = tr.resources.DebugEmissiveSamples(blockReq, 0, 1)
+				err = dumpDebugBuffer(err, tr.resources, blockReq.FrameW, blockReq.FrameH, fmt.Sprintf("debug-emissive-occ-%03d.png", bounce))
+				if err != nil {
+					return time.Since(start), err
+				}
+			}
+
+			if debugFlags&Accumulator == Accumulator {
+				_, err = tr.resources.DebugAccumulator(blockReq)
+				err = dumpDebugBuffer(err, tr.resources, blockReq.FrameW, blockReq.FrameH, fmt.Sprintf("debug-accumulator-%03d.png", bounce))
+				if err != nil {
+					return time.Since(start), err
+				}
 			}
 
 			// Process intersections for indirect rays
@@ -145,174 +201,38 @@ func MonteCarloIntegrator(numBounces uint32) PipelineStage {
 	}
 }
 
-type ray struct {
-	origin types.Vec4
-	dir    types.Vec4
-}
-
-type intersection struct {
-	wuvt         types.Vec4
-	meshInstance uint32
-	triIndex     uint32
-	_padding1    uint32
-	_padding2    uint32
-}
-
-type rayPath struct {
-	throughput types.Vec4
-	status     uint32
-	pixelIndex uint32
-	reserved   [2]uint32
-}
-
-// Debug primary ray intersections.
-func debugPrimaryRayIntersections(dr *deviceResources, blockReq *tracer.BlockRequest, imgFile string) (time.Duration, error) {
-	start := time.Now()
-
-	f, err := os.Create(imgFile)
-	if err != nil {
-		return time.Since(start), err
-	}
-	defer f.Close()
-
-	im := image.NewRGBA(image.Rect(0, 0, int(blockReq.FrameW), int(blockReq.FrameH)))
-
-	data, err := dr.buffers.Intersections.ReadDataIntoSlice(make([]intersection, 0))
-	if err != nil {
-		return time.Since(start), err
-	}
-	intersections := data.([]intersection)
-
-	data, err = dr.buffers.Paths.ReadDataIntoSlice(make([]rayPath, 0))
-	if err != nil {
-		return time.Since(start), err
-	}
-	paths := data.([]rayPath)
-
-	// Find max depth
-	var maxDepth float32 = 0
-	for _, hit := range intersections {
-		if hit.wuvt[3] < math.MaxFloat32 && hit.wuvt[3] > maxDepth {
-			maxDepth = hit.wuvt[3]
-		}
-	}
-	maxDepth++
-
-	// convert depth to 0-255 range
-	for hitIndex, hit := range intersections {
-		if hit.wuvt[3] == math.MaxFloat32 {
-			continue
-		}
-
-		normDepth := uint8(255.0 * (1.0 - hit.wuvt[3]/maxDepth))
-		offset := paths[hitIndex].pixelIndex << 2
-		im.Pix[offset] = normDepth
-		im.Pix[offset+1] = normDepth
-		im.Pix[offset+2] = normDepth
-		im.Pix[offset+3] = 255 // alpha
-	}
-
-	return time.Since(start), png.Encode(f, im)
-}
-
-// Debug path throughput.
-func debugThroughput(dr *deviceResources, blockReq *tracer.BlockRequest, imgFile string) (time.Duration, error) {
-	start := time.Now()
-
-	f, err := os.Create(imgFile)
-	if err != nil {
-		return time.Since(start), err
-	}
-	defer f.Close()
-
-	im := image.NewRGBA(image.Rect(0, 0, int(blockReq.FrameW), int(blockReq.FrameH)))
-
-	data, err := dr.buffers.Paths.ReadDataIntoSlice(make([]rayPath, 0))
-	if err != nil {
-		return time.Since(start), err
-	}
-	paths := data.([]rayPath)
-
-	for _, path := range paths {
-		offset := path.pixelIndex << 2
-		scaledThroughput := path.throughput.Mul(255.0)
-		im.Pix[offset] = uint8(scaledThroughput[0])
-		im.Pix[offset+1] = uint8(scaledThroughput[1])
-		im.Pix[offset+2] = uint8(scaledThroughput[2])
-		im.Pix[offset+3] = 255 // alpha
-	}
-
-	return time.Since(start), png.Encode(f, im)
-}
-
-// Debug emissive samples.
-func debugEmissiveSamples(dr *deviceResources, blockReq *tracer.BlockRequest, imgFile string) (time.Duration, error) {
-	start := time.Now()
-
-	f, err := os.Create(imgFile)
-	if err != nil {
-		return time.Since(start), err
-	}
-	defer f.Close()
-
-	im := image.NewRGBA(image.Rect(0, 0, int(blockReq.FrameW), int(blockReq.FrameH)))
-
-	data, err := dr.buffers.Rays[2].ReadDataIntoSlice(make([]ray, 0))
-	if err != nil {
-		return time.Since(start), err
-	}
-	rays := data.([]ray)
-
-	data, err = dr.buffers.EmissiveSamples.ReadDataIntoSlice(make([]types.Vec4, 0))
-	if err != nil {
-		return time.Since(start), err
-	}
-	emissiveSamples := data.([]types.Vec4)
-
-	data, err = dr.buffers.Paths.ReadDataIntoSlice(make([]rayPath, 0))
-	if err != nil {
-		return time.Since(start), err
-	}
-	paths := data.([]rayPath)
-
-	// Set alpha channel for all pixels
-	for i := 3; i < len(im.Pix); i += 4 {
-		im.Pix[i] = 255
-	}
-
-	numRays := int(readCounter(dr, 2))
-	for rayIndex := 0; rayIndex < numRays; rayIndex++ {
-		pathIndex := int(rays[rayIndex].dir[3])
-		offset := paths[pathIndex].pixelIndex << 2
-		scaledThroughput := types.MinVec3(emissiveSamples[rayIndex].Mul(255.0).Vec3(), types.Vec3{255.0, 255.0, 255.0})
-		im.Pix[offset] = uint8(scaledThroughput[0])
-		im.Pix[offset+1] = uint8(scaledThroughput[1])
-		im.Pix[offset+2] = uint8(scaledThroughput[2])
-	}
-
-	return time.Since(start), png.Encode(f, im)
-}
-
 // Dump a copy of the RGBA framebuffer.
 func DebugFrameBuffer(imgFile string) PipelineStage {
 	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
 		start := time.Now()
-		f, err := os.Create(imgFile)
+
+		_, err := tr.resources.DebugAccumulator(blockReq)
+		err = dumpDebugBuffer(err, tr.resources, blockReq.FrameW, blockReq.FrameH, imgFile)
 		if err != nil {
-			return time.Since(start), err
+			return 0, err
 		}
-		defer f.Close()
-
-		im := image.NewRGBA(image.Rect(0, 0, int(blockReq.FrameW), int(blockReq.FrameH)))
-
-		pix, err := tr.resources.buffers.FrameBuffer.ReadDataIntoSlice(make([]uint8, 0))
-		if err != nil {
-			return time.Since(start), err
-		}
-		im.Pix = pix.([]uint8)
-
-		return time.Since(start), png.Encode(f, im)
+		return time.Since(start), nil
 	}
+}
+
+// Dump debug buffer to png file.
+func dumpDebugBuffer(debugKernelError error, dr *deviceResources, frameW, frameH uint32, imgFile string) error {
+	if debugKernelError != nil {
+		return debugKernelError
+	}
+	f, err := os.Create(imgFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	im := image.NewRGBA(image.Rect(0, 0, int(frameW), int(frameH)))
+	err = dr.buffers.DebugOutput.ReadData(0, 0, dr.buffers.DebugOutput.Size(), im.Pix)
+	if err != nil {
+		return err
+	}
+
+	return png.Encode(f, im)
 }
 
 func readCounter(dr *deviceResources, counterIndex uint32) uint32 {

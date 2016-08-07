@@ -21,6 +21,13 @@ const (
 	tonemapSimpleReinhard
 	// utils
 	clearAccumulator
+	// Debugging
+	debugClearBuffer
+	debugPrimaryRayIntersectionDepth
+	debugPrimaryRayIntersectionNormals
+	debugEmissiveSamples
+	debugThroughput
+	debugAccumulator
 	//
 	numKernels
 )
@@ -48,6 +55,18 @@ func (kt kernelType) String() string {
 		return "tonemapSimpleReinhard"
 	case clearAccumulator:
 		return "clearAccumulator"
+	case debugClearBuffer:
+		return "debugClearBuffer"
+	case debugPrimaryRayIntersectionDepth:
+		return "debugPrimaryRayIntersectionDepth"
+	case debugPrimaryRayIntersectionNormals:
+		return "debugPrimaryRayIntersectionNormals"
+	case debugEmissiveSamples:
+		return "debugEmissiveSamples"
+	case debugThroughput:
+		return "debugThroughput"
+	case debugAccumulator:
+		return "debugAccumulator"
 	default:
 		panic(fmt.Sprintf("Unsupported kernel type: %d", kt))
 	}

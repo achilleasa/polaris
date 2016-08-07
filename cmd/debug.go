@@ -54,14 +54,19 @@ func Debug(ctx *cli.Context) error {
 	logger.Noticef(`using device "%s"`, dev.Name)
 
 	// Setup pipeline
-	pipeline := opencl.DefaultPipeline(3, 1.5)
-	pipeline.PostProcess = append(pipeline.PostProcess, opencl.DebugFrameBuffer("debug-fb.png"))
+	pipeline := opencl.DefaultPipeline(
+		opencl.PrimaryRayIntersectionDepth|opencl.PrimaryRayIntersectionNormals|
+			//opencl.VisibleEmissiveSamples|opencl.Throughput|opencl.Accumulator|
+			opencl.FrameBuffer,
+		3,
+		1.5,
+	)
 
 	tr, _ := opencl.NewTracer("tr-0", dev, pipeline)
 	err = tr.Init()
 	if err != nil {
 		logger.Error(err)
-		return err
+		return fmt.Errorf("error initializing opencl device")
 	}
 	defer tr.Close()
 
@@ -78,7 +83,7 @@ func Debug(ctx *cli.Context) error {
 		BlockY:          0,
 		BlockW:          frameW,
 		BlockH:          frameH,
-		SamplesPerPixel: 1,
+		SamplesPerPixel: 32,
 	}
 
 	// Render

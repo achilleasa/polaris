@@ -54,6 +54,7 @@ type bufferSet struct {
 
 	Accumulator     *device.Buffer
 	EmissiveSamples *device.Buffer
+	DebugOutput     *device.Buffer
 
 	// Counters
 	RayCounters [3]*device.Buffer
@@ -86,6 +87,7 @@ func newBufferSet(dev *device.Device) *bufferSet {
 		Intersections:   dev.Buffer("intersections"),
 		EmissiveSamples: dev.Buffer("emissiveSamples"),
 		Accumulator:     dev.Buffer("accumulator"),
+		DebugOutput:     dev.Buffer("debugOutput"),
 		RayCounters: [3]*device.Buffer{
 			dev.Buffer("numRays0"),
 			dev.Buffer("numRays1"),
@@ -150,7 +152,10 @@ func (bs *bufferSet) Resize(frameW, frameH uint32) error {
 	if err != nil {
 		return err
 	}
-
+	err = bs.DebugOutput.Allocate(int(pixels*4), cl.MEM_READ_WRITE)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

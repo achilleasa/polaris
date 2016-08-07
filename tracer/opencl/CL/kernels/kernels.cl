@@ -6,5 +6,6 @@
 #include "intersect.cl"
 #include "pt_integrator.cl"
 #include "clear.cl"
+#include "debug.cl"
 
 #endif

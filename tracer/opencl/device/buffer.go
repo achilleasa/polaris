@@ -116,7 +116,6 @@ func (b *Buffer) AllocateAndWriteData(data interface{}, flags cl.MemFlags) error
 // if a non-slice argument is passed or the argument does not use contiguous
 // memory. A byte offset may also be specified to adjust the actual data copied.
 func (b *Buffer) WriteData(data interface{}, offset int) error {
-
 	dataPtr, dataLen := getSliceData(data)
 	if dataLen == 0 {
 		return nil

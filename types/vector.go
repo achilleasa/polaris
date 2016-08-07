@@ -84,12 +84,24 @@ func (v Vec3) Cross(v2 Vec3) Vec3 {
 	return Vec3{v[1]*v2[2] - v[2]*v2[1], v[2]*v2[0] - v[0]*v2[2], v[0]*v2[1] - v[1]*v2[0]}
 }
 
+// Return max vector component.
+func (v Vec3) MaxComponent() float32 {
+	out := v[0]
+	if v[1] > out {
+		out = v[1]
+	}
+	if v[2] > out {
+		out = v[2]
+	}
+	return out
+}
+
 // Reduce a 4 component vector to a Vec3.
 func (v Vec4) Vec3() Vec3 {
 	return Vec3{v[0], v[1], v[2]}
 }
 
-// Calc min component from two vectors
+// Calc min component from two vectors.
 func MinVec3(v1, v2 Vec3) Vec3 {
 	out := v1
 	if v2[0] < out[0] {
@@ -104,7 +116,7 @@ func MinVec3(v1, v2 Vec3) Vec3 {
 	return out
 }
 
-// Calc maxcomponent from two vectors
+// Calc maxcomponent from two vectors.
 func MaxVec3(v1, v2 Vec3) Vec3 {
 	out := v1
 	if v2[0] > out[0] {

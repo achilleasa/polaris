@@ -2,6 +2,7 @@ package opencl
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/achilleasa/go-pathtrace/tracer"
@@ -273,13 +274,171 @@ func (dr *deviceResources) TonemapSimpleReinhard(blockReq *tracer.BlockRequest, 
 	kernel := dr.kernels[tonemapSimpleReinhard]
 	numPixels := int(blockReq.FrameW * blockReq.BlockH)
 	sampleWeight := float32(1.0 / float32(blockReq.AccumulatedSamples+blockReq.SamplesPerPixel))
-
 	err := kernel.SetArgs(
 		dr.buffers.Accumulator,
 		dr.buffers.Paths,
 		dr.buffers.FrameBuffer,
 		sampleWeight,
 		exposure,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return kernel.Exec1D(0, numPixels, 0)
+}
+
+// Clear debug buffer
+func (dr *deviceResources) DebugClearBuffer(blockReq *tracer.BlockRequest) (time.Duration, error) {
+	kernel := dr.kernels[debugClearBuffer]
+	numPixels := int(blockReq.FrameW * blockReq.BlockH)
+
+	err := kernel.SetArgs(
+		dr.buffers.DebugOutput,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return kernel.Exec1D(0, numPixels, 0)
+}
+
+// Generate a depth map based on the primary ray intersections.
+func (dr *deviceResources) DebugPrimaryRayIntersectionDepth(blockReq *tracer.BlockRequest) (time.Duration, error) {
+	_, err := dr.DebugClearBuffer(blockReq)
+	if err != nil {
+		return 0, err
+	}
+
+	type intersection struct {
+		wuvt         types.Vec4
+		meshInstance uint32
+		triIndex     uint32
+		_padding1    uint32
+		_padding2    uint32
+	}
+
+	data, err := dr.buffers.Intersections.ReadDataIntoSlice(make([]intersection, 0))
+	if err != nil {
+		return 0, err
+	}
+	var maxDepth float32 = 1.0
+	for _, i := range data.([]intersection) {
+		if i.wuvt[3] != math.MaxFloat32 && i.wuvt[3] > maxDepth {
+			maxDepth = i.wuvt[3]
+		}
+	}
+
+	kernel := dr.kernels[debugPrimaryRayIntersectionDepth]
+	numPixels := int(blockReq.FrameW * blockReq.BlockH)
+
+	err = kernel.SetArgs(
+		dr.buffers.RayCounters[0],
+		dr.buffers.Paths,
+		dr.buffers.HitFlags,
+		dr.buffers.Intersections,
+		maxDepth,
+		dr.buffers.DebugOutput,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return kernel.Exec1D(0, numPixels, 0)
+}
+
+// Generate a depth map based on the primary ray intersections.
+func (dr *deviceResources) DebugPrimaryRayIntersectionNormals(blockReq *tracer.BlockRequest) (time.Duration, error) {
+	_, err := dr.DebugClearBuffer(blockReq)
+	if err != nil {
+		return 0, err
+	}
+
+	kernel := dr.kernels[debugPrimaryRayIntersectionNormals]
+	numPixels := int(blockReq.FrameW * blockReq.BlockH)
+
+	err = kernel.SetArgs(
+		dr.buffers.RayCounters[0],
+		dr.buffers.Paths,
+		dr.buffers.HitFlags,
+		dr.buffers.Intersections,
+		dr.buffers.Vertices,
+		dr.buffers.Normals,
+		dr.buffers.UV,
+		dr.buffers.MaterialIndices,
+		dr.buffers.DebugOutput,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return kernel.Exec1D(0, numPixels, 0)
+}
+
+// Render emissiveSamples optionally masking occluded/not-occluded rays.
+func (dr *deviceResources) DebugEmissiveSamples(blockReq *tracer.BlockRequest, maskOccluded, maskNotOccluded uint32) (time.Duration, error) {
+	_, err := dr.DebugClearBuffer(blockReq)
+	if err != nil {
+		return 0, err
+	}
+
+	kernel := dr.kernels[debugEmissiveSamples]
+	numPixels := int(blockReq.FrameW * blockReq.BlockH)
+
+	err = kernel.SetArgs(
+		dr.buffers.Rays[2],
+		dr.buffers.RayCounters[2],
+		dr.buffers.Paths,
+		dr.buffers.HitFlags,
+		dr.buffers.EmissiveSamples,
+		maskOccluded,
+		maskNotOccluded,
+		dr.buffers.DebugOutput,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return kernel.Exec1D(0, numPixels, 0)
+}
+
+// Render path throughput.
+func (dr *deviceResources) DebugThroughput(blockReq *tracer.BlockRequest) (time.Duration, error) {
+	_, err := dr.DebugClearBuffer(blockReq)
+	if err != nil {
+		return 0, err
+	}
+
+	kernel := dr.kernels[debugThroughput]
+	numPixels := int(blockReq.FrameW * blockReq.BlockH)
+
+	err = kernel.SetArgs(
+		dr.buffers.Paths,
+		dr.buffers.DebugOutput,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return kernel.Exec1D(0, numPixels, 0)
+}
+
+// Render accumulator contents.
+func (dr *deviceResources) DebugAccumulator(blockReq *tracer.BlockRequest) (time.Duration, error) {
+	_, err := dr.DebugClearBuffer(blockReq)
+	if err != nil {
+		return 0, err
+	}
+
+	kernel := dr.kernels[debugAccumulator]
+	numPixels := int(blockReq.FrameW * blockReq.BlockH)
+	sampleWeight := float32(1.0 / float32(blockReq.AccumulatedSamples+blockReq.SamplesPerPixel))
+
+	err = kernel.SetArgs(
+		sampleWeight,
+		dr.buffers.Paths,
+		dr.buffers.Accumulator,
+		dr.buffers.DebugOutput,
 	)
 	if err != nil {
 		return 0, err

@@ -2,6 +2,7 @@ package opencl
 
 import (
 	"fmt"
+	"math/rand"
 	"path"
 	"runtime"
 	"sync"
@@ -201,6 +202,8 @@ func (tr *Tracer) Trace(blockReq *tracer.BlockRequest) (time.Duration, error) {
 
 	var sample uint32
 	for sample = 0; sample < blockReq.SamplesPerPixel; sample++ {
+		blockReq.Seed = rand.Uint32()
+
 		// Generate primary rays
 		if tr.pipeline.PrimaryRayGenerator != nil {
 			_, err = tr.pipeline.PrimaryRayGenerator(tr, blockReq)

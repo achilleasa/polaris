@@ -160,8 +160,10 @@ float areaLightGetPdf(
 		return 0.0f;
 	}
 
-	float nDotOutRay = dot(normalize(cross(edge01, edge02)), -outRayDir);
-	return (t * t) / (nDotOutRay * emissive->area);
+	// The cos term allows us to convert from the uniform pdf 1/|A| from area measure 
+	// to the solid angle measure
+	float denominator = emissive->area * fabs(dot(normalize(cross(edge01, edge02)), outRayDir));
+	return denominator > 0.0f ? (t * t) / denominator : 0.0f;
 }
 
 

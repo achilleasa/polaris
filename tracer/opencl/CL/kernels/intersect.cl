@@ -34,9 +34,6 @@ __kernel void rayIntersectionTest(
 		__global int* hitFlag
 		){
 
-	Intersection intersection;
-	intersection.wuvt.w = FLT_MAX;
-
 	int globalId = get_global_id(0);
 	if(globalId >= *numRays){
 		return;
@@ -68,7 +65,11 @@ __kernel void rayIntersectionTest(
 	meshBvhStackStartIndex = -1;
 	curNode = bvhNodes[0];
 
-	for(int iteration=0;iteration<MAX_ITERATIONS;iteration++){
+	int wantLeft;
+	int wantRight;
+	int gotHit = 0;
+
+	while(stackIndex > -1){
 		if(BVH_IS_LEAF(curNode)){
 			numTriangles = BVH_TRIANGLE_COUNT(curNode);
 
@@ -118,12 +119,16 @@ __kernel void rayIntersectionTest(
 					}
 
 					float t = dot(edge02, qVec) * invDet;
-					if (t > INTERSECTION_EPSILON && t < intersection.wuvt.w){
-						hitFlag[globalId] = 1;
-						return;
+					if (t > INTERSECTION_EPSILON){
+						gotHit = 1;
+						stackIndex = -1;
+						break;
 					}
 				}
 			}
+
+			wantLeft = 0;
+			wantRight = 0;
 		} else {
 			// Read children
 			childNodes[0] = bvhNodes[BVH_LEFT_CHILD(curNode)];
@@ -148,33 +153,32 @@ __kernel void rayIntersectionTest(
 			maxmin = fmax( fmax(rmin.x, rmin.y), rmin.z);
 			float rHitDist = minmax < 0 || maxmin > minmax ? FLT_MAX : (maxmin >= ray.origin.w ? FLT_MAX : maxmin);
 
-			int wantLeft = lHitDist < FLT_MAX ? 1 : 0;
-			int wantRight = rHitDist < FLT_MAX ? 1 : 0;
-
-			if( wantLeft && wantRight ){
-				nodeStack[stackIndex++] = wantLeft ? BVH_RIGHT_CHILD(curNode) : BVH_LEFT_CHILD(curNode);
-				curNode = wantLeft ? childNodes[0] : childNodes[1];
-				continue;
-			} else if(wantLeft || wantRight){
-				curNode = wantLeft ? childNodes[0] : childNodes[1];
-				continue;
-			} 
+			wantLeft = lHitDist < FLT_MAX ? 1 : 0;
+			wantRight = rHitDist < FLT_MAX ? 1 : 0;
 		} 
 
-		if(stackIndex == 0){
-			// We are done
-			hitFlag[globalId] = 0;
-			return;
-		} else if(stackIndex == meshBvhStackStartIndex){
-			// If we exited from a bottom bvh tree we need to restore our ray
-			ray.origin.xyz = origRayOrigin;
-			ray.dir.xyz = origRayDir;
-			meshBvhStackStartIndex = -1;
-		}
+		if( wantLeft && wantRight ){
+			nodeStack[stackIndex++] = wantLeft ? BVH_RIGHT_CHILD(curNode) : BVH_LEFT_CHILD(curNode);
+			curNode = wantLeft ? childNodes[0] : childNodes[1];
+		} else if(wantLeft || wantRight){
+			curNode = wantLeft ? childNodes[0] : childNodes[1];
+		} else if(stackIndex <= 0) { 
+			stackIndex = -1;
+		} else {
+			if(stackIndex == meshBvhStackStartIndex){
+				// If we exited from a bottom bvh tree we need to restore our ray
+				ray.origin.xyz = origRayOrigin;
+				ray.dir.xyz = origRayDir;
+				meshBvhStackStartIndex = -1;
+			}
 
-		// Pop the next node off the stack
-		curNode = bvhNodes[nodeStack[--stackIndex]];
+			// Pop the next node off the stack
+			curNode = bvhNodes[nodeStack[--stackIndex]];
+		}
 	}
+	
+	// Update hit flag
+	hitFlag[globalId] = gotHit;
 }
 
 // Test for ray intersections with scene geometry. Sets an ouput flag to indicate
@@ -223,7 +227,9 @@ __kernel void rayIntersectionQuery(
 	meshBvhStackStartIndex = -1;
 	curNode = bvhNodes[0];
 
-	for(int iteration=0;iteration<MAX_ITERATIONS;iteration++){
+	int wantLeft;
+	int wantRight;
+	while(stackIndex > -1){
 		if(BVH_IS_LEAF(curNode)){
 			numTriangles = BVH_TRIANGLE_COUNT(curNode);
 
@@ -285,6 +291,9 @@ __kernel void rayIntersectionQuery(
 					}
 				}
 			}
+
+			wantLeft = 0;
+			wantRight = 0;
 		} else {
 			// Read children
 			childNodes[0] = bvhNodes[BVH_LEFT_CHILD(curNode)];
@@ -309,35 +318,34 @@ __kernel void rayIntersectionQuery(
 			maxmin = fmax( fmax(rmin.x, rmin.y), rmin.z);
 			float rHitDist = minmax < 0 || maxmin > minmax ? FLT_MAX : (maxmin >= ray.origin.w ? FLT_MAX : maxmin);
 
-			int wantLeft = lHitDist < FLT_MAX ? 1 : 0;
-			int wantRight = rHitDist < FLT_MAX ? 1 : 0;
-
-			if( wantLeft && wantRight ){
-				nodeStack[stackIndex++] = wantLeft ? BVH_RIGHT_CHILD(curNode) : BVH_LEFT_CHILD(curNode);
-				curNode = wantLeft ? childNodes[0] : childNodes[1];
-
-				continue;
-			} else if(wantLeft || wantRight){
-				curNode = wantLeft ? childNodes[0] : childNodes[1];
-				continue;
-			} 
-		} 
-
-		if(stackIndex == 0){
-			// We are done
-			hitFlag[globalId] = intersection.wuvt.w < FLT_MAX ? 1 : 0;
-			intersections[globalId] = intersection;
-			return;
-		} else if(stackIndex == meshBvhStackStartIndex){
-			// If we exited from a bottom bvh tree we need to restore our ray
-			ray.origin.xyz = origRayOrigin;
-			ray.dir.xyz = origRayDir;
-			meshBvhStackStartIndex = -1;
+			wantLeft = lHitDist < FLT_MAX ? 1 : 0;
+			wantRight = rHitDist < FLT_MAX ? 1 : 0;
 		}
 
-		// Pop the next node off the stack
-		curNode = bvhNodes[nodeStack[--stackIndex]];
+		if( wantLeft && wantRight ){
+			nodeStack[stackIndex++] = wantLeft ? BVH_RIGHT_CHILD(curNode) : BVH_LEFT_CHILD(curNode);
+			curNode = wantLeft ? childNodes[0] : childNodes[1];
+		} else if(wantLeft || wantRight){
+			curNode = wantLeft ? childNodes[0] : childNodes[1];
+		} 
+		else if(stackIndex <= 0){
+			stackIndex = -1;
+		} else {
+			if(stackIndex == meshBvhStackStartIndex){
+				// If we exited from a bottom bvh tree we need to restore our ray
+				ray.origin.xyz = origRayOrigin;
+				ray.dir.xyz = origRayDir;
+				meshBvhStackStartIndex = -1;
+			}
+
+			// Pop the next node off the stack
+			curNode = bvhNodes[nodeStack[--stackIndex]];
+		}
 	}
+			
+	// Update hit flag
+	hitFlag[globalId] = intersection.wuvt.w < FLT_MAX ? 1 : 0;
+	intersections[globalId] = intersection;
 }
 
 // Test for ray packet intersections with scene geometry. Sets an ouput flag to 

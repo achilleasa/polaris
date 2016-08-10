@@ -46,6 +46,11 @@ __kernel void debugPrimaryRayIntersectionNormals(
 		__global float4 *normals,
 		__global float2 *uv,
 		__global uint *materialIndices,
+		__global MaterialNode *materialNodes,
+		// texture data
+		__global TextureMetadata *texMeta,
+		__global uchar *texData,
+		// output
 		__global uchar4 *output
 		){
 
@@ -65,6 +70,12 @@ __kernel void debugPrimaryRayIntersectionNormals(
 
 	Surface surface;
 	surfaceInit(&surface, intersections + globalId, vertices, normals, uv, materialIndices);
+
+	// Apply normal map
+	int normalTex = materialNodes[surface.matNodeIndex].normalTex;
+	if(normalTex != -1){
+		surface.normal = matGetNormalSample3f(surface.normal, surface.uv, normalTex, texMeta, texData);
+	}
 
 	// convert normal from [-1, 1] -> [0, 255]
 	float3 val = (surface.normal + 1.0f) * 255.0f * 0.5f;
@@ -87,7 +98,7 @@ __kernel void debugEmissiveSamples(
 	if(globalId >= *numRays){
 		return;
 	}
-	
+
 	int pathIndex = rayGetdPathIndex(rays + globalId);
 	uint pixelIndex = paths[pathIndex].pixelIndex;
 
@@ -126,7 +137,7 @@ __kernel void debugAccumulator(
 
 	int globalId = get_global_id(0);
 	uint pixelIndex = paths[globalId].pixelIndex;
-
+	
 	// gamma correct and clamp
 	float3 val = clamp(native_powr(accumulator[globalId] * sampleWeight, 1.0f / 2.2f), 0.0f, 1.0f) * 255.0f;
 	output[pixelIndex] = (uchar4)((uchar)val.x, (uchar)val.y, (uchar)val.z, 255);

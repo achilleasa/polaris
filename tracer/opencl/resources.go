@@ -230,7 +230,7 @@ func (dr *deviceResources) ShadePrimaryRayMisses(diffuseMatNodeIndex, rayBufferI
 // with ShadePrimaryRayMisses is that this kernel multiplies the path throughput
 // with the bg sample and adds that to the accumulator.
 func (dr *deviceResources) ShadeIndirectRayMisses(diffuseMatNodeIndex, rayBufferIndex uint32, numPixels int) (time.Duration, error) {
-	kernel := dr.kernels[shadePrimaryRayMisses]
+	kernel := dr.kernels[shadeIndirectRayMisses]
 
 	err := kernel.SetArgs(
 		dr.buffers.Rays[rayBufferIndex],
@@ -366,6 +366,9 @@ func (dr *deviceResources) DebugPrimaryRayIntersectionNormals(blockReq *tracer.B
 		dr.buffers.Normals,
 		dr.buffers.UV,
 		dr.buffers.MaterialIndices,
+		dr.buffers.MaterialNodes,
+		dr.buffers.TextureMetadata,
+		dr.buffers.Textures,
 		dr.buffers.DebugOutput,
 	)
 	if err != nil {

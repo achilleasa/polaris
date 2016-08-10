@@ -14,6 +14,7 @@
 void matSelectNode(Surface *surface, MaterialNode *selectedMaterial, __global MaterialNode* materialNodes );
 float3 matGetSample3f(float2 uv, float3 defaultValue, int texIndex, __global TextureMetadata *metadata, __global uchar* texData);
 float matGetSample1f(float2 uv, float defaultValue, int texIndex, __global TextureMetadata *metadata, __global uchar* texData);
+float3 matGetNormalSample3f(float3 normal, float2 uv, int texIndex, __global TextureMetadata *metadata, __global uchar* texData);
 void printMaterialNode(MaterialNode *node);
 
 // Traverse the layered material tree for this surface and select a leaf node
@@ -45,6 +46,19 @@ float matGetSample1f(float2 uv, float defaultValue, int texIndex, __global Textu
 	}
 
 	return texGetSample1f( uv, texIndex, metadata, texData );
+}
+
+// Apply normal map to intersection normal.
+float3 matGetNormalSample3f(float3 normal, float2 uv, int texIndex, __global TextureMetadata *metadata, __global uchar* texData){
+	// Generate tangent, bi-tangent vectors
+	float3 u = normalize(cross((fabs(normal.x) > .1f ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f)), normal));
+	float3 v = cross(normal,u);
+
+	// Sample normal map and convert it into the [-1, 1] range. 
+	// R, G components encode the range [-1, 1] into a value [0, 255]
+	// B component encodes the range [0, 1] into [128, 255]
+	float3 sample = (texGetSample3f( uv, texIndex, metadata, texData ) * 2.0f) - 1.0f;
+	return normalize(u * sample.x + v * sample.y + 0.5f * normal * sample.z);
 }
 
 void printMaterialNode(MaterialNode *node){

@@ -7,10 +7,10 @@
 float3 environmentLightGetSample( Surface *surface, __global Emissive *emissive, __global MaterialNode *materialNodes, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 *outRayDir, float *pdf, float *distToEmissive); 
 float environmentLightGetPdf( Surface *surface, __global Emissive *emissive, float3 outRayDir);
 float3 areaLightGetSample( Surface *surface, __global Emissive *emissive, __global float4 *vertices, __global float4 *normals, __global float2 *uv, __global MaterialNode *materialNodes, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 *outRayDir, float *pdf, float *distToEmissive);
-float areaLightGetPdf( Surface *surface, __global Emissive *emissive, __global float4 *vertices, __global float4 *normals, float3 outRayDir);
+float areaLightGetPdf( Surface *surface, __global Emissive *emissive, __global float4 *vertices, __global float4 *normals, __global float2 *uv, __global MaterialNode *materialNodes, __global TextureMetadata *texMeta, __global uchar *texData, float3 outRayDir);
 
 float3 emissiveGetSample( Surface *surface, __global Emissive *emissive, __global float4 *vertices, __global float4 *normals, __global float2 *uv, __global MaterialNode *materialNodes, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 *outRayDir, float *pdf, float *distToEmissive);
-float emissiveGetPdf( Surface *surface, __global Emissive *emissive, __global float4 *vertices, __global float4 *normals, float3 outRayDir);
+float emissiveGetPdf( Surface *surface, __global Emissive *emissive, __global float4 *vertices, __global float4 *normals, __global float2 *uv, __global MaterialNode *materialNodes, __global TextureMetadata *texMeta, __global uchar *texData, float3 outRayDir);
 uint emissiveSelect( const int numLights, float randSample, float *pdf);
 
 float3 environmentLightGetSample(
@@ -92,6 +92,13 @@ float3 areaLightGetSample(
 		wuv.z * uv[offset+2];
 
 
+	MaterialNode matNode = materialNodes[emissive->matNodeIndex];
+
+	// Apply normal map
+	if(matNode.normalTex != -1){
+		emissiveNormal = matGetNormalSample3f(emissiveNormal, emissiveUV, matNode.normalTex, texMeta, texData);
+	}
+
 	float3 emissiveRay = emissivePoint - surface->point;
 	float squaredDistToLight = dot(emissiveRay, emissiveRay);
 	*outRayDir = normalize(emissiveRay);
@@ -103,7 +110,6 @@ float3 areaLightGetSample(
 
 		// convert from area to solid angle using formula (25) from total compedium:
 		// ω = cos(θy) / dist^2
-		MaterialNode matNode = materialNodes[emissive->matNodeIndex];
 		float3 ke = matGetSample3f(emissiveUV, matNode.kval, matNode.kvalTex, texMeta, texData);
 		return ke * nDotOutRay / squaredDistToLight;
 	}
@@ -119,6 +125,10 @@ float areaLightGetPdf(
 		__global Emissive *emissive,
 		__global float4 *vertices, 
 		__global float4 *normals,
+		__global float2 *uv,
+		__global MaterialNode *materialNodes,
+		__global TextureMetadata *texMeta,
+		__global uchar *texData,
 		float3 outRayDir
 		){
 
@@ -160,9 +170,19 @@ float areaLightGetPdf(
 		return 0.0f;
 	}
 
+	// Apply normal map
+	float3 emissiveNormal = normalize(cross(edge01, edge02));
+	int normalTex = materialNodes[emissive->matNodeIndex].normalTex;
+	if(normalTex != -1){
+		float2 emissiveUV = (1.0f - u - v) * uv[offset] + 
+		 			        u * uv[offset+1] + 
+				  			v * uv[offset+2];
+		emissiveNormal = matGetNormalSample3f(emissiveNormal, emissiveUV, normalTex, texMeta, texData);
+	}
+
 	// The cos term allows us to convert from the uniform pdf 1/|A| from area measure 
 	// to the solid angle measure
-	float denominator = emissive->area * fabs(dot(normalize(cross(edge01, edge02)), outRayDir));
+	float denominator = emissive->area * fabs(dot(emissiveNormal, outRayDir));
 	return denominator > 0.0f ? (t * t) / denominator : 0.0f;
 }
 
@@ -200,12 +220,16 @@ float emissiveGetPdf(
 		__global Emissive *emissive,
 		__global float4 *vertices, 
 		__global float4 *normals,
+		__global float2 *uv,
+		__global MaterialNode *materialNodes,
+		__global TextureMetadata *texMeta,
+		__global uchar *texData,
 		float3 outRayDir
 		){
 
 	switch( emissive->type ){
 		case EMISSIVE_TYPE_AREA_LIGHT:
-			return areaLightGetPdf(surface, emissive, vertices, normals, outRayDir);
+			return areaLightGetPdf(surface, emissive, vertices, normals, uv, materialNodes, texMeta, texData, outRayDir);
 		case EMISSIVE_TYPE_ENVIRONMENT_LIGHT:
 			return environmentLightGetPdf(surface, emissive, outRayDir);
 	}

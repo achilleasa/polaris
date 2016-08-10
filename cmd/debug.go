@@ -46,7 +46,7 @@ func Debug(ctx *cli.Context) error {
 	sc.Camera.SetupProjection(float32(frameW) / float32(frameH))
 
 	// Setup tracer
-	dev, err := findDevice([]string{"AMD", "CPU", "Iris", "CPU"})
+	dev, err := findDevice([]string{ /*"CPU", */ "AMD", "CPU", "Iris", "CPU"})
 	if err != nil {
 		logger.Error(err)
 		return err
@@ -56,9 +56,9 @@ func Debug(ctx *cli.Context) error {
 	// Setup pipeline
 	pipeline := opencl.DefaultPipeline(
 		opencl.PrimaryRayIntersectionDepth|opencl.PrimaryRayIntersectionNormals|
-			//opencl.VisibleEmissiveSamples|opencl.Throughput|opencl.Accumulator|
+			opencl.VisibleEmissiveSamples|opencl.Throughput|opencl.Accumulator|
 			opencl.FrameBuffer,
-		3,
+		6,
 		1.5,
 	)
 
@@ -83,7 +83,7 @@ func Debug(ctx *cli.Context) error {
 		BlockY:          0,
 		BlockW:          frameW,
 		BlockH:          frameH,
-		SamplesPerPixel: 32,
+		SamplesPerPixel: 1,
 	}
 
 	// Render

@@ -123,18 +123,18 @@ func MonteCarloIntegrator(debugFlags DebugFlag, numBounces uint32) PipelineStage
 
 		var bounce uint32
 		for bounce = 0; bounce < numBounces; bounce++ {
-			// Shade hits
-			_, err = tr.resources.ShadeHits(bounce, rand.Uint32(), numEmissives, activeRayBuf, numPixels)
-			if err != nil {
-				return time.Since(start), err
-			}
-
 			// Shade misses
 			if bounce == 0 {
 				_, err = tr.resources.ShadePrimaryRayMisses(tr.sceneData.SceneDiffuseMatIndex, activeRayBuf, numPixels)
 			} else {
 				_, err = tr.resources.ShadeIndirectRayMisses(tr.sceneData.SceneDiffuseMatIndex, activeRayBuf, numPixels)
 			}
+			if err != nil {
+				return time.Since(start), err
+			}
+
+			// Shade hits
+			_, err = tr.resources.ShadeHits(bounce, rand.Uint32(), numEmissives, activeRayBuf, numPixels)
 			if err != nil {
 				return time.Since(start), err
 			}
@@ -206,12 +206,19 @@ func DebugFrameBuffer(imgFile string) PipelineStage {
 	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
 		start := time.Now()
 
-		_, err := tr.resources.DebugAccumulator(blockReq)
-		err = dumpDebugBuffer(err, tr.resources, blockReq.FrameW, blockReq.FrameH, imgFile)
+		f, err := os.Create(imgFile)
 		if err != nil {
 			return 0, err
 		}
-		return time.Since(start), nil
+		defer f.Close()
+
+		im := image.NewRGBA(image.Rect(0, 0, int(blockReq.FrameW), int(blockReq.FrameH)))
+		err = tr.resources.buffers.FrameBuffer.ReadData(0, 0, tr.resources.buffers.FrameBuffer.Size(), im.Pix)
+		if err != nil {
+			return 0, err
+		}
+
+		return time.Since(start), png.Encode(f, im)
 	}
 }
 

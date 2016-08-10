@@ -1,6 +1,17 @@
 #ifndef DEBUG_KERNELS_CL
 #define DEBUG_KERNELS_CL
 
+#define DEBUG_TONEMAP_EXPOSURE 1.0f
+
+float3 debugToneMapAndGammaCorrect(float3 sample);
+
+float3 debugToneMapAndGammaCorrect(float3 sample){
+	sample *= DEBUG_TONEMAP_EXPOSURE;
+
+	float3 mapped = sample / (sample + 1.0f);
+	return clamp(pow(mapped, 1.0f / 2.2f), 0.0f, 1.0f) * 255.0f;
+}
+
 // Clear debug buffer
 __kernel void debugClearBuffer(
 		__global uchar4 *output
@@ -109,7 +120,7 @@ __kernel void debugEmissiveSamples(
 	} 
 
 	// gamma correct and clamp
-	float3 val = clamp(native_powr(emissiveSamples[globalId], 1.0f / 2.2f), 0.0f, 1.0f) * 255.0f;
+	float3 val = debugToneMapAndGammaCorrect(emissiveSamples[globalId]);
 	output[pixelIndex] = (uchar4)((uchar)val.x, (uchar)val.y, (uchar)val.z, 255);
 }
 
@@ -123,7 +134,7 @@ __kernel void debugThroughput(
 	uint pixelIndex = paths[globalId].pixelIndex;
 
 	// gamma correct and clamp
-	float3 val = clamp(native_powr(paths[globalId].throughput, 1.0f / 2.2f), 0.0f, 1.0f) * 255.0f;
+	float3 val = debugToneMapAndGammaCorrect(paths[globalId].throughput);
 	output[pixelIndex] = (uchar4)((uchar)val.x, (uchar)val.y, (uchar)val.z, 255);
 }
 
@@ -139,7 +150,7 @@ __kernel void debugAccumulator(
 	uint pixelIndex = paths[globalId].pixelIndex;
 	
 	// gamma correct and clamp
-	float3 val = clamp(native_powr(accumulator[globalId] * sampleWeight, 1.0f / 2.2f), 0.0f, 1.0f) * 255.0f;
+	float3 val = debugToneMapAndGammaCorrect(accumulator[globalId] * sampleWeight);
 	output[pixelIndex] = (uchar4)((uchar)val.x, (uchar)val.y, (uchar)val.z, 255);
 }
 

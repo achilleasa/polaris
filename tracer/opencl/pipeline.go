@@ -191,10 +191,12 @@ func MonteCarloIntegrator(debugFlags DebugFlag, numBounces uint32) PipelineStage
 			}
 
 			// Process intersections for indirect rays
-			activeRayBuf = 1 - activeRayBuf
-			_, err = tr.resources.RayIntersectionQuery(activeRayBuf, numPixels)
-			if err != nil {
-				return time.Since(start), err
+			if bounce+1 < numBounces {
+				activeRayBuf = 1 - activeRayBuf
+				_, err = tr.resources.RayIntersectionQuery(activeRayBuf, numPixels)
+				if err != nil {
+					return time.Since(start), err
+				}
 			}
 		}
 		return time.Since(start), nil

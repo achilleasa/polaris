@@ -2,6 +2,7 @@
 #define BXDF_CL
 
 #include "lambert.cl"
+#include "ideal_specular.cl"
 
 #define BXDF_TYPE_DIFFUSE 1 << 0
 #define BXDF_TYPE_SPECULAR 1 << 1
@@ -27,6 +28,8 @@ float3 bxdfGetSample(
 	switch(matNode->bxdfType){
 		case BXDF_TYPE_DIFFUSE:
 			return lambertDiffuseSample(surface, matNode, texMeta, texData, randSample, outRayDir, pdf);
+		case BXDF_TYPE_SPECULAR:
+			return idealSpecularSample(surface, matNode, texMeta, texData, randSample, inRayDir, outRayDir, pdf);
 	}
 
 	return (float3)(0.0f, 0.0f, 0.0f);
@@ -45,6 +48,8 @@ float bxdfGetPdf(
 	switch(matNode->bxdfType){
 		case BXDF_TYPE_DIFFUSE:
 			return lambertDiffusePdf(surface, matNode, outRayDir);
+		case BXDF_TYPE_SPECULAR:
+			return idealSpecularPdf();
 	}
 
 	return 0.0f;
@@ -63,6 +68,8 @@ float3 bxdfEval(
 	switch(matNode->bxdfType){
 		case BXDF_TYPE_DIFFUSE:
 			return lambertDiffuseEval(surface, matNode, texMeta, texData, outRayDir);
+		case BXDF_TYPE_SPECULAR:
+			return idealSpecularEval();
 	}
 
 	return (float3)(0.0f, 0.0f, 0.0f);

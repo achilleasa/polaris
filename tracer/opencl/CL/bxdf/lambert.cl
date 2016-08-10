@@ -9,8 +9,6 @@ float3 lambertDiffuseEval(Surface *surface, MaterialNode *matNode, __global Text
 //
 // BXDF = F * kval  / PI
 // PDF = cos(theta) / PI
-//
-// Note: We pre-multiply the BXDF with cos(theta) as we calculate it anyway in the function.
 float3 lambertDiffuseSample(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 *rayOutDir, float *pdf){
 	*rayOutDir = rayGetCosWeightedHemisphereSample(surface->normal, randSample);	
 	

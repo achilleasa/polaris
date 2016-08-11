@@ -25,7 +25,6 @@ void matSelectNode(Surface *surface, MaterialNode *selectedMaterial, __global Ma
 	}
 
 	*selectedMaterial = *node;
-	selectedMaterial->fresnel = 1.0f;
 }
 
 // Sample texture using the supplied uv coordinates and return a float3 vector. 

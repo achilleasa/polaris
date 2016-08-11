@@ -132,14 +132,10 @@ typedef struct {
 		float nval;
 	};
 
-	// alignment padding
-	float _reserved1;
-
-	// Fresnel value; for layered materials it contains the product of each node
-	// selection probability in the evaluated material node sub-tree.
-	float fresnel;
-
 	uint isNode;
+	
+	// alignment padding
+	float _reserved[2];
 
 	union {
 		// For intermediate nodes

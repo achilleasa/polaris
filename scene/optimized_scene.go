@@ -117,11 +117,11 @@ type MaterialNode struct {
 	// For leafs it contains a BRDF-specific parameter like roughness e.t.c
 	Nval float32
 
-	// Reserved space; used by the kernels as scratch space while evaluating materials
-	reserved [2]float32
-
 	// Set to 1 if this is a node; 0 if this is a leaf
 	IsNode uint32
+
+	// Alignment padding
+	reserved [2]float32
 
 	// This union like structure has different contents depending on the node
 	// type.

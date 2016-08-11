@@ -7,7 +7,7 @@ float3 lambertDiffuseEval(Surface *surface, MaterialNode *matNode, __global Text
 
 // Sample ideal diffuse (lambert) surface:
 //
-// BXDF = F * kval  / PI
+// BXDF = kval  / PI
 // PDF = cos(theta) / PI
 float3 lambertDiffuseSample(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 *rayOutDir, float *pdf){
 	*rayOutDir = rayGetCosWeightedHemisphereSample(surface->normal, randSample);	
@@ -16,7 +16,7 @@ float3 lambertDiffuseSample(Surface *surface, MaterialNode *matNode, __global Te
 
 	float3 kd = matGetSample3f(surface->uv, matNode->kval, matNode->kvalTex, texMeta, texData);
 	
-	return matNode->fresnel * kd * C_1_PI;
+	return kd * C_1_PI;
 }
 
 // Get PDF for lambert surface given a pre-calculated bounce ray.
@@ -28,6 +28,6 @@ float lambertDiffusePdf(Surface *surface, MaterialNode *matNode, float3 rayOutDi
 // Evaluate BXDF for lambert surface given a pre-calculated bounce ray.
 float3 lambertDiffuseEval(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 rayOutDir){
 	float3 kd = matGetSample3f(surface->uv, matNode->kval, matNode->kvalTex, texMeta, texData);
-	return matNode->fresnel * kd * C_1_PI;
+	return kd * C_1_PI;
 }
 #endif

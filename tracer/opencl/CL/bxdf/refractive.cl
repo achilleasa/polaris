@@ -46,7 +46,7 @@ float3 refractiveSample(Surface *surface, MaterialNode *matNode, __global Textur
 	*rayOutDir = normalize(normalize(surfNormal * cosI - rayInDir) * sinT - surfNormal * cosTransimission);
 
 	float3 ks = eta * eta * matGetSample3f(surface->uv, matNode->kval, matNode->kvalTex, texMeta, texData);
-	return cosTransimission > 0.0f ? matNode->fresnel * ks / cosTransimission: 0.0f;
+	return cosTransimission > 0.0f ? ks / cosTransimission: 0.0f;
 }
 
 // Get PDF for refractive surface given a pre-calculated bounce ray.

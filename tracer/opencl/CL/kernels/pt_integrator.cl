@@ -106,11 +106,13 @@ __kernel void shadeHits(
 					surface.normal = matGetNormalSample3f(surface.normal, surface.uv, materialNode.normalTex, texMeta, texData);
 				}
 
+				float inRayDotNormal = dot(inRayDir, surface.normal);
+
 				// Check if we hit an emissive node. If so, we need to accumulate implicit
 				// light and terminate the path.
 				if( MAT_IS_EMISSIVE(materialNode) ){
 					// Make sure that the incoming ray is facing the emissive
-					if( dot( inRayDir, surface.normal ) > 0.0f ){
+					if( inRayDotNormal > 0.0f ){
 						accumulator[rayPathIndex] += curPathThroughput * matGetSample3f(surface.uv, materialNode.kval, materialNode.kvalTex, texMeta, texData);
 					}
 				} else {
@@ -144,10 +146,15 @@ __kernel void shadeHits(
 								&bxdfPdf
 								);
 
+
+						// If this material is refractive and we are hitting it from the outside
+						// we need to ensure that the outgoing ray starts inside the surface.
+						float displaceDir = BXDF_IS_TRANSMISSION(materialNode.bxdfType) ? -sign(inRayDotNormal) : 1.0f;
+				
 						// To calculate the origin for occlusion/indirect rays we displace the 
 						// surface hit point by a small epsilon along the normal to ensure that 
 						// we don't register an intersection with the same surface
-						outRayOrigin = DISPLACE_BY_EPSILON(surface.point, surface.normal);
+						outRayOrigin = DISPLACE_BY_EPSILON(surface.point, surface.normal * displaceDir);
 
 						// Select and sample emissive source
 						int emissiveIndex = numEmissives > 0 ? emissiveSelect(numEmissives, sample1.x, &emissiveSelectionPdf) : -1;
@@ -207,7 +214,9 @@ __kernel void shadeHits(
 						}
 
 						// If we got a valid bxdf sample update the path throughput
-						float3 throughput = bxdfSample * dot(surface.normal, bxdfOutRayDir) * bxdfWeight;
+						// Note: we are using the abs value of the dot product as 
+						// it will be negative for rays entering into refractive surfaces
+						float3 throughput = bxdfSample * fabs(dot(surface.normal, bxdfOutRayDir)) * bxdfWeight;
 
 						if (MIN_VEC3_COMPONENT(throughput) > 0.0f && bxdfPdf > 0.0f){
 							pathSetThroughput(paths + rayPathIndex, curPathThroughput * throughput / bxdfPdf);

@@ -330,11 +330,17 @@ func (sc *sceneCompiler) createLayeredMaterialTrees() error {
 			node.SetNormalTex(mat.NormalTex)
 			node.SetBxdfType(scene.Specular)
 			sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, node)
-		} else if isRefractive && !(isDiffuse || isSpecular || isEmissive) {
+		} else if isRefractive && !(isDiffuse || isEmissive) {
 			// Ideal refractive surface
 			node = scene.MaterialNode{}
 			node.Init()
 
+			if mat.Ks.MaxComponent() == 0.0 && mat.KsTex == -1 {
+				node.Kval = types.Vec4{1.0, 1.0, 1.0, 0.0}
+			} else {
+				node.Kval = mat.Ks.Vec4(0)
+				node.SetKvalTex(mat.KsTex)
+			}
 			node.SetNormalTex(mat.NormalTex)
 			node.SetBxdfType(scene.Refractive)
 			node.Nval = mat.Ni

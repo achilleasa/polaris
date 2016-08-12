@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/achilleasa/go-pathtrace/tracer"
+	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
 )
 
 // Debug flags.
@@ -99,8 +100,13 @@ func MonteCarloIntegrator(debugFlags DebugFlag, numBounces uint32) PipelineStage
 		var activeRayBuf uint32 = 0
 
 		// Intersect primary rays outside of the loop
-		// TODO: Use packet query
-		_, err = tr.resources.RayIntersectionQuery(activeRayBuf, numPixels)
+		// Use packet query intersector for GPUs as opencl forces CPU
+		// to use a local workgroup size equal to 1
+		if tr.device.Type == device.GpuDevice {
+			_, err = tr.resources.RayPacketIntersectionQuery(activeRayBuf, numPixels)
+		} else {
+			_, err = tr.resources.RayIntersectionQuery(activeRayBuf, numPixels)
+		}
 		if err != nil {
 			return time.Since(start), err
 		}
@@ -112,7 +118,6 @@ func MonteCarloIntegrator(debugFlags DebugFlag, numBounces uint32) PipelineStage
 				return time.Since(start), err
 			}
 		}
-
 		if debugFlags&PrimaryRayIntersectionNormals == PrimaryRayIntersectionNormals {
 			_, err = tr.resources.DebugPrimaryRayIntersectionNormals(blockReq)
 			err = dumpDebugBuffer(err, tr.resources, blockReq.FrameW, blockReq.FrameH, "debug-primary-intersection-normals.png")

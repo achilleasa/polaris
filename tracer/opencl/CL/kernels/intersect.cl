@@ -1,8 +1,6 @@
 #ifndef INTERSECT_KERNEL_CL
 #define INTERSECT_KERNEL_CL
 
-#define MAX_ITERATIONS 10000
-
 #define BVH_MAX_STACK_SIZE 32
 
 #define BVH_IS_LEAF(node) (node.leftChild.w <= 0)
@@ -162,8 +160,6 @@ __kernel void rayIntersectionTest(
 			curNode = wantLeft ? childNodes[0] : childNodes[1];
 		} else if(wantLeft || wantRight){
 			curNode = wantLeft ? childNodes[0] : childNodes[1];
-		} else if(stackIndex <= 0) { 
-			stackIndex = -1;
 		} else {
 			if(stackIndex == meshBvhStackStartIndex){
 				// If we exited from a bottom bvh tree we need to restore our ray
@@ -173,7 +169,9 @@ __kernel void rayIntersectionTest(
 			}
 
 			// Pop the next node off the stack
-			curNode = bvhNodes[nodeStack[--stackIndex]];
+			if( --stackIndex >= 0 ){
+				curNode = bvhNodes[nodeStack[stackIndex]];
+			}
 		}
 	}
 	
@@ -285,7 +283,7 @@ __kernel void rayIntersectionQuery(
 								u,
 								v,
 								t
-								);
+						);
 						intersection.triIndex = vIndex / 3;
 						intersection.meshInstance = meshInstanceId;
 					}
@@ -327,9 +325,6 @@ __kernel void rayIntersectionQuery(
 			curNode = wantLeft ? childNodes[0] : childNodes[1];
 		} else if(wantLeft || wantRight){
 			curNode = wantLeft ? childNodes[0] : childNodes[1];
-		} 
-		else if(stackIndex <= 0){
-			stackIndex = -1;
 		} else {
 			if(stackIndex == meshBvhStackStartIndex){
 				// If we exited from a bottom bvh tree we need to restore our ray
@@ -339,7 +334,9 @@ __kernel void rayIntersectionQuery(
 			}
 
 			// Pop the next node off the stack
-			curNode = bvhNodes[nodeStack[--stackIndex]];
+			if( --stackIndex >= 0 ){
+				curNode = bvhNodes[nodeStack[stackIndex]];
+			}
 		}
 	}
 			
@@ -352,7 +349,7 @@ __kernel void rayIntersectionQuery(
 // indicate intersections and also emits intersection data for any found intersections.
 // This kernel operates on a bundle of RAY_PACKET_SIZE rays in parallel. Stack
 // operations are handled by the first thread in the local thread group.
-__kernel void packetIntersectionQuery(
+__kernel void rayPacketIntersectionQuery(
 		__global Ray* rays,
 		__global const int *numRays,
 		__global BvhNode* bvhNodes,
@@ -382,7 +379,7 @@ __kernel void packetIntersectionQuery(
 	__local MeshInstance meshInstance;
 
 	// Shared triangle intersection vars
-	__local float3 v0, edge01, edge02;
+	__local float3 vert[3];
 
 	// Node bbox and leaf primitive intersection vars
 	float3 invDir, tmin, tmax, rmin, rmax;
@@ -394,14 +391,19 @@ __kernel void packetIntersectionQuery(
 	float3 origRayOrigin = ray.origin.xyz;
 	float3 origRayDir = ray.dir.xyz;
 
+	// Traversal preferences
+	int packetWantsLeft, packetWantsRight;
+
 	// Thread 0 manages the stack; set initial values
 	if(localId == 0){
 		stackIndex = 0;
 		meshBvhStackStartIndex = -1;
 		curNode = bvhNodes[0];
 	}
+	
+	barrier(CLK_LOCAL_MEM_FENCE);
 
-	for(int iteration=0;iteration<MAX_ITERATIONS;iteration++){
+	while(stackIndex > -1){
 		if(BVH_IS_LEAF(curNode)){
 			numTriangles = BVH_TRIANGLE_COUNT(curNode);
 
@@ -418,6 +420,7 @@ __kernel void packetIntersectionQuery(
 					meshBvhStackStartIndex = stackIndex;
 					nodeStack[stackIndex++] = meshInstance.bvhRoot;
 				}
+
 				barrier(CLK_LOCAL_MEM_FENCE);
 
 				// Transform rays without translating ray direction vector
@@ -427,14 +430,14 @@ __kernel void packetIntersectionQuery(
 				// Intersect with all triangles using the Moller-Trumbore algorithm
 				triStartIndex = BVH_TRIANGLE_INDEX(curNode);
 				for(int vIndex = triStartIndex * 3; vIndex < (triStartIndex + numTriangles)*3;vIndex+=3){
-					// Thread 0 fetches triangle data into local memory
-					if(localId == 0 ){
-						v0 = vertexList[vIndex].xyz;
-						edge01 = vertexList[vIndex+1].xyz - v0;
-						edge02 = vertexList[vIndex+2].xyz - v0;
+					// Fetch vertex data in parallel
+					if(localId < 3 ){
+						vert[localId] = vertexList[vIndex + localId].xyz;
 					}
 					barrier(CLK_LOCAL_MEM_FENCE);
 
+					float3 edge01 = vert[1] - vert[0];
+					float3 edge02 = vert[2] - vert[0];
 					float3 pVec = cross(ray.dir.xyz, edge02);
 					float det = dot(edge01, pVec);
 
@@ -442,7 +445,7 @@ __kernel void packetIntersectionQuery(
 						float invDet = native_recip(det);
 
 						// Calculate barycentric coords
-						float3 tVec = ray.origin.xyz - v0;
+						float3 tVec = ray.origin.xyz - vert[0];
 						float u = dot(tVec, pVec) * invDet;
 						float3 qVec = cross(tVec, edge01);
 						float v = dot(ray.dir.xyz, qVec) * invDet;
@@ -459,7 +462,7 @@ __kernel void packetIntersectionQuery(
 									u,
 									v,
 									t
-									);
+							);
 							intersection.triIndex = vIndex / 3;
 							intersection.meshInstance = meshInstanceId;
 						}
@@ -467,12 +470,16 @@ __kernel void packetIntersectionQuery(
 					barrier(CLK_LOCAL_MEM_FENCE);
 				}
 			}
+
+			if(localId == 0 ){
+				packetWantsLeft = 0;
+				packetWantsRight = 0;
+			}
 		} else {
-			// Read children in parallel
+			// Fetch child nodes in parallel and clear first 4 memory slots
 			if( localId < 2 ){
 				childNodes[localId] = bvhNodes[localId == 0 ? BVH_LEFT_CHILD(curNode) : BVH_RIGHT_CHILD(curNode)];
 
-				// Clear the first 4 scratchMemory locations
 				scratchMemory[localId] = 0;
 				scratchMemory[localId+2] = 0;
 			}
@@ -505,71 +512,64 @@ __kernel void packetIntersectionQuery(
 			// [3] visit both nodes
 			int wantLeft = lHitDist < FLT_MAX ? 1 : 0;
 			int wantRight = rHitDist < FLT_MAX ? 1 : 0;
-			//printf("[%d] wantLeft: %d, wantRight: %d\n", localId, wantLeft, wantRight);
 			scratchMemory[2*wantRight + wantLeft] = 1;
 
 			// Wait for all threads to encode their traversal preference
 			barrier(CLK_LOCAL_MEM_FENCE);
 
-			if( scratchMemory[RAY_VISIT_BOTH_NODES] || (scratchMemory[RAY_VISIT_LEFT_NODE] && scratchMemory[RAY_VISIT_RIGHT_NODE])){
+			packetWantsLeft = scratchMemory[RAY_VISIT_BOTH_NODES] || scratchMemory[RAY_VISIT_LEFT_NODE];
+			packetWantsRight = scratchMemory[RAY_VISIT_BOTH_NODES] || scratchMemory[RAY_VISIT_RIGHT_NODE];
+
+			// If we want to visit both nodes decide which should we visit first
+			if( packetWantsLeft && packetWantsRight ){
 				// For each thread, set its scratchMemory location to -1 if 
 				// ray prefers the left node and to 1 if the ray prefers the right node.
 				scratchMemory[localId] = wantLeft || lHitDist < rHitDist ? -1 : 1;
-				//printf("[%2d] scratchMemory -> %d\n", localId, scratchMemory[localId]);
-				barrier(CLK_LOCAL_MEM_FENCE);
 
 				// run a parallel reduction on scratchMemory. We are using
 				// sequential addressing to avoid bank conflicts
 				// see: https://docs.nvidia.com/cuda/samples/6_Advanced/reduction/doc/reduction.pdf
 				for (int s=HALF_RAY_PACKET_SIZE; s>0; s>>=1) {
+					barrier(CLK_LOCAL_MEM_FENCE);
 					if (localId < s) {
 						scratchMemory[localId] += scratchMemory[localId + s];
 					}
-					barrier(CLK_LOCAL_MEM_FENCE);
 				}
-
-				// scratchMemory[0] sign indicates which node should we visit first
-				if( localId == 0 ){
-					nodeStack[stackIndex++] = scratchMemory[0] < 1 ? BVH_RIGHT_CHILD(curNode) : BVH_LEFT_CHILD(curNode);
-					curNode = scratchMemory[0] < 1 ? childNodes[0] : childNodes[1];
-				}
-
-				barrier(CLK_LOCAL_MEM_FENCE);
-				continue;
-			} else if(scratchMemory[RAY_VISIT_LEFT_NODE] || scratchMemory[RAY_VISIT_RIGHT_NODE]) {
-				if( localId == 0 ){
-					curNode = scratchMemory[1] ? childNodes[0] : childNodes[1];
-				}
-
-				barrier(CLK_LOCAL_MEM_FENCE);
-				continue;
-			} 
-		} 
-
-		if(stackIndex == 0){
-			// We are done
-			hitFlag[globalId] = intersection.wuvt.w < FLT_MAX ? 1 : 0;
-			intersections[globalId] = intersection;
-			return;
-		} else if(stackIndex == meshBvhStackStartIndex){
-			// If we exited from a bottom bvh tree we need to restore our ray
-			ray.origin.xyz = origRayOrigin;
-			ray.dir.xyz = origRayDir;
-
-			if(localId == 0 ){
-				meshBvhStackStartIndex = -1;
 			}
 		}
 
 		barrier(CLK_LOCAL_MEM_FENCE);
 
-		// Pop the next node pointer off the stack and read it into local memory
+		// Thread 0 handles all stack operations
 		if( localId == 0 ){
-			curNode = bvhNodes[nodeStack[--stackIndex]];
-		}
+			if( packetWantsLeft && packetWantsRight ){
+				// scratchMemory[0] sign indicates which node should we visit first
+				nodeStack[stackIndex++] = scratchMemory[0] < 1 ? BVH_RIGHT_CHILD(curNode) : BVH_LEFT_CHILD(curNode);
+				curNode = scratchMemory[0] < 1  ? childNodes[0] : childNodes[1];
+			} else if( packetWantsLeft || packetWantsRight ){
+				curNode = packetWantsLeft ? childNodes[0] : childNodes[1];
+			} else {	
+				if(stackIndex == meshBvhStackStartIndex){
+					// If we exited from a bottom bvh tree we need to restore our ray
+					ray.origin.xyz = origRayOrigin;
+					ray.dir.xyz = origRayDir;
+					meshBvhStackStartIndex = -1;
+				}
+				
+				// Pop the next node off the stack
+				if( --stackIndex >= 0 ){
+					curNode = bvhNodes[nodeStack[stackIndex]];
+				}
+			}
+		} 
 
+		// Sync before next iteration
 		barrier(CLK_LOCAL_MEM_FENCE);
 	}
+			
+	// Update hit flag
+	hitFlag[globalId] = intersection.wuvt.w < FLT_MAX ? 1 : 0;
+	intersections[globalId] = intersection;
 }
 
 void printIntersection(Intersection *inter){

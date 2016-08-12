@@ -20,7 +20,7 @@
 #define C_SQRT1_2      0.70710678118654752440f  /* 1/sqrt(2) */
 
 // Intersection constants
-#define INTERSECTION_EPSILON 0.001f
+#define INTERSECTION_EPSILON 0.00001f
 #define INTERSECTION_EPSILON_X2 (INTERSECTION_EPSILON * 2.0f)
 
 #endif

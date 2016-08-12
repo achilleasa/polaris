@@ -11,7 +11,7 @@ const (
 	// intersection kernels
 	rayIntersectionTest
 	rayIntersectionQuery
-	packetIntersectionQuery
+	rayPacketIntersectionQuery
 	// pt kernels
 	shadeHits
 	shadePrimaryRayMisses
@@ -41,8 +41,8 @@ func (kt kernelType) String() string {
 		return "rayIntersectionTest"
 	case rayIntersectionQuery:
 		return "rayIntersectionQuery"
-	case packetIntersectionQuery:
-		return "packetIntersectionQuery"
+	case rayPacketIntersectionQuery:
+		return "rayPacketIntersectionQuery"
 	case shadeHits:
 		return "shadeHits"
 	case shadePrimaryRayMisses:

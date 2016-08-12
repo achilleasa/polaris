@@ -159,7 +159,29 @@ func (dr *deviceResources) RayIntersectionQuery(rayBufferIndex uint32, numPixels
 		return 0, err
 	}
 
-	return kernel.Exec1D(0, numPixels, 0)
+	return kernel.Exec1D(0, numPixels, 64)
+}
+
+// Calculate ray intersections and fill out the hit buffer and the intersection
+// buffer with intersection data for the closest ray/triangle intersection.
+// This kernel works with ray packets and should only be used for primary rays.
+func (dr *deviceResources) RayPacketIntersectionQuery(rayBufferIndex uint32, numPixels int) (time.Duration, error) {
+	kernel := dr.kernels[rayPacketIntersectionQuery]
+
+	err := kernel.SetArgs(
+		dr.buffers.Rays[rayBufferIndex],
+		dr.buffers.RayCounters[rayBufferIndex],
+		dr.buffers.BvhNodes,
+		dr.buffers.MeshInstances,
+		dr.buffers.Vertices,
+		dr.buffers.HitFlags,
+		dr.buffers.Intersections,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return kernel.Exec1D(0, numPixels, 32)
 }
 
 // Evaluate shading for intersections. For each intersection, this kernel may
@@ -358,6 +380,7 @@ func (dr *deviceResources) DebugPrimaryRayIntersectionNormals(blockReq *tracer.B
 	numPixels := int(blockReq.FrameW * blockReq.BlockH)
 
 	err = kernel.SetArgs(
+		dr.buffers.Rays[0],
 		dr.buffers.RayCounters[0],
 		dr.buffers.Paths,
 		dr.buffers.HitFlags,

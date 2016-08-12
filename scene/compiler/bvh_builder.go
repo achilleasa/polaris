@@ -216,11 +216,7 @@ func (c bvhSplitCandidate) Score(workList []BoundedVolume, resChan chan<- bvhSpl
 	}
 
 	// Make sure that we got enough items of each side of the split
-	minItemsOnEachSide := 2
-	if len(workList) == 2 {
-		minItemsOnEachSide = 1
-	}
-	if c.leftCount < minItemsOnEachSide || c.rightCount < minItemsOnEachSide {
+	if c.leftCount == 0 || c.rightCount == 0 {
 		c.score = math.MaxFloat32
 		resChan <- c
 		return

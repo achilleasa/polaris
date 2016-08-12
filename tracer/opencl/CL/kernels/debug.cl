@@ -49,6 +49,7 @@ __kernel void debugPrimaryRayIntersectionDepth(
 
 // Render surface normals for primary ray hits.
 __kernel void debugPrimaryRayIntersectionNormals(
+		__global Ray *rays,
 		__global const int *numRays,
 		__global Path *paths,
 		__global uint *hitFlags,
@@ -82,12 +83,18 @@ __kernel void debugPrimaryRayIntersectionNormals(
 	Surface surface;
 	surfaceInit(&surface, intersections + globalId, vertices, normals, uv, materialIndices);
 
+	float3 inRayDir = -rays[globalId].dir.xyz;
+
+	MaterialNode materialNode;
+	uint2 rndState = (uint2)(globalId, globalId);
+	matSelectNode(&surface, inRayDir, &materialNode, materialNodes, &rndState, texMeta, texData);
+
 	// Apply normal map
-	int normalTex = materialNodes[surface.matNodeIndex].normalTex;
+	int normalTex = materialNode.normalTex;
 	if(normalTex != -1){
 		surface.normal = matGetNormalSample3f(surface.normal, surface.uv, normalTex, texMeta, texData);
 	}
-
+	
 	// convert normal from [-1, 1] -> [0, 255]
 	float3 val = (surface.normal + 1.0f) * 255.0f * 0.5f;
 	output[pixelIndex] = (uchar4)((uchar)val.x, (uchar)val.y, (uchar)val.z, 255);

@@ -119,18 +119,9 @@ typedef struct {
 	// "color" for node. Depends on BRDF type
 	float3 kval;
 
-	union {
-		// If this is a intermediate node this specifies the probability 
-		// of selecting the left child if blend mode == MIX
-		float leftChildProb;
-
-		// If this is an intermediate node this specifies the surface IOR if 
-		// blend mode == FRESNEL
-		float ior;
-
-		// BRDF-specific parameter (roughness e.t.c) for leafs
-		float nval;
-	};
+	// BRDF-specific parameter (roughness e.t.c) for leafs and blend parameter
+	// (IOR, mix probability) for nodes
+	float nval;
 
 	uint isNode;
 	

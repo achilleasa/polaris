@@ -13,7 +13,7 @@ float3 rayGetCosWeightedHemisphereSample(float3 normal, float2 randSample);
 float3 rayGetCosWeightedHemisphereSample(float3 normal, float2 randSample) {
 	// Generate point on disk
 	float rd = sqrt(randSample.x);
-	float phi = 2.0f*M_PI*randSample.y;
+	float phi = 2.0f*C_PI*randSample.y;
 
 	// Generate tangent, bi-tangent vectors
 	float3 u = normalize(cross((fabs(normal.x) > .1f ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f)), normal));

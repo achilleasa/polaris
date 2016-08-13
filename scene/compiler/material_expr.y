@@ -34,6 +34,7 @@ import (
 %token <nodeId> DIFFUSE
 %token <nodeId> SPECULAR_REFLECTION
 %token <nodeId> SPECULAR_TRANSMISSION
+%token <nodeId> SPECULAR_MICROFACET
 %token <nodeId> EMISSIVE
 
 %%
@@ -103,6 +104,18 @@ BSDF:
 		node.Nval = exprVAL.material.Ni
 		node.SetNvalTex(exprVAL.material.NiTex)
 		node.SetBxdfType(scene.SpecularTransmission)
+		$$ = exprVAL.compiler.appendMaterialNode(node)
+	}
+|	SPECULAR_MICROFACET
+	{
+		node := &scene.MaterialNode{}
+		node.Init()
+		node.Kval = exprVAL.material.Ks.Vec4(0)
+		node.SetKvalTex(exprVAL.material.KsTex)
+		node.SetNormalTex(exprVAL.material.NormalTex)
+		node.Nval = exprVAL.material.Nr
+		node.SetNvalTex(exprVAL.material.NrTex)
+		node.SetBxdfType(scene.SpecularMicrofacet)
 		$$ = exprVAL.compiler.appendMaterialNode(node)
 	}
 |	EMISSIVE
@@ -209,6 +222,7 @@ func (x *exprLex) lexText(c rune, yylval *exprSymType) int {
 	case "D": return DIFFUSE
 	case "S": return SPECULAR_REFLECTION
 	case "T": return SPECULAR_TRANSMISSION
+	case "M": return SPECULAR_MICROFACET
 	case "E": return EMISSIVE
 	case "mix": return MIX
 	case "fresnel": return FRESNEL

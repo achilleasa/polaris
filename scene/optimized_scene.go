@@ -92,10 +92,11 @@ const (
 type MatBxdfType int32
 
 const (
-	Diffuse MatBxdfType = 1 << iota
+	Emissive MatBxdfType = 1 << iota
+	Diffuse
 	SpecularReflection
 	SpecularTransmission
-	Emissive
+	SpecularMicrofacet
 )
 
 // Materials are represented as a tree where nodes define a blending operation

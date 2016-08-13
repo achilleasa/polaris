@@ -5,7 +5,7 @@
 #define MIN_VEC3_COMPONENT(v) (min(v.x,min(v.y,v.z)))
 #define DISPLACE_BY_EPSILON(v,n) (v + n * INTERSECTION_EPSILON)
 
-#define MIN_BOUNCES_FOR_RR 2
+#define MIN_BOUNCES_FOR_RR 3
 
 // For each intersection, calculate an outgoing indirect ray based on the 
 // surface PDF and also perform direct light sampling emitting occlusion
@@ -107,7 +107,7 @@ __kernel void shadeHits(
 
 			// Check if we hit an emissive node. If so, we need to accumulate implicit
 			// light and terminate the path.
-			if( MAT_IS_EMISSIVE(materialNode) ){
+			if( BXDF_IS_EMISSIVE(materialNode.bxdfType) ){
 				// Make sure that the incoming ray is facing the emissive
 				if( inRayDotNormal > 0.0f ){
 					accumulator[rayPathIndex] += curPathThroughput * matGetSample3f(surface.uv, materialNode.kval, materialNode.kvalTex, texMeta, texData);
@@ -219,7 +219,7 @@ __kernel void shadeHits(
 						wgIndirectRayIndex = atomic_inc(&wgNumIndirectRays);
 					} 
 				} // if(!rejectSample)
-			} // if(!MAT_IS_EMISSIVE)
+			} // if(BXDF_IS_EMISSIVE)
 		} // if(hitFlags)
 	} // if(globalId < *numRays)
 

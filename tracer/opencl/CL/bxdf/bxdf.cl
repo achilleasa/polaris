@@ -4,14 +4,16 @@
 #include "lambert.cl"
 #include "specular_reflection.cl"
 #include "specular_transmission.cl"
+#include "specular_microfacet.cl"
 
-#define BXDF_TYPE_DIFFUSE 1 << 0
-#define BXDF_TYPE_SPECULAR_REFLECTION 1 << 1
-#define BXDF_TYPE_SPECULAR_TRANSMISSION 1 << 2
-#define BXDF_TYPE_EMISSIVE 1 << 3
+#define BXDF_TYPE_EMISSIVE 1 << 0
+#define BXDF_TYPE_DIFFUSE 1 << 1
+#define BXDF_TYPE_SPECULAR_REFLECTION 1 << 2
+#define BXDF_TYPE_SPECULAR_TRANSMISSION 1 << 3
+#define BXDF_TYPE_SPECULAR_MICROFACET 1 << 4
 
-// Returns true if BXDF models a transmission
 #define BXDF_IS_TRANSMISSION(t) (t == BXDF_TYPE_SPECULAR_TRANSMISSION)
+#define BXDF_IS_EMISSIVE(t) (t == BXDF_TYPE_EMISSIVE)
 
 float3 bxdfGetSample(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 inRayDir, float3 *outRayDir, float *pdf);
 float bxdfGetPdf(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir );
@@ -36,6 +38,8 @@ float3 bxdfGetSample(
 			return idealSpecularSample(surface, matNode, texMeta, texData, randSample, inRayDir, outRayDir, pdf);
 		case BXDF_TYPE_SPECULAR_TRANSMISSION:
 			return refractiveSample(surface, matNode, texMeta, texData, randSample, inRayDir, outRayDir, pdf);
+		case BXDF_TYPE_SPECULAR_MICROFACET:
+			return microfacetSample(surface, matNode, texMeta, texData, randSample, inRayDir, outRayDir, pdf);
 	}
 
 	return (float3)(0.0f, 0.0f, 0.0f);
@@ -58,6 +62,8 @@ float bxdfGetPdf(
 			return idealSpecularPdf();
 		case BXDF_TYPE_SPECULAR_TRANSMISSION:
 			return refractivePdf();
+		case BXDF_TYPE_SPECULAR_MICROFACET:
+			return microfacetPdf(surface, matNode, texMeta, texData, inRayDir, outRayDir);
 	}
 
 	return 0.0f;
@@ -80,10 +86,11 @@ float3 bxdfEval(
 			return idealSpecularEval();
 		case BXDF_TYPE_SPECULAR_TRANSMISSION:
 			return refractiveEval();
+		case BXDF_TYPE_SPECULAR_MICROFACET:
+			return microfacetEval(surface, matNode, texMeta, texData, inRayDir, outRayDir);
 	}
 
 	return (float3)(0.0f, 0.0f, 0.0f);
-
 } 
 
 

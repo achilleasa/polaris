@@ -4,13 +4,6 @@
 #define MAT_BLEND_FUNC_MIX 0
 #define MAT_BLEND_FUNC_FRESNEL 1
 
-#define MAT_BXDF_DIFFUSE (1 << 0)
-#define MAT_BXDF_SPECULAR (1 << 1)
-#define MAT_BXDF_REFRACTIVE (1 << 2)
-#define MAT_BXDF_EMISSIVE (1 << 3)
-
-#define MAT_IS_EMISSIVE(matNode) (matNode.bxdfType == MAT_BXDF_EMISSIVE)
-
 void matSelectNode(Surface *surface, float3 inRayDir, MaterialNode *selectedMaterial, __global MaterialNode* materialNodes, uint2 *rndState, __global TextureMetadata *texMeta, __global uchar *texData );
 float3 matGetSample3f(float2 uv, float3 defaultValue, int texIndex, __global TextureMetadata *texMeta, __global uchar* texData);
 float matGetSample1f(float2 uv, float defaultValue, int texIndex, __global TextureMetadata *texMeta, __global uchar* texData);

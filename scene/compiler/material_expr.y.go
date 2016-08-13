@@ -31,7 +31,8 @@ const FRESNEL = 57348
 const DIFFUSE = 57349
 const SPECULAR_REFLECTION = 57350
 const SPECULAR_TRANSMISSION = 57351
-const EMISSIVE = 57352
+const SPECULAR_MICROFACET = 57352
+const EMISSIVE = 57353
 
 var exprToknames = [...]string{
 	"$end",
@@ -46,6 +47,7 @@ var exprToknames = [...]string{
 	"DIFFUSE",
 	"SPECULAR_REFLECTION",
 	"SPECULAR_TRANSMISSION",
+	"SPECULAR_MICROFACET",
 	"EMISSIVE",
 }
 var exprStatenames = [...]string{}
@@ -54,7 +56,7 @@ const exprEofCode = 1
 const exprErrCode = 2
 const exprInitialStackSize = 16
 
-//line material_expr.y:118
+//line material_expr.y:131
 
 // The parser expects the lexer to return 0 on EOF.
 const EOF = 0
@@ -151,6 +153,8 @@ func (x *exprLex) lexText(c rune, yylval *exprSymType) int {
 		return SPECULAR_REFLECTION
 	case "T":
 		return SPECULAR_TRANSMISSION
+	case "M":
+		return SPECULAR_MICROFACET
 	case "E":
 		return EMISSIVE
 	case "mix":
@@ -202,51 +206,51 @@ var exprExca = [...]int{
 	-2, 0,
 }
 
-const exprNprod = 11
+const exprNprod = 12
 const exprPrivate = 57344
 
 var exprTokenNames []string
 var exprStates []string
 
-const exprLast = 23
+const exprLast = 24
 
 var exprAct = [...]int{
 
-	12, 8, 9, 4, 5, 6, 7, 22, 20, 17,
-	16, 23, 15, 21, 11, 10, 1, 18, 19, 14,
-	3, 13, 2,
+	13, 9, 10, 4, 5, 6, 7, 8, 23, 21,
+	18, 17, 24, 16, 22, 12, 11, 1, 19, 20,
+	15, 3, 14, 2,
 }
 var exprPact = [...]int{
 
-	-7, -1000, -1000, -1000, -1000, -1000, -1000, -1000, 11, 10,
-	-7, -7, 4, -1000, -1000, 3, -7, -7, 2, 8,
-	0, -1000, 6, -1000,
+	-7, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, 12,
+	11, -7, -7, 5, -1000, -1000, 4, -7, -7, 3,
+	9, 1, -1000, 7, -1000,
 }
 var exprPgo = [...]int{
 
-	0, 21, 19, 0, 16,
+	0, 22, 20, 0, 17,
 }
 var exprR1 = [...]int{
 
 	0, 4, 4, 2, 2, 3, 3, 1, 1, 1,
-	1,
+	1, 1,
 }
 var exprR2 = [...]int{
 
 	0, 1, 1, 8, 6, 1, 1, 1, 1, 1,
-	1,
+	1, 1,
 }
 var exprChk = [...]int{
 
-	-1000, -4, -1, -2, 10, 11, 12, 13, 8, 9,
-	4, 4, -3, -1, -2, -3, 6, 6, -3, -3,
-	6, 5, 7, 5,
+	-1000, -4, -1, -2, 10, 11, 12, 13, 14, 8,
+	9, 4, 4, -3, -1, -2, -3, 6, 6, -3,
+	-3, 6, 5, 7, 5,
 }
 var exprDef = [...]int{
 
-	0, -2, 1, 2, 7, 8, 9, 10, 0, 0,
-	0, 0, 0, 5, 6, 0, 0, 0, 0, 0,
-	0, 4, 0, 3,
+	0, -2, 1, 2, 7, 8, 9, 10, 11, 0,
+	0, 0, 0, 0, 5, 6, 0, 0, 0, 0,
+	0, 0, 4, 0, 3,
 }
 var exprTok1 = [...]int{
 
@@ -258,7 +262,7 @@ var exprTok1 = [...]int{
 }
 var exprTok2 = [...]int{
 
-	2, 3, 7, 8, 9, 10, 11, 12, 13,
+	2, 3, 7, 8, 9, 10, 11, 12, 13, 14,
 }
 var exprTok3 = [...]int{
 	0,
@@ -603,7 +607,7 @@ exprdefault:
 
 	case 3:
 		exprDollar = exprS[exprpt-8 : exprpt+1]
-		//line material_expr.y:47
+		//line material_expr.y:48
 		{
 			node := &scene.MaterialNode{}
 			node.Init()
@@ -617,7 +621,7 @@ exprdefault:
 		}
 	case 4:
 		exprDollar = exprS[exprpt-6 : exprpt+1]
-		//line material_expr.y:59
+		//line material_expr.y:60
 		{
 			node := &scene.MaterialNode{}
 			node.Init()
@@ -631,7 +635,7 @@ exprdefault:
 		}
 	case 7:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:77
+		//line material_expr.y:78
 		{
 			node := &scene.MaterialNode{}
 			node.Init()
@@ -643,7 +647,7 @@ exprdefault:
 		}
 	case 8:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:87
+		//line material_expr.y:88
 		{
 			node := &scene.MaterialNode{}
 			node.Init()
@@ -655,7 +659,7 @@ exprdefault:
 		}
 	case 9:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:97
+		//line material_expr.y:98
 		{
 			node := &scene.MaterialNode{}
 			node.Init()
@@ -669,7 +673,21 @@ exprdefault:
 		}
 	case 10:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:109
+		//line material_expr.y:110
+		{
+			node := &scene.MaterialNode{}
+			node.Init()
+			node.Kval = exprVAL.material.Ks.Vec4(0)
+			node.SetKvalTex(exprVAL.material.KsTex)
+			node.SetNormalTex(exprVAL.material.NormalTex)
+			node.Nval = exprVAL.material.Nr
+			node.SetNvalTex(exprVAL.material.NrTex)
+			node.SetBxdfType(scene.SpecularMicrofacet)
+			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
+		}
+	case 11:
+		exprDollar = exprS[exprpt-1 : exprpt+1]
+		//line material_expr.y:122
 		{
 			node := &scene.MaterialNode{}
 			node.Init()

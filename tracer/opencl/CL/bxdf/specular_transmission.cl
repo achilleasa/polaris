@@ -1,5 +1,5 @@
-#ifndef BXDF_REFRACTIVE_CL
-#define BXDF_REFRACTIVE_CL
+#ifndef BXDF_SPECULAR_TRANSMISSION_CL
+#define BXDF_SPECULAR_TRANSMISSION_CL
 
 float3 refractiveSample(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 rayInDir, float3 *rayOutDir, float *pdf);
 float refractivePdf();

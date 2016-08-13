@@ -120,6 +120,9 @@ type ParsedMaterial struct {
 	// Emissive color.
 	Ke types.Vec3
 
+	// Transmission filter
+	Tf types.Vec3
+
 	// Index of refraction.
 	Ni float32
 
@@ -130,9 +133,13 @@ type ParsedMaterial struct {
 	KdTex     int32
 	KsTex     int32
 	KeTex     int32
+	TfTex     int32
 	NormalTex int32
 	NiTex     int32
 	NrTex     int32
+
+	// Layered material expression.
+	MaterialExpression string
 }
 
 // Return true if material contains a diffuse component.
@@ -141,7 +148,7 @@ func (pm *ParsedMaterial) IsDiffuse() bool {
 }
 
 // Return true if material contains a specular component.
-func (pm *ParsedMaterial) IsSpecular() bool {
+func (pm *ParsedMaterial) IsSpecularReflection() bool {
 	return pm.Ks.Len() > 0 || pm.KsTex != -1
 }
 
@@ -151,7 +158,7 @@ func (pm *ParsedMaterial) IsEmissive() bool {
 }
 
 // Return true if material is refractive.
-func (pm *ParsedMaterial) IsRefractive() bool {
+func (pm *ParsedMaterial) IsSpecularTransmission() bool {
 	return pm.Ni != 0 || pm.NiTex != -1
 }
 
@@ -215,6 +222,7 @@ func NewParsedMaterial(name string) *ParsedMaterial {
 		KdTex:     -1,
 		KsTex:     -1,
 		KeTex:     -1,
+		TfTex:     -1,
 		NormalTex: -1,
 		NiTex:     -1,
 		NrTex:     -1,

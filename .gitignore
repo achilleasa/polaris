@@ -26,3 +26,5 @@ _testmain.go
 *.swp
 *.png
 .DS_Store
+
+y.output

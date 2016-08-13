@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/achilleasa/go-pathtrace/log"
@@ -23,9 +24,12 @@ type sceneCompiler struct {
 // optimized scene format.
 func Compile(parsedScene *scene.ParsedScene) (*scene.Scene, error) {
 	compiler := &sceneCompiler{
-		parsedScene:    parsedScene,
-		optimizedScene: &scene.Scene{},
-		logger:         log.New("scene compiler"),
+		parsedScene: parsedScene,
+		optimizedScene: &scene.Scene{
+			SceneDiffuseMatIndex:  -1,
+			SceneEmissiveMatIndex: -1,
+		},
+		logger: log.New("scene compiler"),
 	}
 
 	start := time.Now()
@@ -164,7 +168,7 @@ func (sc *sceneCompiler) partitionGeometry() error {
 				// Check if this an emissive primitive and keep track of it
 				// Since we may use multiple instances of this mesh we need a
 				// separate pass to generate a primitive for each mesh instance
-				emissiveNodeIndex := sc.findEmissiveNode(matNodeIndex)
+				emissiveNodeIndex := sc.findMaterialNodeByBxdf(matNodeIndex, scene.Emissive)
 				if emissiveNodeIndex != -1 {
 					meshEmissivePrimitives = append(meshEmissivePrimitives, &scene.EmissivePrimitive{
 						// area = 0.5 * len(cross(v2-v0, v2-v1))
@@ -224,13 +228,15 @@ func (sc *sceneCompiler) partitionGeometry() error {
 	}
 
 	// If a global emission map is defined for the scene create an emissive for it
-	sceneEmissiveMat := sc.optimizedScene.MaterialNodeList[sc.optimizedScene.SceneEmissiveMatIndex]
-	if sceneEmissiveMat.Kval.MaxComponent() > 0.0 || sceneEmissiveMat.GetKvalTex() != -1 {
-		emp := scene.EmissivePrimitive{
-			MaterialNodeIndex: sc.optimizedScene.SceneEmissiveMatIndex,
-			Type:              scene.EnvironmentLight,
+	if sc.optimizedScene.SceneEmissiveMatIndex != -1 {
+		sceneEmissiveMat := sc.optimizedScene.MaterialNodeList[sc.optimizedScene.SceneEmissiveMatIndex]
+		if sceneEmissiveMat.Kval.MaxComponent() > 0.0 || sceneEmissiveMat.GetKvalTex() != -1 {
+			emp := scene.EmissivePrimitive{
+				MaterialNodeIndex: uint32(sc.optimizedScene.SceneEmissiveMatIndex),
+				Type:              scene.EnvironmentLight,
+			}
+			sc.optimizedScene.EmissivePrimitives = append(sc.optimizedScene.EmissivePrimitives, emp)
 		}
-		sc.optimizedScene.EmissivePrimitives = append(sc.optimizedScene.EmissivePrimitives, emp)
 	}
 
 	if len(sc.optimizedScene.EmissivePrimitives) > 0 {
@@ -244,22 +250,22 @@ func (sc *sceneCompiler) partitionGeometry() error {
 	return nil
 }
 
-// Perform a DFS in a layered material tree trying to locate an emissive node.
-func (sc *sceneCompiler) findEmissiveNode(nodeIndex uint32) int32 {
+// Perform a DFS in a layered material tree trying to locate anode with a particular BXDF.
+func (sc *sceneCompiler) findMaterialNodeByBxdf(nodeIndex uint32, bxdf scene.MatBxdfType) int32 {
 	node := sc.optimizedScene.MaterialNodeList[nodeIndex]
 	if node.IsNode == 0 {
-		if node.GetBxdfType() == scene.Emissive {
+		if node.GetBxdfType() == bxdf {
 			return int32(nodeIndex)
 		}
 		return -1
 	}
 
-	out := sc.findEmissiveNode(node.GetLeftIndex())
+	out := sc.findMaterialNodeByBxdf(node.GetLeftIndex(), bxdf)
 	if out != -1 {
 		return out
 	}
 
-	return sc.findEmissiveNode(node.GetRightIndex())
+	return sc.findMaterialNodeByBxdf(node.GetRightIndex(), bxdf)
 }
 
 // Convert material definitions into a node-based structure that models a
@@ -272,137 +278,69 @@ func (sc *sceneCompiler) createLayeredMaterialTrees() error {
 	sc.optimizedScene.MaterialNodeList = make([]scene.MaterialNode, 0)
 	sc.optimizedScene.MaterialNodeRoots = make([]uint32, len(sc.parsedScene.Materials))
 
-	var nextNodeIndex uint32 = 0
-	var node scene.MaterialNode
-
+	var rootNodeIndex uint32 = 0
 	for matIndex, mat := range sc.parsedScene.Materials {
 		sc.logger.Infof(`processing material "%s"`, mat.Name)
-		nextNodeIndex = uint32(len(sc.optimizedScene.MaterialNodeList))
-		sc.optimizedScene.MaterialNodeRoots[matIndex] = nextNodeIndex
 
 		// Till we get material expressions working use a naive approach to building material nodes
 		isDiffuse := mat.IsDiffuse()
-		isSpecular := mat.IsSpecular()
-		isRefractive := mat.IsRefractive()
+		isSpecularReflection := mat.IsSpecularReflection()
+		isSpecularTransmission := mat.IsSpecularTransmission()
 		isEmissive := mat.IsEmissive()
 
-		// Special case for scene material
+		var materialExpr string
+		switch {
+		case mat.MaterialExpression != "":
+			materialExpr = mat.MaterialExpression
+		case isSpecularReflection && !(isDiffuse || isSpecularTransmission || isEmissive):
+			materialExpr = "S"
+		case isSpecularTransmission && !(isDiffuse || isEmissive):
+			materialExpr = "T"
+		case isSpecularReflection && isSpecularTransmission && !(isDiffuse || isEmissive):
+			materialExpr = "fresnel(S, T)"
+		case isEmissive:
+			materialExpr = "E"
+		default:
+			materialExpr = "D"
+		}
+
+		// Parse expression and generate material nodes
+		lexer := &exprLex{
+			line:     []byte(materialExpr),
+			compiler: sc,
+			material: mat,
+		}
+		parser := exprNewParser()
+		parser.Parse(lexer)
+
+		if lexer.lastError != nil {
+			return fmt.Errorf(
+				"could not parse expression %q for material %q: %s",
+				mat.MaterialExpression,
+				mat.Name,
+				lexer.lastError,
+			)
+		}
+
+		// Parser uses a stack so the last node to be appended will be the root
+		rootNodeIndex = uint32(len(sc.optimizedScene.MaterialNodeList) - 1)
+		sc.optimizedScene.MaterialNodeRoots[matIndex] = rootNodeIndex
+
+		// Handle special scene material
 		if mat.Name == sceneMaterialName {
-			// Create a two layer material where the left node contains
-			// the diffuse scene properties and the right node contains the emissive properties
-			node = scene.MaterialNode{}
-			node.Init()
-
-			node.IsNode = 1
-			node.SetLeftIndex(nextNodeIndex + 1)
-			node.SetRightIndex(nextNodeIndex + 2)
-			node.SetBlendFunc(scene.Mix)
-			sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, node)
-
-			// Left child: diffuse scene properties
-			node = scene.MaterialNode{}
-			node.Init()
-
-			node.Kval = mat.Kd.Vec4(0)
-			node.SetKvalTex(mat.KdTex)
-			node.SetBxdfType(scene.Diffuse)
-			sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, node)
-
-			// Right child: emissive
-			node = scene.MaterialNode{}
-			node.Init()
-
-			node.Kval = mat.Ke.Vec4(0)
-			node.SetKvalTex(mat.KeTex)
-			node.SetBxdfType(scene.Emissive)
-			sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, node)
-
-			// Keep track of the node indices for the diffuse and emissive components
-			sc.optimizedScene.SceneDiffuseMatIndex = nextNodeIndex + 1
-			sc.optimizedScene.SceneEmissiveMatIndex = nextNodeIndex + 2
-		} else if isSpecular && !(isDiffuse || isRefractive || isEmissive) {
-			// Ideal specular surface
-			node = scene.MaterialNode{}
-			node.Init()
-
-			node.Kval = mat.Ks.Vec4(0)
-			node.SetKvalTex(mat.KsTex)
-			node.SetNormalTex(mat.NormalTex)
-			node.SetBxdfType(scene.Specular)
-			sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, node)
-		} else if isRefractive && !(isDiffuse || isEmissive) {
-			// Ideal refractive surface
-			node = scene.MaterialNode{}
-			node.Init()
-
-			if mat.Ks.MaxComponent() == 0.0 && mat.KsTex == -1 {
-				node.Kval = types.Vec4{1.0, 1.0, 1.0, 0.0}
-			} else {
-				node.Kval = mat.Ks.Vec4(0)
-				node.SetKvalTex(mat.KsTex)
-			}
-			node.SetNormalTex(mat.NormalTex)
-			node.SetBxdfType(scene.Refractive)
-			node.Nval = mat.Ni
-			node.SetNvalTex(mat.NiTex)
-			sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, node)
-		} else if isSpecular && isRefractive && !(isDiffuse || isEmissive) {
-			// Ideal dielectric; define a 2-node material using a frensel blend func
-			node = scene.MaterialNode{}
-			node.Init()
-
-			node.IsNode = 1
-			node.SetLeftIndex(nextNodeIndex + 1)
-			node.SetRightIndex(nextNodeIndex + 2)
-			node.SetBlendFunc(scene.Fresnel)
-			node.Nval = mat.Ni
-			node.SetNvalTex(mat.NiTex)
-			sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, node)
-
-			// Left child: specular
-			node = scene.MaterialNode{}
-			node.Init()
-
-			node.Kval = mat.Ks.Vec4(0)
-			node.SetKvalTex(mat.KsTex)
-			node.SetNormalTex(mat.NormalTex)
-			node.SetBxdfType(scene.Specular)
-			sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, node)
-
-			// Right child: refractive
-			node = scene.MaterialNode{}
-			node.Init()
-
-			node.SetNormalTex(mat.NormalTex)
-			node.SetBxdfType(scene.Refractive)
-			node.Nval = mat.Ni
-			node.SetNvalTex(mat.NiTex)
-			sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, node)
-		} else if isEmissive {
-			// Light emitter
-			node = scene.MaterialNode{}
-			node.Init()
-
-			node.Kval = mat.Ke.Vec4(0)
-			node.SetKvalTex(mat.KeTex)
-			node.SetNormalTex(mat.NormalTex)
-			node.SetBxdfType(scene.Emissive)
-			sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, node)
-		} else {
-			// Treat everything else as diffuse
-			node = scene.MaterialNode{}
-			node.Init()
-
-			node.Kval = mat.Kd.Vec4(0)
-			node.SetKvalTex(mat.KdTex)
-			node.SetNormalTex(mat.NormalTex)
-			node.SetBxdfType(scene.Diffuse)
-			sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, node)
+			sc.optimizedScene.SceneDiffuseMatIndex = sc.findMaterialNodeByBxdf(rootNodeIndex, scene.Diffuse)
+			sc.optimizedScene.SceneEmissiveMatIndex = sc.findMaterialNodeByBxdf(rootNodeIndex, scene.Emissive)
 		}
 	}
 
 	sc.logger.Noticef("processed materials in %d ms", time.Since(start).Nanoseconds()/1e6)
 	return nil
+}
+
+// Append material node and return its insertion index.
+func (sc *sceneCompiler) appendMaterialNode(node *scene.MaterialNode) uint32 {
+	sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, *node)
+	return uint32(len(sc.optimizedScene.MaterialNodeList) - 1)
 }
 
 // Create a material for representing the scene background, ambient light e.t.c.

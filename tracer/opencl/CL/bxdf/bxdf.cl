@@ -2,16 +2,16 @@
 #define BXDF_CL
 
 #include "lambert.cl"
-#include "ideal_specular.cl"
-#include "refractive.cl"
+#include "specular_reflection.cl"
+#include "specular_transmission.cl"
 
 #define BXDF_TYPE_DIFFUSE 1 << 0
-#define BXDF_TYPE_SPECULAR 1 << 1
-#define BXDF_TYPE_REFRACTIVE 1 << 2
+#define BXDF_TYPE_SPECULAR_REFLECTION 1 << 1
+#define BXDF_TYPE_SPECULAR_TRANSMISSION 1 << 2
 #define BXDF_TYPE_EMISSIVE 1 << 3
 
 // Returns true if BXDF models a transmission
-#define BXDF_IS_TRANSMISSION(t) (t == BXDF_TYPE_REFRACTIVE)
+#define BXDF_IS_TRANSMISSION(t) (t == BXDF_TYPE_SPECULAR_TRANSMISSION)
 
 float3 bxdfGetSample(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 inRayDir, float3 *outRayDir, float *pdf);
 float bxdfGetPdf(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir );
@@ -32,9 +32,9 @@ float3 bxdfGetSample(
 	switch(matNode->bxdfType){
 		case BXDF_TYPE_DIFFUSE:
 			return lambertDiffuseSample(surface, matNode, texMeta, texData, randSample, outRayDir, pdf);
-		case BXDF_TYPE_SPECULAR:
+		case BXDF_TYPE_SPECULAR_REFLECTION:
 			return idealSpecularSample(surface, matNode, texMeta, texData, randSample, inRayDir, outRayDir, pdf);
-		case BXDF_TYPE_REFRACTIVE:
+		case BXDF_TYPE_SPECULAR_TRANSMISSION:
 			return refractiveSample(surface, matNode, texMeta, texData, randSample, inRayDir, outRayDir, pdf);
 	}
 
@@ -54,9 +54,9 @@ float bxdfGetPdf(
 	switch(matNode->bxdfType){
 		case BXDF_TYPE_DIFFUSE:
 			return lambertDiffusePdf(surface, matNode, outRayDir);
-		case BXDF_TYPE_SPECULAR:
+		case BXDF_TYPE_SPECULAR_REFLECTION:
 			return idealSpecularPdf();
-		case BXDF_TYPE_REFRACTIVE:
+		case BXDF_TYPE_SPECULAR_TRANSMISSION:
 			return refractivePdf();
 	}
 
@@ -76,9 +76,9 @@ float3 bxdfEval(
 	switch(matNode->bxdfType){
 		case BXDF_TYPE_DIFFUSE:
 			return lambertDiffuseEval(surface, matNode, texMeta, texData, outRayDir);
-		case BXDF_TYPE_SPECULAR:
+		case BXDF_TYPE_SPECULAR_REFLECTION:
 			return idealSpecularEval();
-		case BXDF_TYPE_REFRACTIVE:
+		case BXDF_TYPE_SPECULAR_TRANSMISSION:
 			return refractiveEval();
 	}
 

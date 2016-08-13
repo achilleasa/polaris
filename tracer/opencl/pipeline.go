@@ -124,13 +124,15 @@ func MonteCarloIntegrator(debugFlags DebugFlag, numBounces uint32) PipelineStage
 		var bounce uint32
 		for bounce = 0; bounce < numBounces; bounce++ {
 			// Shade misses
-			if bounce == 0 {
-				_, err = tr.resources.ShadePrimaryRayMisses(tr.sceneData.SceneDiffuseMatIndex, activeRayBuf, numPixels)
-			} else {
-				_, err = tr.resources.ShadeIndirectRayMisses(tr.sceneData.SceneDiffuseMatIndex, activeRayBuf, numPixels)
-			}
-			if err != nil {
-				return time.Since(start), err
+			if tr.sceneData.SceneDiffuseMatIndex != -1 {
+				if bounce == 0 {
+					_, err = tr.resources.ShadePrimaryRayMisses(uint32(tr.sceneData.SceneDiffuseMatIndex), activeRayBuf, numPixels)
+				} else {
+					_, err = tr.resources.ShadeIndirectRayMisses(uint32(tr.sceneData.SceneDiffuseMatIndex), activeRayBuf, numPixels)
+				}
+				if err != nil {
+					return time.Since(start), err
+				}
 			}
 
 			// Shade hits

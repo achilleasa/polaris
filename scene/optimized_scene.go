@@ -93,8 +93,8 @@ type MatBxdfType int32
 
 const (
 	Diffuse MatBxdfType = 1 << iota
-	Specular
-	Refractive
+	SpecularReflection
+	SpecularTransmission
 	Emissive
 )
 
@@ -262,8 +262,8 @@ type Scene struct {
 
 	// Indices to material nodes used for storing the scene global
 	// properties such as diffuse and emissive colors.
-	SceneDiffuseMatIndex  uint32
-	SceneEmissiveMatIndex uint32
+	SceneDiffuseMatIndex  int32
+	SceneEmissiveMatIndex int32
 
 	// The scene camera.
 	Camera *Camera

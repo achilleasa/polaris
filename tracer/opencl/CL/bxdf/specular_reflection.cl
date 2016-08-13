@@ -1,5 +1,5 @@
-#ifndef BXDF_IDEAL_SPECULAR_CL
-#define BXDF_IDEAL_SPECULAR_CL
+#ifndef BXDF_SPECULAR_REFLECTION_CL
+#define BXDF_SPECULAR_REFLECTION_CL
 
 float3 idealSpecularSample(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 rayInDir, float3 *rayOutDir, float *pdf);
 float idealSpecularPdf();

@@ -510,7 +510,7 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 			}
 
 			switch lineTokens[0] {
-			case "Kd", "Ks", "Ke":
+			case "Kd", "Ks", "Ke", "Tf":
 
 				var target *types.Vec3
 				switch lineTokens[0] {
@@ -520,6 +520,8 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 					target = &curMaterial.Ks
 				case "Ke":
 					target = &curMaterial.Ke
+				case "Tf":
+					target = &curMaterial.Tf
 				}
 
 				*target, err = parseVec3(lineTokens)
@@ -534,7 +536,7 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 				}
 
 				*target, err = parseFloat32(lineTokens)
-			case "map_Kd", "map_Ks", "map_Ke", "map_bump", "map_Ni", "map_Nr":
+			case "map_Kd", "map_Ks", "map_Ke", "map_Tf", "map_bump", "map_Ni", "map_Nr":
 				var target *int32
 				switch lineTokens[0] {
 				case "map_Kd":
@@ -543,6 +545,8 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 					target = &curMaterial.KsTex
 				case "map_Ke":
 					target = &curMaterial.KeTex
+				case "map_Tf":
+					target = &curMaterial.TfTex
 				case "map_bump":
 					target = &curMaterial.NormalTex
 				case "map_Ni":
@@ -563,6 +567,11 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 				}
 
 				*target, err = r.loadTexture(imgRes)
+			case "mat_expr":
+				if len(lineTokens) < 2 {
+					return r.emitError(res.Path(), lineNum, `unsupported syntax for "%s"; expected 1 argument; got %d`, lineTokens[0], len(lineTokens)-1)
+				}
+				curMaterial.MaterialExpression = strings.Join(lineTokens[1:], " ")
 			}
 
 			// Report any errors

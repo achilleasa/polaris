@@ -298,7 +298,7 @@ func TestCreateLayeredMaterialTrees(t *testing.T) {
 		t.Fatalf("[mat %d] expected Normal tex index to be %d; got %d", matIndex, expValue, node.UnionData[1])
 	}
 
-	if node.UnionData[3] != int32(scene.Specular) {
+	if node.UnionData[3] != int32(scene.SpecularReflection) {
 		t.Fatalf("[mat %d] expected BRDF type to be Specular; got %d", matIndex, node.UnionData[3])
 	}
 
@@ -320,7 +320,7 @@ func TestCreateLayeredMaterialTrees(t *testing.T) {
 		t.Fatalf("[mat %d] expected Normal tex index to be %d; got %d", matIndex, expValue, node.UnionData[1])
 	}
 
-	if node.UnionData[3] != int32(scene.Refractive) {
+	if node.UnionData[3] != int32(scene.SpecularTransmission) {
 		t.Fatalf("[mat %d] expected BRDF type to be Refractive; got %d", matIndex, node.UnionData[3])
 	}
 
@@ -354,7 +354,7 @@ func TestCreateLayeredMaterialTrees(t *testing.T) {
 			t.Fatalf("[mat %d - left child] expected Normal tex index to be %d; got %d", matIndex, expValue, leftNode.UnionData[1])
 		}
 
-		if leftNode.UnionData[3] != int32(scene.Specular) {
+		if leftNode.UnionData[3] != int32(scene.SpecularReflection) {
 			t.Fatalf("[mat %d - left child] expected BRDF type to be Specular; got %d", matIndex, leftNode.UnionData[3])
 		}
 	}
@@ -377,7 +377,7 @@ func TestCreateLayeredMaterialTrees(t *testing.T) {
 			t.Fatalf("[mat %d - right child] expected Normal tex index to be %d; got %d", matIndex, expValue, rightNode.UnionData[1])
 		}
 
-		if rightNode.UnionData[3] != int32(scene.Refractive) {
+		if rightNode.UnionData[3] != int32(scene.SpecularTransmission) {
 			t.Fatalf("[mat %d - right child] expected BRDF type to be Refractive; got %d", matIndex, rightNode.UnionData[3])
 		}
 	}

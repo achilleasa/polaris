@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	minPrimitivesPerLeaf = 10
-	sceneMaterialName    = "scene_properties"
+	minPrimitivesPerLeaf      = 10
+	sceneDiffuseMaterialName  = "scene_diffuse_material"
+	sceneEmissiveMaterialName = "scene_emissive_material"
 )
 
 type sceneCompiler struct {
@@ -272,7 +273,6 @@ func (sc *sceneCompiler) findMaterialNodeByBxdf(nodeIndex uint32, bxdf scene.Mat
 // layered material.
 func (sc *sceneCompiler) createLayeredMaterialTrees() error {
 	start := time.Now()
-	sc.createMaterialForScene()
 	sc.logger.Noticef("processing %d materials", len(sc.parsedScene.Materials))
 
 	sc.optimizedScene.MaterialNodeList = make([]scene.MaterialNode, 0)
@@ -327,8 +327,10 @@ func (sc *sceneCompiler) createLayeredMaterialTrees() error {
 		sc.optimizedScene.MaterialNodeRoots[matIndex] = rootNodeIndex
 
 		// Handle special scene material
-		if mat.Name == sceneMaterialName {
+		if mat.Name == sceneDiffuseMaterialName {
 			sc.optimizedScene.SceneDiffuseMatIndex = sc.findMaterialNodeByBxdf(rootNodeIndex, scene.Diffuse)
+		}
+		if mat.Name == sceneEmissiveMaterialName {
 			sc.optimizedScene.SceneEmissiveMatIndex = sc.findMaterialNodeByBxdf(rootNodeIndex, scene.Emissive)
 		}
 	}
@@ -341,20 +343,6 @@ func (sc *sceneCompiler) createLayeredMaterialTrees() error {
 func (sc *sceneCompiler) appendMaterialNode(node *scene.MaterialNode) uint32 {
 	sc.optimizedScene.MaterialNodeList = append(sc.optimizedScene.MaterialNodeList, *node)
 	return uint32(len(sc.optimizedScene.MaterialNodeList) - 1)
-}
-
-// Create a material for representing the scene background, ambient light e.t.c.
-// This method will check for the presence of a scene material and only create
-// a new one if its missing.
-func (sc *sceneCompiler) createMaterialForScene() {
-	for _, mat := range sc.parsedScene.Materials {
-		if mat.Name == sceneMaterialName {
-			return
-		}
-	}
-
-	// Just add a blank material
-	sc.parsedScene.Materials = append(sc.parsedScene.Materials, scene.NewParsedMaterial(sceneMaterialName))
 }
 
 // Initialize and position the camera for the scene.

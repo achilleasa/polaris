@@ -17,7 +17,7 @@ float3 refractiveSample(Surface *surface, MaterialNode *matNode, __global Textur
 	bool entering = cosI > 0.0f;
 
 	float etaI = 1.0f;
-	float etaT = matGetSample1f(surface->uv, matNode->nval, matNode->nvalTex, texMeta, texData);
+	float etaT = matGetSample1f(surface->uv, matNode->ior, matNode->iorTex, texMeta, texData);
 	float3 surfNormal = surface->normal;
 
 	// If we are exiting the area we need to flip the normal and incident/transmission etas 

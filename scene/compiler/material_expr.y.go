@@ -56,7 +56,7 @@ const exprEofCode = 1
 const exprErrCode = 2
 const exprInitialStackSize = 16
 
-//line material_expr.y:131
+//line material_expr.y:139
 
 // The parser expects the lexer to return 0 on EOF.
 const EOF = 0
@@ -666,14 +666,17 @@ exprdefault:
 			node.Kval = exprVAL.material.Tf.Vec4(0)
 			node.SetKvalTex(exprVAL.material.TfTex)
 			node.SetNormalTex(exprVAL.material.NormalTex)
-			node.Nval = exprVAL.material.Ni
-			node.SetNvalTex(exprVAL.material.NiTex)
+			if exprVAL.material.Ni <= 0.0 {
+				exprVAL.material.Ni = 1.0
+			}
+			node.IOR = exprVAL.material.Ni
+			node.SetIORTex(exprVAL.material.NiTex)
 			node.SetBxdfType(scene.SpecularTransmission)
 			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
 		}
 	case 10:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:110
+		//line material_expr.y:113
 		{
 			node := &scene.MaterialNode{}
 			node.Init()
@@ -682,12 +685,17 @@ exprdefault:
 			node.SetNormalTex(exprVAL.material.NormalTex)
 			node.Nval = exprVAL.material.Nr
 			node.SetNvalTex(exprVAL.material.NrTex)
+			if exprVAL.material.Ni <= 0.0 {
+				exprVAL.material.Ni = 1.0
+			}
+			node.IOR = exprVAL.material.Ni
+			node.SetIORTex(exprVAL.material.NiTex)
 			node.SetBxdfType(scene.SpecularMicrofacet)
 			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
 		}
 	case 11:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:122
+		//line material_expr.y:130
 		{
 			node := &scene.MaterialNode{}
 			node.Init()

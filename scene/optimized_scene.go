@@ -118,11 +118,11 @@ type MaterialNode struct {
 	// For leafs it contains a BRDF-specific parameter like roughness e.t.c
 	Nval float32
 
+	IOR    float32
+	IORTex int32
+
 	// Set to 1 if this is a node; 0 if this is a leaf
 	IsNode uint32
-
-	// Alignment padding
-	reserved [2]float32
 
 	// This union like structure has different contents depending on the node
 	// type.
@@ -172,6 +172,15 @@ func (m *MaterialNode) GetRightIndex() uint32 {
 // Set node blend function.
 func (m *MaterialNode) SetBlendFunc(blendfunc MatNodeBlendFunc) {
 	m.UnionData[3] = int32(blendfunc)
+}
+
+// Set IOR tex index.
+func (m *MaterialNode) SetIORTex(tex *ParsedTexture) {
+	if tex == nil {
+		m.IORTex = -1
+		return
+	}
+	m.IORTex = int32(tex.TexIndex)
 }
 
 // Set Kval tex index.

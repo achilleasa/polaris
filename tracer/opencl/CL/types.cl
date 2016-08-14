@@ -122,11 +122,14 @@ typedef struct {
 	// BRDF-specific parameter (roughness e.t.c) for leafs and blend parameter
 	// (IOR, mix probability) for nodes
 	float nval;
-
-	uint isNode;
 	
-	// alignment padding
-	float _reserved[2];
+	// Index of refraction
+	float ior;
+
+	// texture index for overriding ior
+	int iorTex;
+	
+	uint isNode;
 
 	union {
 		// For intermediate nodes

@@ -101,8 +101,11 @@ BSDF:
 		node.Kval = exprVAL.material.Tf.Vec4(0)
 		node.SetKvalTex(exprVAL.material.TfTex)
 		node.SetNormalTex(exprVAL.material.NormalTex)
-		node.Nval = exprVAL.material.Ni
-		node.SetNvalTex(exprVAL.material.NiTex)
+		if exprVAL.material.Ni <= 0.0 {
+			exprVAL.material.Ni = 1.0
+		}
+		node.IOR = exprVAL.material.Ni
+		node.SetIORTex(exprVAL.material.NiTex)
 		node.SetBxdfType(scene.SpecularTransmission)
 		$$ = exprVAL.compiler.appendMaterialNode(node)
 	}
@@ -115,6 +118,11 @@ BSDF:
 		node.SetNormalTex(exprVAL.material.NormalTex)
 		node.Nval = exprVAL.material.Nr
 		node.SetNvalTex(exprVAL.material.NrTex)
+		if exprVAL.material.Ni <= 0.0 {
+			exprVAL.material.Ni = 1.0
+		}
+		node.IOR = exprVAL.material.Ni
+		node.SetIORTex(exprVAL.material.NiTex)
 		node.SetBxdfType(scene.SpecularMicrofacet)
 		$$ = exprVAL.compiler.appendMaterialNode(node)
 	}

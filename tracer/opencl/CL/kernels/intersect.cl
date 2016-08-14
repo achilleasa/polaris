@@ -117,7 +117,7 @@ __kernel void rayIntersectionTest(
 					}
 
 					float t = dot(edge02, qVec) * invDet;
-					if (t > INTERSECTION_EPSILON){
+					if (t > INTERSECTION_EPSILON && t < ray.origin.w){
 						gotHit = 1;
 						stackIndex = -1;
 						break;
@@ -191,9 +191,6 @@ __kernel void rayIntersectionQuery(
 		__global Intersection* intersections
 		){
 
-	Intersection intersection;
-	intersection.wuvt.w = FLT_MAX;
-
 	int globalId = get_global_id(0);
 	if(globalId >= *numRays){
 		return;
@@ -220,6 +217,10 @@ __kernel void rayIntersectionQuery(
 	float3 origRayOrigin = ray.origin.xyz;
 	float3 origRayDir = ray.dir.xyz;
 
+	// Set initial intersection to the ray max dist
+	Intersection intersection;
+	intersection.wuvt.w = ray.origin.w;
+	
 	// Setup stack
 	stackIndex = 0;
 	meshBvhStackStartIndex = -1;
@@ -341,7 +342,7 @@ __kernel void rayIntersectionQuery(
 	}
 			
 	// Update hit flag
-	hitFlag[globalId] = intersection.wuvt.w < FLT_MAX ? 1 : 0;
+	hitFlag[globalId] = intersection.wuvt.w < ray.origin.w ? 1 : 0;
 	intersections[globalId] = intersection;
 }
 
@@ -358,9 +359,6 @@ __kernel void rayPacketIntersectionQuery(
 		__global int* hitFlag,
 		__global Intersection* intersections
 		){
-
-	Intersection intersection;
-	intersection.wuvt.w = FLT_MAX;
 
 	int globalId = get_global_id(0);
 	if (globalId >= *numRays){
@@ -390,6 +388,10 @@ __kernel void rayPacketIntersectionQuery(
 	Ray	ray = rays[globalId];
 	float3 origRayOrigin = ray.origin.xyz;
 	float3 origRayDir = ray.dir.xyz;
+
+	// Set initial intersection to the ray max dist
+	Intersection intersection;
+	intersection.wuvt.w = ray.origin.w;
 
 	// Traversal preferences
 	int packetWantsLeft, packetWantsRight;
@@ -568,7 +570,7 @@ __kernel void rayPacketIntersectionQuery(
 	}
 			
 	// Update hit flag
-	hitFlag[globalId] = intersection.wuvt.w < FLT_MAX ? 1 : 0;
+	hitFlag[globalId] = intersection.wuvt.w < ray.origin.w ? 1 : 0;
 	intersections[globalId] = intersection;
 }
 

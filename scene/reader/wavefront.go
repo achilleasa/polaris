@@ -24,8 +24,8 @@ type wavefrontSceneReader struct {
 	// A map of material names to material index.
 	matNameToIndex map[string]uint32
 
-	// Currently selected material index
-	curMaterial int32
+	// Currently selected material.
+	curMaterial *scenePkg.ParsedMaterial
 
 	// List of vertices, normals and uv coords.
 	vertexList []types.Vec3
@@ -43,7 +43,6 @@ func newWavefrontReader() *wavefrontSceneReader {
 		logger:         log.New("wavefront scene reader"),
 		sceneGraph:     scenePkg.NewParsedScene(),
 		matNameToIndex: make(map[string]uint32, 0),
-		curMaterial:    -1,
 		vertexList:     make([]types.Vec3, 0),
 		normalList:     make([]types.Vec3, 0),
 		uvList:         make([]types.Vec2, 0),
@@ -118,7 +117,7 @@ func (r *wavefrontSceneReader) popFrame() {
 }
 
 // Create and select a default material for surfaces not using one.
-func (r *wavefrontSceneReader) defaultMaterial() int32 {
+func (r *wavefrontSceneReader) defaultMaterial() *scenePkg.ParsedMaterial {
 	matName := ""
 
 	// Search for material in referenced list
@@ -127,8 +126,9 @@ func (r *wavefrontSceneReader) defaultMaterial() int32 {
 		// Add it now
 		r.sceneGraph.Materials = append(r.sceneGraph.Materials, &scenePkg.ParsedMaterial{Kd: types.Vec3{0.7, 0.7, 0.7}})
 		matIndex = uint32(len(r.sceneGraph.Materials) - 1)
+		r.matNameToIndex[matName] = matIndex
 	}
-	r.curMaterial = int32(matIndex)
+	r.curMaterial = r.sceneGraph.Materials[matIndex]
 	return r.curMaterial
 }
 
@@ -185,7 +185,7 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 			}
 
 			// Activate material
-			r.curMaterial = int32(matIndex)
+			r.curMaterial = r.sceneGraph.Materials[matIndex]
 		case "v":
 			v, err := parseVec3(lineTokens)
 			if err != nil {
@@ -415,10 +415,12 @@ func (r *wavefrontSceneReader) parseFace(lineTokens []string) ([]*scenePkg.Parse
 		}
 	}
 
-	// If no material defined select the default
-	if r.curMaterial < 0 {
+	// If no material defined select the default. Also flag the current material
+	// as being in use so we don't prune it later.
+	if r.curMaterial == nil {
 		r.curMaterial = r.defaultMaterial()
 	}
+	r.curMaterial.Used = true
 
 	// If no normals are available generate them from the vertices
 	if !hasNormals {
@@ -450,10 +452,10 @@ func (r *wavefrontSceneReader) parseFace(lineTokens []string) ([]*scenePkg.Parse
 		}
 
 		prim := &scenePkg.ParsedPrimitive{
-			Vertices:      triVerts,
-			Normals:       triNormals,
-			UVs:           triUVs,
-			MaterialIndex: uint32(r.curMaterial),
+			Vertices: triVerts,
+			Normals:  triNormals,
+			UVs:      triUVs,
+			Material: r.curMaterial,
 		}
 		prim.SetBBox(
 			[2]types.Vec3{
@@ -537,7 +539,7 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 
 				*target, err = parseFloat32(lineTokens)
 			case "map_Kd", "map_Ks", "map_Ke", "map_Tf", "map_bump", "map_Ni", "map_Nr":
-				var target *int32
+				var target **scenePkg.ParsedTexture
 				switch lineTokens[0] {
 				case "map_Kd":
 					target = &curMaterial.KdTex
@@ -566,7 +568,8 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 					return r.emitError(res.Path(), lineNum, err.Error())
 				}
 
-				*target, err = r.loadTexture(imgRes)
+				*target, err = newTexture(imgRes)
+				r.sceneGraph.Textures = append(r.sceneGraph.Textures, *target)
 			case "mat_expr":
 				if len(lineTokens) < 2 {
 					return r.emitError(res.Path(), lineNum, `unsupported syntax for "%s"; expected 1 argument; got %d`, lineTokens[0], len(lineTokens)-1)
@@ -582,17 +585,6 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 	}
 
 	return nil
-}
-
-// Load texture and return its index in the texture list.
-func (r *wavefrontSceneReader) loadTexture(res *resource) (int32, error) {
-	tex, err := newTexture(res)
-	if err != nil {
-		return -1, err
-	}
-
-	r.sceneGraph.Textures = append(r.sceneGraph.Textures, tex)
-	return int32(len(r.sceneGraph.Textures) - 1), nil
 }
 
 // Given an index for a face coord type (vertex, normal, tex) calculate the

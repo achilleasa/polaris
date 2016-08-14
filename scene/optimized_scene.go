@@ -175,8 +175,12 @@ func (m *MaterialNode) SetBlendFunc(blendfunc MatNodeBlendFunc) {
 }
 
 // Set Kval tex index.
-func (m *MaterialNode) SetKvalTex(texIndex int32) {
-	m.UnionData[0] = texIndex
+func (m *MaterialNode) SetKvalTex(tex *ParsedTexture) {
+	if tex == nil {
+		m.UnionData[0] = -1
+		return
+	}
+	m.UnionData[0] = int32(tex.TexIndex)
 }
 
 // Get Kval tex index.
@@ -185,13 +189,21 @@ func (m *MaterialNode) GetKvalTex() int32 {
 }
 
 // Set normal tex index.
-func (m *MaterialNode) SetNormalTex(texIndex int32) {
-	m.UnionData[1] = texIndex
+func (m *MaterialNode) SetNormalTex(tex *ParsedTexture) {
+	if tex == nil {
+		m.UnionData[1] = -1
+		return
+	}
+	m.UnionData[1] = int32(tex.TexIndex)
 }
 
 // Set Nval tex index.
-func (m *MaterialNode) SetNvalTex(texIndex int32) {
-	m.UnionData[2] = texIndex
+func (m *MaterialNode) SetNvalTex(tex *ParsedTexture) {
+	if tex == nil {
+		m.UnionData[2] = -1
+		return
+	}
+	m.UnionData[2] = int32(tex.TexIndex)
 }
 
 // Set leaf BxDF type.

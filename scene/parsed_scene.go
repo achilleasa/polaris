@@ -8,10 +8,10 @@ import (
 
 // The primitive struct represents a parsed triangle primitive.
 type ParsedPrimitive struct {
-	Vertices      [3]types.Vec3
-	Normals       [3]types.Vec3
-	UVs           [3]types.Vec2
-	MaterialIndex uint32
+	Vertices [3]types.Vec3
+	Normals  [3]types.Vec3
+	UVs      [3]types.Vec2
+	Material *ParsedMaterial
 
 	bbox   [2]types.Vec3
 	center types.Vec3
@@ -130,36 +130,68 @@ type ParsedMaterial struct {
 	Nr float32
 
 	// Textures for modulating above parameters.
-	KdTex     int32
-	KsTex     int32
-	KeTex     int32
-	TfTex     int32
-	NormalTex int32
-	NiTex     int32
-	NrTex     int32
+	KdTex     *ParsedTexture
+	KsTex     *ParsedTexture
+	KeTex     *ParsedTexture
+	TfTex     *ParsedTexture
+	NormalTex *ParsedTexture
+	NiTex     *ParsedTexture
+	NrTex     *ParsedTexture
 
 	// Layered material expression.
 	MaterialExpression string
+
+	// Flag to quickly check if any primitive references this material.
+	Used bool
+
+	// The material slice index allocated by the compiler for this material.
+	MatIndex uint32
+}
+
+// Flag material textures as used
+func (pm *ParsedMaterial) MarkTexturesAsUsed() {
+	pm.Used = true
+	if pm.KdTex != nil {
+		pm.KdTex.Used = true
+	}
+	if pm.KsTex != nil {
+		pm.KsTex.Used = true
+	}
+	if pm.KeTex != nil {
+		pm.KeTex.Used = true
+	}
+	if pm.TfTex != nil {
+		pm.TfTex.Used = true
+	}
+	if pm.NormalTex != nil {
+		pm.NormalTex.Used = true
+	}
+	if pm.NiTex != nil {
+		pm.NiTex.Used = true
+	}
+	if pm.NrTex != nil {
+		pm.NrTex.Used = true
+	}
 }
 
 // Return true if material contains a diffuse component.
 func (pm *ParsedMaterial) IsDiffuse() bool {
-	return pm.Kd.Len() > 0 || pm.KdTex != -1
+	return pm.Kd.Len() > 0 || pm.KdTex != nil
 }
 
 // Return true if material contains a specular component.
 func (pm *ParsedMaterial) IsSpecularReflection() bool {
-	return pm.Ks.Len() > 0 || pm.KsTex != -1
+	return pm.Ks.Len() > 0 || pm.KsTex != nil
 }
 
 // Return true if material contains an emissive component.
 func (pm *ParsedMaterial) IsEmissive() bool {
-	return pm.Ke.Len() > 0 || pm.KeTex != -1
+	return pm.Ke.Len() > 0 || pm.KeTex != nil
 }
 
 // Return true if material is refractive.
 func (pm *ParsedMaterial) IsSpecularTransmission() bool {
-	return pm.Ni != 0 || pm.NiTex != -1
+	return pm.Ni != 0 || pm.NiTex != nil
 }
 
 // A texture image and its metadata.
@@ -170,6 +202,11 @@ type ParsedTexture struct {
 	Height uint32
 
 	Data []byte
+
+	Used bool
+
+	// The texture slice index allocated by the compiler for this material.
+	TexIndex uint32
 }
 
 // Camera settings
@@ -218,13 +255,5 @@ func NewParsedMesh(name string) *ParsedMesh {
 func NewParsedMaterial(name string) *ParsedMaterial {
 	return &ParsedMaterial{
 		Name: name,
-		// Disable textures,
-		KdTex:     -1,
-		KsTex:     -1,
-		KeTex:     -1,
-		TfTex:     -1,
-		NormalTex: -1,
-		NiTex:     -1,
-		NrTex:     -1,
 	}
 }

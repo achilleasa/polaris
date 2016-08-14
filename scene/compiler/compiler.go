@@ -61,34 +61,65 @@ func Compile(parsedScene *scene.ParsedScene) (*scene.Scene, error) {
 	return compiler.optimizedScene, nil
 }
 
+// Iterate through all materials that are in use and flag their textures as being in use.
+// This method will also manually flag the special scene diffuse/emissive materials as
+// being in use as no primitives reference them.
+func (sc *sceneCompiler) flagUsedTextures() {
+	for _, mat := range sc.parsedScene.Materials {
+		if mat.Name == sceneDiffuseMaterialName || mat.Name == sceneEmissiveMaterialName {
+			mat.Used = true
+		}
+
+		if mat.Used {
+			mat.MarkTexturesAsUsed()
+		}
+	}
+}
+
 // Allocate a contiguous memory block for all texture data and initialize the
 // scene's texture metadata so that they point to the proper index inside the block.
 func (sc *sceneCompiler) bakeTextures() error {
 	start := time.Now()
 	sc.logger.Noticef("processing %d textures", len(sc.parsedScene.Textures))
 
+	sc.flagUsedTextures()
+
 	// Find how much memory we need. To ensure proper memory alignment we pad
 	// each texture's data len so its a multiple of a qword
 	var totalDataLen uint32 = 0
+	activeTextures := 0
 	for _, tex := range sc.parsedScene.Textures {
+		// Skip unused textures
+		if !tex.Used {
+			continue
+		}
 		totalDataLen += align4(len(tex.Data))
+		activeTextures++
 	}
 
 	sc.optimizedScene.TextureData = make([]byte, totalDataLen)
-	sc.optimizedScene.TextureMetadata = make([]scene.TextureMetadata, len(sc.parsedScene.Textures))
+	sc.optimizedScene.TextureMetadata = make([]scene.TextureMetadata, activeTextures)
 	var offset uint32 = 0
-	for index, tex := range sc.parsedScene.Textures {
-		sc.optimizedScene.TextureMetadata[index].Format = tex.Format
-		sc.optimizedScene.TextureMetadata[index].Width = tex.Width
-		sc.optimizedScene.TextureMetadata[index].Height = tex.Height
-		sc.optimizedScene.TextureMetadata[index].DataOffset = offset
+	var texIndex uint32 = 0
+	for _, tex := range sc.parsedScene.Textures {
+		if !tex.Used {
+			continue
+		}
+		sc.optimizedScene.TextureMetadata[texIndex].Format = tex.Format
+		sc.optimizedScene.TextureMetadata[texIndex].Width = tex.Width
+		sc.optimizedScene.TextureMetadata[texIndex].Height = tex.Height
+		sc.optimizedScene.TextureMetadata[texIndex].DataOffset = offset
 
 		// Copy data
 		copy(sc.optimizedScene.TextureData[offset:], tex.Data)
 		offset += uint32(align4(len(tex.Data)))
+
+		// Set TexIndex in the parsed texture so it can be used by the material compiler
+		tex.TexIndex = texIndex
+		texIndex++
 	}
 
-	sc.logger.Noticef("processed textures in %d ms", time.Since(start).Nanoseconds()/1e6)
+	sc.logger.Noticef("processed textures in %d ms (pruned: %d)", time.Since(start).Nanoseconds()/1e6, len(sc.parsedScene.Textures)-activeTextures)
 	return nil
 }
 
@@ -163,7 +194,7 @@ func (sc *sceneCompiler) partitionGeometry() error {
 				sc.optimizedScene.UvList[vertexOffset+2] = prim.UVs[2]
 
 				// Lookup root material node for primitive material index
-				matNodeIndex := sc.optimizedScene.MaterialNodeRoots[prim.MaterialIndex]
+				matNodeIndex := sc.optimizedScene.MaterialNodeRoots[prim.Material.MatIndex]
 				sc.optimizedScene.MaterialIndex[primOffset] = matNodeIndex
 
 				// Check if this an emissive primitive and keep track of it
@@ -275,14 +306,27 @@ func (sc *sceneCompiler) createLayeredMaterialTrees() error {
 	start := time.Now()
 	sc.logger.Noticef("processing %d materials", len(sc.parsedScene.Materials))
 
+	activeMaterials := 0
+	for _, mat := range sc.parsedScene.Materials {
+		if !mat.Used {
+			continue
+		}
+		activeMaterials++
+	}
+
 	sc.optimizedScene.MaterialNodeList = make([]scene.MaterialNode, 0)
-	sc.optimizedScene.MaterialNodeRoots = make([]uint32, len(sc.parsedScene.Materials))
+	sc.optimizedScene.MaterialNodeRoots = make([]uint32, activeMaterials)
 
 	var rootNodeIndex uint32 = 0
-	for matIndex, mat := range sc.parsedScene.Materials {
+	var matIndex uint32
+	for _, mat := range sc.parsedScene.Materials {
+		if !mat.Used {
+			sc.logger.Infof(`skipping unused material "%s"`, mat.Name)
+			continue
+		}
 		sc.logger.Infof(`processing material "%s"`, mat.Name)
 
-		// Till we get material expressions working use a naive approach to building material nodes
+		// If no material expression is defined make a best-effort attempt to build one
 		isDiffuse := mat.IsDiffuse()
 		isSpecularReflection := mat.IsSpecularReflection()
 		isSpecularTransmission := mat.IsSpecularTransmission()
@@ -333,9 +377,13 @@ func (sc *sceneCompiler) createLayeredMaterialTrees() error {
 		if mat.Name == sceneEmissiveMaterialName {
 			sc.optimizedScene.SceneEmissiveMatIndex = sc.findMaterialNodeByBxdf(rootNodeIndex, scene.Emissive)
 		}
+
+		// Set MatIndex in parsed material so it can be used by the geometry compiler
+		mat.MatIndex = matIndex
+		matIndex++
 	}
 
-	sc.logger.Noticef("processed materials in %d ms", time.Since(start).Nanoseconds()/1e6)
+	sc.logger.Noticef("processed materials in %d ms (pruned: %d)", time.Since(start).Nanoseconds()/1e6, len(sc.parsedScene.Materials)-activeMaterials)
 	return nil
 }
 

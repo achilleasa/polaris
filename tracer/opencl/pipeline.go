@@ -50,13 +50,13 @@ type Pipeline struct {
 	PostProcess []PipelineStage
 }
 
-func DefaultPipeline(debugFlags DebugFlag, numBounces uint32, exposure float32) *Pipeline {
+func DefaultPipeline(debugFlags DebugFlag) *Pipeline {
 	pipeline := &Pipeline{
 		Reset:               ClearAccumulator(),
 		PrimaryRayGenerator: PerspectiveCamera(),
-		Integrator:          MonteCarloIntegrator(debugFlags, numBounces),
+		Integrator:          MonteCarloIntegrator(debugFlags),
 		PostProcess: []PipelineStage{
-			TonemapSimpleReinhard(exposure),
+			TonemapSimpleReinhard(),
 		},
 	}
 
@@ -82,14 +82,14 @@ func PerspectiveCamera() PipelineStage {
 }
 
 // Apply simple Reinhard tone-mapping.
-func TonemapSimpleReinhard(exposure float32) PipelineStage {
+func TonemapSimpleReinhard() PipelineStage {
 	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
-		return tr.resources.TonemapSimpleReinhard(blockReq, exposure)
+		return tr.resources.TonemapSimpleReinhard(blockReq)
 	}
 }
 
 // Use a montecarlo pathtracer implementation.
-func MonteCarloIntegrator(debugFlags DebugFlag, numBounces uint32) PipelineStage {
+func MonteCarloIntegrator(debugFlags DebugFlag) PipelineStage {
 	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
 		var err error
 
@@ -127,7 +127,7 @@ func MonteCarloIntegrator(debugFlags DebugFlag, numBounces uint32) PipelineStage
 		}
 
 		var bounce uint32
-		for bounce = 0; bounce < numBounces; bounce++ {
+		for bounce = 0; bounce < blockReq.NumBounces; bounce++ {
 			// Shade misses
 			if tr.sceneData.SceneDiffuseMatIndex != -1 {
 				if bounce == 0 {
@@ -198,7 +198,7 @@ func MonteCarloIntegrator(debugFlags DebugFlag, numBounces uint32) PipelineStage
 			}
 
 			// Process intersections for indirect rays
-			if bounce+1 < numBounces {
+			if bounce+1 < blockReq.NumBounces {
 				activeRayBuf = 1 - activeRayBuf
 				_, err = tr.resources.RayIntersectionQuery(activeRayBuf, numPixels)
 				if err != nil {

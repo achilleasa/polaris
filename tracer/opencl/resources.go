@@ -291,8 +291,8 @@ func (dr *deviceResources) AccumulateEmissiveSamples(rayBufferIndex uint32, numP
 	return kernel.Exec1D(0, numPixels, 0)
 }
 
-//
-func (dr *deviceResources) TonemapSimpleReinhard(blockReq *tracer.BlockRequest, exposure float32) (time.Duration, error) {
+// Perform tone-mapping using a simple version of Reinhard.
+func (dr *deviceResources) TonemapSimpleReinhard(blockReq *tracer.BlockRequest) (time.Duration, error) {
 	kernel := dr.kernels[tonemapSimpleReinhard]
 	numPixels := int(blockReq.FrameW * blockReq.BlockH)
 	sampleWeight := float32(1.0 / float32(blockReq.AccumulatedSamples+blockReq.SamplesPerPixel))
@@ -301,7 +301,7 @@ func (dr *deviceResources) TonemapSimpleReinhard(blockReq *tracer.BlockRequest, 
 		dr.buffers.Paths,
 		dr.buffers.FrameBuffer,
 		sampleWeight,
-		exposure,
+		blockReq.Exposure,
 	)
 	if err != nil {
 		return 0, err

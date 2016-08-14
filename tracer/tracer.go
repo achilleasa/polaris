@@ -17,6 +17,9 @@ type BlockRequest struct {
 	// The number of emitted rays per traced pixel.
 	SamplesPerPixel uint32
 
+	// The number of bounces to trace.
+	NumBounces uint32
+
 	// The exposure value controls HDR -> LDR mapping.
 	Exposure float32
 

@@ -512,6 +512,19 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 			}
 
 			switch lineTokens[0] {
+			case "include":
+				if len(lineTokens) < 2 {
+					return r.emitError(res.Path(), lineNum, `unsupported syntax for "%s"; expected 1 argument; got %d`, lineTokens[0], len(lineTokens)-1)
+				}
+
+				baseMaterialIndex, exists := r.matNameToIndex[lineTokens[1]]
+				if !exists {
+					return r.emitError(res.Path(), lineNum, `could not include unknown material "%s"`, lineTokens[1])
+				}
+
+				// Overwrite material but keep the original name
+				*curMaterial = *r.sceneGraph.Materials[baseMaterialIndex]
+				curMaterial.Name = matName
 			case "Kd", "Ks", "Ke", "Tf":
 
 				var target *types.Vec3

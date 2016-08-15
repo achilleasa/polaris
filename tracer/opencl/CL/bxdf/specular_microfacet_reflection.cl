@@ -1,12 +1,9 @@
-#ifndef BXDF_MICROFACET_GGX_CL
-#define BXDF_MICROFACET_GGX_CL
+#ifndef BXDF_SPECULAR_MICROFACET_REFLECTION_CL
+#define BXDF_SPECULAR_MICROFACET_REFLECTION_CL
 
-// GGX formulas explode if roughness is 0
-#define MIN_ROUGHNESS 0.0001f
-
-float3 microfacetSample( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 inRayDir, float3 *outRayDir, float *pdf);
-float microfacetPdf( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir);
-float3 microfacetEval( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir);
+float3 microfacetReflectionSample( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 inRayDir, float3 *outRayDir, float *pdf);
+float microfacetReflectionPdf( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir);
+float3 microfacetReflectionEval( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir);
 
 // All formulas are taken from:
 // https://graphicrants.blogspot.co.uk/2013/08/specular-brdf-reference.html
@@ -16,7 +13,7 @@ float3 microfacetEval( Surface *surface, MaterialNode *matNode, __global Texture
 // n = surface normal
 // v = incoming ray (pointing outwards from the surface)
 // l = outgoing ray
-// h = halfway vector = normalize(v + n)
+// h = halfway vector
 //
 // We start with the generic microfacet equation:
 //     D(h) * F(v,h) * G(l,v,h)
@@ -51,25 +48,21 @@ float3 microfacetEval( Surface *surface, MaterialNode *matNode, __global Texture
 // as: R0 = (1 - IOR)^2 / (1 + IOR)^2
 
 // Sample microfacet surface
-float3 microfacetSample( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 inRayDir, float3 *outRayDir, float *pdf){
+float3 microfacetReflectionSample( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 inRayDir, float3 *outRayDir, float *pdf){
 	// Get roughness. We use a = roughness ^ 2
 	float roughness = clamp(matGetSample1f(surface->uv, matNode->nval, matNode->nvalTex, texMeta, texData), MIN_ROUGHNESS, 1.0f);
 	float a = roughness * roughness;
 	float aSquared = a * a;
 	
-	// Note: inRayDir points away from surface
-	float3 h = normalize(inRayDir + surface->normal);
-
-	// Sample ray around halfway vector using a PDF matching D_GGX, 
-	// then mirror inRayDir around it to get the outgoing ray
-	float3 ggxDir = rayGetGGXSample(h, aSquared, randSample);
-	*outRayDir = 2.0f * fabs(dot(ggxDir, inRayDir)) * ggxDir - inRayDir;
+	// Sample GGX distribution to get back the halfway vector and then mirror inRayDir around it
+	float3 h = rayGetGGXSample(surface->normal, aSquared, randSample);
+	float vDotH = clamp( dot( inRayDir, h ), 0.0f, 1.0f );
+	*outRayDir = 2.0f * vDotH * h - inRayDir;
 	
 	// Calc dot products
 	float nDotV = clamp( dot( surface->normal, inRayDir ), 0.0f, 1.0f);
 	float nDotL = clamp( dot( surface->normal, *outRayDir ), 0.0f, 1.0f);
 	float nDotH = clamp( dot( surface->normal, h ), 0.0f, 1.0f);
-	float vDotH = clamp( dot( inRayDir, h ), 0.0f, 1.0f );
 
 	// Evaluate D_GGX
 	float dDenomSqrt = nDotH * nDotH * (aSquared - 1.0f) + 1.0f;
@@ -95,13 +88,13 @@ float3 microfacetSample( Surface *surface, MaterialNode *matNode, __global Textu
 }
 
 // Get PDF given an outbound ray
-float microfacetPdf( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir){
+float microfacetReflectionPdf( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir){
 	// Get roughness. We use a = roughness ^ 2
 	float roughness = clamp(matGetSample1f(surface->uv, matNode->nval, matNode->nvalTex, texMeta, texData), MIN_ROUGHNESS, 1.0f);
 	float aSquared = native_powr(roughness, 4.0f);
 	
 	// Note: inRayDir points away from surface
-	float3 h = normalize(inRayDir + surface->normal);
+	float3 h = normalize(inRayDir + outRayDir);
 
 	// Calc dot products
 	float nDotV = clamp( dot( surface->normal, inRayDir ), 0.0f, 1.0f);
@@ -119,14 +112,14 @@ float microfacetPdf( Surface *surface, MaterialNode *matNode, __global TextureMe
 }
 
 // Evaluate microfacet BXDF for the selected outgoing ray.
-float3 microfacetEval( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir){
+float3 microfacetReflectionEval( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir){
 	// Get roughness. We use a = roughness ^ 2
 	float roughness = clamp(matGetSample1f(surface->uv, matNode->nval, matNode->nvalTex, texMeta, texData), MIN_ROUGHNESS, 1.0f);
 	float a = roughness * roughness;
 	float aSquared = a * a;
 	
 	// Note: inRayDir points away from surface
-	float3 h = normalize(inRayDir + surface->normal);
+	float3 h = normalize(inRayDir + outRayDir);
 
 	// Calc dot products
 	float nDotV = clamp( dot( surface->normal, inRayDir ), 0.0f, 1.0f);

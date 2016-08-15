@@ -24,19 +24,18 @@ float3 rayGetCosWeightedHemisphereSample(float3 normal, float2 randSample) {
 	return normalize(u * rd * native_cos(phi) + v * rd * native_sin(phi) + normal * native_sqrt(1 - randSample.x));
 }
 
-// Sample the GGX microfacet distribution given a halfway vector h and the 
-// squared roughness factor a.
-float3 rayGetGGXSample(float3 h, float a, float2 randSample){
+// Sample the GGX microfacet distribution.
+float3 rayGetGGXSample(float3 n, float a, float2 randSample){
 
 	// Generate tangent, bi-tangent vectors
-	float3 u = normalize(cross((fabs(h.x) > .1f ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f)), h));
-	float3 v = cross(h,u);
+	float3 u = normalize(cross((fabs(n.x) > .1f ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f)), n));
+	float3 v = cross(n,u);
 
 	float phi = C_TWO_TIMES_PI * randSample.x;
 	float cosTheta = native_sqrt( (1.0f - randSample.y) / ( 1.0f + (a*a - 1.0f) * randSample.y ) );
 	float sinTheta = native_sqrt( 1 - cosTheta * cosTheta );
 
     // Project and rotate
-    return normalize(u * sinTheta * native_cos(phi) + v * sinTheta * native_sin(phi) + h * cosTheta);
+    return normalize(u * sinTheta * native_cos(phi) + v * sinTheta * native_sin(phi) + n * cosTheta);
 }
 #endif

@@ -112,14 +112,14 @@ func MonteCarloIntegrator(debugFlags DebugFlag) PipelineStage {
 		}
 
 		if debugFlags&PrimaryRayIntersectionDepth == PrimaryRayIntersectionDepth {
-			_, err = tr.resources.DebugPrimaryRayIntersectionDepth(blockReq)
+			_, err = tr.resources.DebugRayIntersectionDepth(blockReq, activeRayBuf)
 			err = dumpDebugBuffer(err, tr.resources, blockReq.FrameW, blockReq.FrameH, "debug-primary-intersection-depth.png")
 			if err != nil {
 				return time.Since(start), err
 			}
 		}
 		if debugFlags&PrimaryRayIntersectionNormals == PrimaryRayIntersectionNormals {
-			_, err = tr.resources.DebugPrimaryRayIntersectionNormals(blockReq)
+			_, err = tr.resources.DebugRayIntersectionNormals(blockReq, activeRayBuf)
 			err = dumpDebugBuffer(err, tr.resources, blockReq.FrameW, blockReq.FrameH, "debug-primary-intersection-normals.png")
 			if err != nil {
 				return time.Since(start), err

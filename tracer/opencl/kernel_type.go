@@ -23,11 +23,13 @@ const (
 	clearAccumulator
 	// Debugging
 	debugClearBuffer
-	debugPrimaryRayIntersectionDepth
-	debugPrimaryRayIntersectionNormals
+	debugRayIntersectionDepth
+	debugRayIntersectionNormals
 	debugEmissiveSamples
 	debugThroughput
 	debugAccumulator
+	//
+	debugMicrofacet
 	//
 	numKernels
 )
@@ -57,16 +59,18 @@ func (kt kernelType) String() string {
 		return "clearAccumulator"
 	case debugClearBuffer:
 		return "debugClearBuffer"
-	case debugPrimaryRayIntersectionDepth:
-		return "debugPrimaryRayIntersectionDepth"
-	case debugPrimaryRayIntersectionNormals:
-		return "debugPrimaryRayIntersectionNormals"
+	case debugRayIntersectionDepth:
+		return "debugRayIntersectionDepth"
+	case debugRayIntersectionNormals:
+		return "debugRayIntersectionNormals"
 	case debugEmissiveSamples:
 		return "debugEmissiveSamples"
 	case debugThroughput:
 		return "debugThroughput"
 	case debugAccumulator:
 		return "debugAccumulator"
+	case debugMicrofacet:
+		return "debugMicrofacet"
 	default:
 		panic(fmt.Sprintf("Unsupported kernel type: %d", kt))
 	}

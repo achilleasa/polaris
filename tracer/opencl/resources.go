@@ -326,7 +326,7 @@ func (dr *deviceResources) DebugClearBuffer(blockReq *tracer.BlockRequest) (time
 }
 
 // Generate a depth map based on the primary ray intersections.
-func (dr *deviceResources) DebugPrimaryRayIntersectionDepth(blockReq *tracer.BlockRequest) (time.Duration, error) {
+func (dr *deviceResources) DebugRayIntersectionDepth(blockReq *tracer.BlockRequest, activeRayBuf uint32) (time.Duration, error) {
 	_, err := dr.DebugClearBuffer(blockReq)
 	if err != nil {
 		return 0, err
@@ -351,11 +351,11 @@ func (dr *deviceResources) DebugPrimaryRayIntersectionDepth(blockReq *tracer.Blo
 		}
 	}
 
-	kernel := dr.kernels[debugPrimaryRayIntersectionDepth]
+	kernel := dr.kernels[debugRayIntersectionDepth]
 	numPixels := int(blockReq.FrameW * blockReq.BlockH)
 
 	err = kernel.SetArgs(
-		dr.buffers.RayCounters[0],
+		dr.buffers.RayCounters[activeRayBuf],
 		dr.buffers.Paths,
 		dr.buffers.HitFlags,
 		dr.buffers.Intersections,
@@ -370,18 +370,18 @@ func (dr *deviceResources) DebugPrimaryRayIntersectionDepth(blockReq *tracer.Blo
 }
 
 // Generate a depth map based on the primary ray intersections.
-func (dr *deviceResources) DebugPrimaryRayIntersectionNormals(blockReq *tracer.BlockRequest) (time.Duration, error) {
+func (dr *deviceResources) DebugRayIntersectionNormals(blockReq *tracer.BlockRequest, activeRayBuf uint32) (time.Duration, error) {
 	_, err := dr.DebugClearBuffer(blockReq)
 	if err != nil {
 		return 0, err
 	}
 
-	kernel := dr.kernels[debugPrimaryRayIntersectionNormals]
+	kernel := dr.kernels[debugRayIntersectionNormals]
 	numPixels := int(blockReq.FrameW * blockReq.BlockH)
 
 	err = kernel.SetArgs(
-		dr.buffers.Rays[0],
-		dr.buffers.RayCounters[0],
+		dr.buffers.Rays[activeRayBuf],
+		dr.buffers.RayCounters[activeRayBuf],
 		dr.buffers.Paths,
 		dr.buffers.HitFlags,
 		dr.buffers.Intersections,
@@ -471,4 +471,18 @@ func (dr *deviceResources) DebugAccumulator(blockReq *tracer.BlockRequest) (time
 	}
 
 	return kernel.Exec1D(0, numPixels, 0)
+}
+
+func (dr *deviceResources) DebugMicrofacet(blockReq *tracer.BlockRequest) (time.Duration, error) {
+	kernel := dr.kernels[debugMicrofacet]
+
+	err := kernel.SetArgs(
+		dr.buffers.TextureMetadata,
+		dr.buffers.Textures,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return kernel.Exec1D(0, 1, 0)
 }

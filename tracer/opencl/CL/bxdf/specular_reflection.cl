@@ -7,20 +7,28 @@ float3 idealSpecularEval();
 
 // Sample ideal diffuse (idealSpecular) surface:
 //
-// BXDF = kval / cos(theta)
+// BXDF = kval / cosI
 // PDF = 1
 float3 idealSpecularSample(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 rayInDir, float3 *rayOutDir, float *pdf){
-	float cosTheta = dot(rayInDir, surface->normal);
+	float cosI = dot(rayInDir, surface->normal);
 	
+	// When rendering surfaces like diamonds we need to handle internal reflections.
+	// We need to flip the normal if we are hitting the surface from the inside
+	float3 surfNormal = surface->normal;
+	if(cosI < 0.0f ){
+		cosI = -cosI;
+		surfNormal = -surfNormal;
+	}
+
 	// To generate the out ray we need to reflect the input ray around the normal
 	// rayInDir points *away* from the surface so we need to flip the sign of the 
 	// reflection formula: I - 2*dot(I,N) * N
-	*rayOutDir = 2.0f * cosTheta * surface->normal - rayInDir;
+	*rayOutDir = 2.0f * cosI * surfNormal - rayInDir;
 
 	*pdf = 1.0f;
 	
 	float3 ks = matGetSample3f(surface->uv, matNode->kval, matNode->kvalTex, texMeta, texData);
-	return cosTheta > 0.0f ? ks / cosTheta : 0.0f;
+	return cosI != 0.0f ? ks / cosI : 0.0f;
 }
 
 // Get PDF for idealSpecular surface given a pre-calculated bounce ray.

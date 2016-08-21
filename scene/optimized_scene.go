@@ -96,7 +96,8 @@ const (
 	Diffuse
 	SpecularReflection
 	SpecularTransmission
-	SpecularMicrofacet
+	SpecularMicrofacetReflection
+	SpecularMicrofacetTransmission
 )
 
 // Materials are represented as a tree where nodes define a blending operation

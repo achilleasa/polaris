@@ -72,15 +72,17 @@ __kernel void shadeHits(
 	
 	Surface surface;
 	int rayPathIndex;
-	float3 outRayOrigin;
+	float3 outBxdfRayOrigin, outEmissiveRayOrigin;
 	float3 curPathThroughput;
 	float3 bxdfOutRayDir, bxdfSample, bxdfEmissiveSample, emissiveOutRayDir, emissiveSample;
 	float bxdfPdf, bxdfEmissivePdf, emissivePdf, emissiveBxdfPdf, emissiveSelectionPdf;
 	float emissiveWeight, bxdfWeight, distToEmissive;
 
 	if(globalId < *numRays){
-
 		if( hitFlags[globalId] ){
+			bxdfPdf = 1.0f;
+			bxdfWeight = 1.0f;
+
 			// Init PRNG and generate required samples
 			uint2 rndState = (uint2)(randSeed, globalId);
 			float2 sample0 = randomGetSample2f(&rndState);
@@ -139,11 +141,13 @@ __kernel void shadeHits(
 					// material is refractive and we are hitting it from the outside we 
 					// need to ensure that the outgoing ray starts inside the surface.
 					float displaceDir = BXDF_IS_TRANSMISSION(materialNode.bxdfType) ? -sign(inRayDotNormal) : 1.0f;
-					outRayOrigin = DISPLACE_BY_EPSILON(surface.point, surface.normal * displaceDir);
+					outBxdfRayOrigin = DISPLACE_BY_EPSILON(surface.point, surface.normal * displaceDir);
+					// The emissive ray always starts away from the surface. This allows us to shade BTDFs
+					outEmissiveRayOrigin = DISPLACE_BY_EPSILON(surface.point, surface.normal);
 
 					// Get BXDF sample and generate outgoing ray based on surface BXDF
 					bxdfSample = bxdfGetSample(&surface, &materialNode, texMeta, texData, sample0, inRayDir, &bxdfOutRayDir, &bxdfPdf);
-					
+
 					// Select and sample emissive source
 					int emissiveIndex = numEmissives > 0 ? emissiveSelect(numEmissives, sample1.x, &emissiveSelectionPdf) : -1;
 					if( emissiveIndex > -1 ){
@@ -163,7 +167,7 @@ __kernel void shadeHits(
 
 					// If we have a valid emissive sample allocate an occlusion ray.
 					float nDotEmissiveOutRay = max(0.0f, dot(surface.normal, emissiveOutRayDir));
-					if( MIN_VEC3_COMPONENT(emissiveSample) > 0.0f && emissivePdf > 0.0f && nDotEmissiveOutRay > 0.0f){
+					if( MAX_VEC3_COMPONENT(emissiveSample) > 0.0f && emissivePdf > 0.0f && nDotEmissiveOutRay > 0.0f){
 						float3 bxdfEmissiveSample = bxdfEval(&surface, &materialNode, texMeta, texData, inRayDir, emissiveOutRayDir);
 						emissiveSample *= emissiveWeight * bxdfEmissiveSample / (emissivePdf * emissiveSelectionPdf) * curPathThroughput * nDotEmissiveOutRay;
 						wgOcclusionRayIndex = atomic_inc(&wgNumOcclusionRays);
@@ -173,7 +177,7 @@ __kernel void shadeHits(
 					// Note: we are using the abs value of the dot product as 
 					// it will be negative for rays entering into refractive surfaces
 					float3 throughput = bxdfWeight * bxdfSample * fabs(dot(surface.normal, bxdfOutRayDir));
-					if (MIN_VEC3_COMPONENT(throughput) > 0.0f && bxdfPdf > 0.0f){
+					if (MAX_VEC3_COMPONENT(throughput) > 0.0f && bxdfPdf > 0.0f){
 						pathSetThroughput(paths + rayPathIndex, curPathThroughput * throughput / bxdfPdf);
 						wgIndirectRayIndex = atomic_inc(&wgNumIndirectRays);
 					} 
@@ -202,13 +206,13 @@ __kernel void shadeHits(
 	if( wgOcclusionRayIndex != -1 && MAX_VEC3_COMPONENT(emissiveSample) > 0.0f ){
 		wgOcclusionRayIndex += wgNumOcclusionRays;
 		emissiveSamples[wgOcclusionRayIndex] = emissiveSample;
-		rayNew(occlusionRays + wgOcclusionRayIndex, outRayOrigin, emissiveOutRayDir, distToEmissive - INTERSECTION_WITH_LIGHT_EPSILON, rayPathIndex);
+		rayNew(occlusionRays + wgOcclusionRayIndex, outEmissiveRayOrigin, emissiveOutRayDir, distToEmissive - INTERSECTION_WITH_LIGHT_EPSILON, rayPathIndex);
 	}
 
 	// Emit indirect ray
 	if( wgIndirectRayIndex != -1 ){
 		wgIndirectRayIndex += wgNumIndirectRays;
-		rayNew(indirectRays + wgIndirectRayIndex, outRayOrigin, bxdfOutRayDir, FLT_MAX, rayPathIndex);
+		rayNew(indirectRays + wgIndirectRayIndex, outBxdfRayOrigin, bxdfOutRayDir, FLT_MAX, rayPathIndex);
 	}
 }
 

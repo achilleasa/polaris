@@ -34,7 +34,8 @@ import (
 %token <nodeId> DIFFUSE
 %token <nodeId> SPECULAR_REFLECTION
 %token <nodeId> SPECULAR_TRANSMISSION
-%token <nodeId> SPECULAR_MICROFACET
+%token <nodeId> SPECULAR_MICROFACET_REFLECTION
+%token <nodeId> SPECULAR_MICROFACET_TRANSMISSION
 %token <nodeId> EMISSIVE
 
 %%
@@ -109,7 +110,7 @@ BSDF:
 		node.SetBxdfType(scene.SpecularTransmission)
 		$$ = exprVAL.compiler.appendMaterialNode(node)
 	}
-|	SPECULAR_MICROFACET
+|	SPECULAR_MICROFACET_REFLECTION
 	{
 		node := &scene.MaterialNode{}
 		node.Init()
@@ -123,7 +124,24 @@ BSDF:
 		}
 		node.IOR = exprVAL.material.Ni
 		node.SetIORTex(exprVAL.material.NiTex)
-		node.SetBxdfType(scene.SpecularMicrofacet)
+		node.SetBxdfType(scene.SpecularMicrofacetReflection)
+		$$ = exprVAL.compiler.appendMaterialNode(node)
+	}
+|	SPECULAR_MICROFACET_TRANSMISSION
+	{
+		node := &scene.MaterialNode{}
+		node.Init()
+		node.Kval = exprVAL.material.Tf.Vec4(0)
+		node.SetKvalTex(exprVAL.material.TfTex)
+		node.SetNormalTex(exprVAL.material.NormalTex)
+		node.Nval = exprVAL.material.Nr
+		node.SetNvalTex(exprVAL.material.NrTex)
+		if exprVAL.material.Ni <= 0.0 {
+			exprVAL.material.Ni = 1.0
+		}
+		node.IOR = exprVAL.material.Ni
+		node.SetIORTex(exprVAL.material.NiTex)
+		node.SetBxdfType(scene.SpecularMicrofacetTransmission)
 		$$ = exprVAL.compiler.appendMaterialNode(node)
 	}
 |	EMISSIVE
@@ -230,7 +248,8 @@ func (x *exprLex) lexText(c rune, yylval *exprSymType) int {
 	case "D": return DIFFUSE
 	case "S": return SPECULAR_REFLECTION
 	case "T": return SPECULAR_TRANSMISSION
-	case "M": return SPECULAR_MICROFACET
+	case "M_S": return SPECULAR_MICROFACET_REFLECTION
+	case "M_T": return SPECULAR_MICROFACET_TRANSMISSION
 	case "E": return EMISSIVE
 	case "mix": return MIX
 	case "fresnel": return FRESNEL

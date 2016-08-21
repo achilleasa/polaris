@@ -137,17 +137,23 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 	var lineNum int = 0
 	var err error
 
+	// The main obj file may include (call) several other object files. Each
+	// object file contains 1-based indices (when they are positive). By
+	// tracking the current vertex/uv/normal offsets we can apply them
+	// while parsing faces to select the correct coordinates.
+	relVertexOffset := len(r.vertexList)
+	relUvOffset := len(r.uvList)
+	relNormalOffset := len(r.normalList)
+
 	scanner := bufio.NewScanner(res)
 	for scanner.Scan() {
 		lineNum++
 		lineTokens := strings.Fields(scanner.Text())
-		if len(lineTokens) == 0 {
+		if len(lineTokens) == 0 || strings.HasPrefix(lineTokens[0], "#") {
 			continue
 		}
 
 		switch lineTokens[0] {
-		case "#":
-			continue
 		case "call", "mtllib":
 			if len(lineTokens) != 2 {
 				return r.emitError(res.Path(), lineNum, `unsupported syntax for "%s"; expected 1 argument; got %d`, lineTokens[0], len(lineTokens)-1)
@@ -212,7 +218,7 @@ func (r *wavefrontSceneReader) parse(res *resource) error {
 			r.verifyLastParsedMesh()
 			r.sceneGraph.Meshes = append(r.sceneGraph.Meshes, scenePkg.NewParsedMesh(lineTokens[1]))
 		case "f":
-			primList, err := r.parseFace(lineTokens)
+			primList, err := r.parseFace(lineTokens, relVertexOffset, relUvOffset, relNormalOffset)
 			if err != nil {
 				return r.emitError(res.Path(), lineNum, err.Error())
 			}
@@ -362,7 +368,7 @@ func (r *wavefrontSceneReader) parseMeshInstance(lineTokens []string) (*scenePkg
 //
 // This method only works with triangular/quad faces and will return an error if a
 // face with more than 4 vertices is encountered.
-func (r *wavefrontSceneReader) parseFace(lineTokens []string) ([]*scenePkg.ParsedPrimitive, error) {
+func (r *wavefrontSceneReader) parseFace(lineTokens []string, relVertexOffset, relUvOffset, relNormalOffset int) ([]*scenePkg.ParsedPrimitive, error) {
 	if len(lineTokens) < 4 || len(lineTokens) > 5 {
 		return nil, fmt.Errorf(`unsupported syntax for "f"; expected 3 arguments for triangular face or 4 arguments for a quad face; got %d. Select the triangulation option in your exporter`, len(lineTokens)-1)
 	}
@@ -389,7 +395,7 @@ func (r *wavefrontSceneReader) parseFace(lineTokens []string) ([]*scenePkg.Parse
 			return nil, fmt.Errorf("face argument %d does not include a vertex index", arg)
 		}
 
-		vOffset, err = selectFaceCoordIndex(vTokens[0], len(r.vertexList))
+		vOffset, err = selectFaceCoordIndex(vTokens[0], len(r.vertexList), relVertexOffset)
 		if err != nil {
 			return nil, fmt.Errorf("could not parse vertex coord for face argument %d: %s", arg, err.Error())
 		}
@@ -397,7 +403,7 @@ func (r *wavefrontSceneReader) parseFace(lineTokens []string) ([]*scenePkg.Parse
 
 		// Parse UV coords if specified
 		if expIndices > 1 && vTokens[1] != "" {
-			vOffset, err = selectFaceCoordIndex(vTokens[1], len(r.uvList))
+			vOffset, err = selectFaceCoordIndex(vTokens[1], len(r.uvList), relUvOffset)
 			if err != nil {
 				return nil, fmt.Errorf("could not parse tex coord for face argument %d: %s", arg, err.Error())
 			}
@@ -406,7 +412,7 @@ func (r *wavefrontSceneReader) parseFace(lineTokens []string) ([]*scenePkg.Parse
 
 		// Parse normal coords if specified
 		if expIndices > 2 && vTokens[2] != "" {
-			vOffset, err = selectFaceCoordIndex(vTokens[2], len(r.normalList))
+			vOffset, err = selectFaceCoordIndex(vTokens[2], len(r.normalList), relNormalOffset)
 			if err != nil {
 				return nil, fmt.Errorf("could not parse normal coord for face argument %d: %s", arg, err.Error())
 			}
@@ -485,13 +491,11 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 	for scanner.Scan() {
 		lineNum++
 		lineTokens := strings.Fields(scanner.Text())
-		if len(lineTokens) == 0 {
+		if len(lineTokens) == 0 || strings.HasPrefix(lineTokens[0], "#") {
 			continue
 		}
 
 		switch lineTokens[0] {
-		case "#":
-			continue
 		case "newmtl":
 			if len(lineTokens) != 2 {
 				return r.emitError(res.Path(), lineNum, `unsupported syntax for "newmtl"; expected 1 argument; got %d`, len(lineTokens)-1)
@@ -603,7 +607,7 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 // Given an index for a face coord type (vertex, normal, tex) calculate the
 // proper offset into the coord list. Wavefront format can also use negative
 // indices to reference elements from the end of the coord list.
-func selectFaceCoordIndex(indexToken string, coordListLen int) (int, error) {
+func selectFaceCoordIndex(indexToken string, coordListLen int, relOffset int) (int, error) {
 	index, err := strconv.ParseInt(indexToken, 10, 32)
 	if err != nil {
 		return -1, err
@@ -613,7 +617,7 @@ func selectFaceCoordIndex(indexToken string, coordListLen int) (int, error) {
 	if index < 0 {
 		vOffset = coordListLen + int(index)
 	} else {
-		vOffset = int(index - 1)
+		vOffset = relOffset + int(index-1)
 	}
 	if vOffset < 0 || vOffset >= coordListLen {
 		return -1, fmt.Errorf("index out of bounds")

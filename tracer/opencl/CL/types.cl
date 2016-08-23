@@ -92,11 +92,6 @@ typedef struct {
 	// normal at intersection point
 	float3 normal;
 
-	// tangent/bitangent vectors (perpendicular to normal)
-	// used for outbound ray generation
-	float3 uVec;
-	float3 vVec;
-
 	// texture uv coords at intersection point
 	float2 uv;
 

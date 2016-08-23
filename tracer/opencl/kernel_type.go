@@ -29,8 +29,6 @@ const (
 	debugThroughput
 	debugAccumulator
 	//
-	debugMicrofacet
-	//
 	numKernels
 )
 
@@ -69,8 +67,6 @@ func (kt kernelType) String() string {
 		return "debugThroughput"
 	case debugAccumulator:
 		return "debugAccumulator"
-	case debugMicrofacet:
-		return "debugMicrofacet"
 	default:
 		panic(fmt.Sprintf("Unsupported kernel type: %d", kt))
 	}

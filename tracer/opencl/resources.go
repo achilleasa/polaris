@@ -159,7 +159,7 @@ func (dr *deviceResources) RayIntersectionQuery(rayBufferIndex uint32, numPixels
 		return 0, err
 	}
 
-	return kernel.Exec1D(0, numPixels, 64)
+	return kernel.Exec1D(0, numPixels, 0)
 }
 
 // Calculate ray intersections and fill out the hit buffer and the intersection
@@ -471,18 +471,4 @@ func (dr *deviceResources) DebugAccumulator(blockReq *tracer.BlockRequest) (time
 	}
 
 	return kernel.Exec1D(0, numPixels, 0)
-}
-
-func (dr *deviceResources) DebugMicrofacet(blockReq *tracer.BlockRequest) (time.Duration, error) {
-	kernel := dr.kernels[debugMicrofacet]
-
-	err := kernel.SetArgs(
-		dr.buffers.TextureMetadata,
-		dr.buffers.Textures,
-	)
-	if err != nil {
-		return 0, err
-	}
-
-	return kernel.Exec1D(0, 1, 0)
 }

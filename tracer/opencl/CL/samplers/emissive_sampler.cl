@@ -26,8 +26,7 @@ float3 environmentLightGetSample(
 		){
 
 	*outRayDir = rayGetCosWeightedHemisphereSample(surface->normal, randSample);
-	float cosTheta = max(0.0f, dot(surface->normal, *outRayDir));
-	*pdf = cosTheta * C_1_PI;
+	*pdf = max(0.0f, dot(surface->normal, *outRayDir)) * C_1_PI;
 	*distToEmissive = FLT_MAX;
 
 	// Convert ray direction vector into spherical UV and use that to sample the env map

@@ -161,42 +161,4 @@ __kernel void debugAccumulator(
 	output[pixelIndex] = (uchar4)((uchar)val.x, (uchar)val.y, (uchar)val.z, 255);
 }
 
-__kernel void debugMicrofacet(__global TextureMetadata *texMeta, __global uchar *texData){
-	if(get_global_id(0) != 0){
-		return;
-	}
-
-	float3 inRayDir = (float3)(0.0f, -1.0f, 0.0f);
-
-	Surface surface;
-	surface.normal = (float3)(0.0f, 1.0f, 0.0f);
-
-	MaterialNode mat;
-	mat.nval = 0.5f;
-	mat.nvalTex = -1;
-	mat.ior = 1.0f;
-	mat.iorTex = -1;
-	mat.kval = (float3)(0.999f, 0.999f, 0.999f);
-	mat.kvalTex = -1;
-
-	printf("--- input\n");
-	printf("inRayDir:  (%3.3v3hlf)\n", inRayDir);
-	printf("normal:    (%3.3v3hlf)\n", surface.normal);
-	printf("roughness: %f\n", mat.nval);
-	printf("ior:       %f\n", mat.ior);
-	printf("\n");
-
-	float3 outRayDir;
-	float pdf;
-	float3 sample = microfacetTransmissionSample(&surface, &mat, texMeta, texData, (float2)(0.5f, 0.1f), inRayDir, &outRayDir, &pdf);
-
-	printf("\n");
-	printf("--- output\n");
-	printf("outRayDir: (%3.3v3hlf)\n", outRayDir);
-	printf("pdf:       %f\n", pdf);
-	printf("sample:    (%3.3v3hlf)\n", sample);
-	printf("sample/pdf:(%3.3v3hlf)\n", sample / pdf);
-	printf("\n");
-}
-
 #endif

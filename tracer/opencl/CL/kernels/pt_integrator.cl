@@ -168,9 +168,14 @@ __kernel void shadeHits(
 					// If we have a valid emissive sample allocate an occlusion ray.
 					float nDotEmissiveOutRay = max(0.0f, dot(surface.normal, emissiveOutRayDir));
 					if( MAX_VEC3_COMPONENT(emissiveSample) > 0.0f && emissivePdf > 0.0f && nDotEmissiveOutRay > 0.0f){
-						float3 bxdfEmissiveSample = bxdfEval(&surface, &materialNode, texMeta, texData, inRayDir, emissiveOutRayDir);
-						emissiveSample *= emissiveWeight * bxdfEmissiveSample / (emissivePdf * emissiveSelectionPdf) * curPathThroughput * nDotEmissiveOutRay;
+						bxdfEmissiveSample = bxdfEval(&surface, &materialNode, texMeta, texData, inRayDir, emissiveOutRayDir);
+						emissiveSample *= emissiveWeight * bxdfEmissiveSample * curPathThroughput * nDotEmissiveOutRay / (emissivePdf * emissiveSelectionPdf);
 						wgOcclusionRayIndex = atomic_inc(&wgNumOcclusionRays);
+					}
+
+					// Disable bxdfWeight for singular surfaces (ideal mirror/dielectric)
+					if( BXDF_IS_SINGULAR(materialNode.bxdfType) ){
+						bxdfWeight = 1.0f;
 					}
 
 					// If we got a valid bxdf sample update the path throughput

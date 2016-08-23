@@ -7,11 +7,16 @@ float3 microfacetReflectionEval( Surface *surface, MaterialNode *matNode, __glob
 
 // Sample microfacet surface
 float3 microfacetReflectionSample( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 inRayDir, float3 *outRayDir, float *pdf){
-	// Get roughness. We use a = roughness ^ 2
+	// Use Disney's remapping: a = roughness^2
 	float roughness = clamp(matGetSample1f(surface->uv, matNode->nval, matNode->nvalTex, texMeta, texData), MIN_ROUGHNESS, 1.0f);
+	roughness *= roughness;
+
+	// Sample GGX distribution to get halfway vector
+	float3 h = ggxGetSample(roughness, inRayDir, surface->normal, randSample);
 	
-	// Sample GGX distribution to get out dir and PDF
-	*outRayDir = ggxGetSample(roughness, inRayDir, surface->normal, randSample, pdf);
+	// Reflect I over h to get O
+	*outRayDir = 2.0f * dot(inRayDir, h) * h - inRayDir;
+	*pdf = ggxGetReflectionPdf(roughness, inRayDir, *outRayDir, surface->normal, h);
 
 	// Eval sample
 	return microfacetReflectionEval(surface, matNode, texMeta, texData, inRayDir, *outRayDir);
@@ -19,18 +24,22 @@ float3 microfacetReflectionSample( Surface *surface, MaterialNode *matNode, __gl
 
 // Get PDF given an outbound ray
 float microfacetReflectionPdf( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir){
+	// Use Disney's remapping: a = roughness^2
 	float roughness = clamp(matGetSample1f(surface->uv, matNode->nval, matNode->nvalTex, texMeta, texData), MIN_ROUGHNESS, 1.0f);
+	roughness *= roughness;
 
 	float iDotN = dot(inRayDir, surface->normal);
-	float3 h = normalize(sign(iDotN) * (inRayDir + outRayDir));
+	float3 h = normalize(inRayDir + outRayDir);
 
-	return ggxGetPdf(roughness, inRayDir, outRayDir, surface->normal, h);
+	return ggxGetReflectionPdf(roughness, inRayDir, outRayDir, surface->normal, h);
 }
 
 // Evaluate microfacet BXDF for the selected outgoing ray.
 float3 microfacetReflectionEval( Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir){
+	// Use Disney's remapping: a = roughness^2
 	float roughness = clamp(matGetSample1f(surface->uv, matNode->nval, matNode->nvalTex, texMeta, texData), MIN_ROUGHNESS, 1.0f);
-		
+	roughness *= roughness;
+
 	float iDotN = dot(inRayDir, surface->normal);
 	float oDotN = dot(outRayDir, surface->normal);
 
@@ -42,8 +51,8 @@ float3 microfacetReflectionEval( Surface *surface, MaterialNode *matNode, __glob
 	float c = 1.0f - fabs(iDotN);
 	float c1 = c * c;
 	float f = r0 + (1.0f - r0)*c1*c1*c;
-
-	float3 h = normalize(sign(iDotN) * (inRayDir + outRayDir));
+	
+	float3 h = normalize(inRayDir + outRayDir);
 
 	// Calculate d and g for GGX
 	float d = ggxGetD(roughness, surface->normal, h);

@@ -14,29 +14,26 @@ void surfaceInit(Surface *surface, __global Intersection *intersection, __global
 		              wuv.y * vertices[offset+1] + 
 					  wuv.z * vertices[offset+2]).xyz;
 
-	surface->normal = (wuv.x * normals[offset] + 
+	surface->normal = normalize(
+					  (wuv.x * normals[offset] + 
 		               wuv.y * normals[offset+1] + 
-					   wuv.z * normals[offset+2]).xyz;
+					   wuv.z * normals[offset+2]).xyz
+			);
 
 	surface->uv = wuv.x * uv[offset] + 
 		          wuv.y * uv[offset+1] + 
 				  wuv.z * uv[offset+2];
-
-	surface->uVec = normalize(cross((fabs(surface->normal.x) > .1f ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f)), surface->normal));
-	surface->vVec = cross(surface->normal, surface->uVec);
 
 	// Fetch material root node index
 	surface->matNodeIndex = matIndices[intersection->triIndex];
 }
 
 void printSurface(Surface *surface){
-	printf("[tid: %03d] surface (point: %2.2v3hlf, normal: %2.2v3hlf, uv: %2.2v2hlf, uVec: %2.2v3hlf, vVec: %2.2v3hlf, matRootNode: %d)\n",
+	printf("[tid: %03d] surface (point: %2.2v3hlf, normal: %2.2v3hlf, uv: %2.2v2hlf, matRootNode: %d)\n",
 			get_global_id(0),
 			surface->point,
 			surface->normal,
 			surface->uv,
-			surface->uVec,
-			surface->vVec,
 			surface->matNodeIndex
 	);
 }

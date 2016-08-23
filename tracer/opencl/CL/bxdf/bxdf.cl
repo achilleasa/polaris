@@ -17,6 +17,9 @@
 #define BXDF_IS_TRANSMISSION(t) ((t & (BXDF_TYPE_SPECULAR_TRANSMISSION | BXDF_TYPE_SPECULAR_MICROFACET_TRANSMISSION)) != 0)
 #define BXDF_IS_EMISSIVE(t) (t == BXDF_TYPE_EMISSIVE)
 
+// Is the surface an ideal mirror or dielectric?
+#define BXDF_IS_SINGULAR(t) ((t & (BXDF_TYPE_SPECULAR_REFLECTION | BXDF_TYPE_SPECULAR_TRANSMISSION)) != 0)
+
 float3 bxdfGetSample(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float2 randSample, float3 inRayDir, float3 *outRayDir, float *pdf);
 float bxdfGetPdf(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir );
 float3 bxdfEval(Surface *surface, MaterialNode *matNode, __global TextureMetadata *texMeta, __global uchar *texData, float3 inRayDir, float3 outRayDir); 

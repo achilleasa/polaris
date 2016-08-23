@@ -21,17 +21,14 @@ void matSelectNode(Surface *surface, float3 inRayDir, MaterialNode *selectedMate
 		if(node->blendFunc == MAT_BLEND_FUNC_FRESNEL){
 			// inRayDir point *away* from surface
 			float cosI = dot(inRayDir, surface->normal);
-			bool entering = cosI > 0.0f;
 
 			float etaI = 1.0f;
 			float etaT = nval;
-			float3 surfNormal = surface->normal;
 
 			// If we are exiting the area we need to flip the normal and incident/transmission etas 
-			if( !entering ) {
+			if( cosI < 0.0f ) {
 				etaI = etaT;
 				etaT = 1.0f;
-				surfNormal = -surfNormal;
 				cosI = -cosI;
 			}
 

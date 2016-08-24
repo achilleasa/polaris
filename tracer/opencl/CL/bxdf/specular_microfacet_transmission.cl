@@ -42,7 +42,7 @@ float3 microfacetTransmissionSample( Surface *surface, MaterialNode *matNode, __
 
 	// Recalculate halfway transmission vector (equation 16)
 	h = normalize(-(etaI * inRayDir + etaT * *outRayDir));
-	*pdf = ggxGetRefractionPdf(roughness, etaT, inRayDir, *outRayDir, surface->normal, h);
+	*pdf = ggxGetRefractionPdf(roughness, etaI, etaT, inRayDir, *outRayDir, surface->normal, h);
 
 	// Eval sample
 	return microfacetTransmissionEval(surface, matNode, texMeta, texData, inRayDir, *outRayDir);
@@ -74,7 +74,7 @@ float microfacetTransmissionPdf( Surface *surface, MaterialNode *matNode, __glob
 	// Calculate halfway transmission vector (equation 16)
 	float3 h = -(etaI * inRayDir + etaT * outRayDir);
 
-	return ggxGetRefractionPdf(roughness, etaT, inRayDir, outRayDir, surface->normal, h);
+	return ggxGetRefractionPdf(roughness, etaI, etaT, inRayDir, outRayDir, surface->normal, h);
 }
 
 // Evaluate microfacet BXDF for the selected outgoing ray.
@@ -98,15 +98,10 @@ float3 microfacetTransmissionEval( Surface *surface, MaterialNode *matNode, __gl
 		// We are exiting the surface so we need to flip the eta
 		etaI = etaT;
 		etaT = 1.0f;
-		iDotN = -iDotN;
 	}
 
 	// Eval fresnel term
-	float eta = etaI / etaT;
-	float r0 = ((eta - 1.0f) * (eta - 1.0f)) / ((eta + 1.0f) * (eta + 1.0f));
-	float c = 1.0f - iDotN;
-	float c1 = c * c;
-	float f = r0 + (1.0f - r0)*c1*c1*c;
+	float f = fresnelForDielectric(etaI / etaT, iDotN);
 
 	// Get halfway trasmission vector (equation 16)
 	float3 h = normalize(-(etaI * inRayDir + etaT * outRayDir));
@@ -117,7 +112,7 @@ float3 microfacetTransmissionEval( Surface *surface, MaterialNode *matNode, __gl
 
 	// Calc focus term (see equation 21)
 	//float focusTermDenom = iDotN * oDotN * (etaI*iDotH + etaT*oDotH)*(etaI*iDotH + etaT*oDotH);
-	float focusTermDenom = iDotN * oDotN;
+	float focusTermDenom = iDotN * oDotN * (etaI * iDotH + etaT * oDotH) * (etaI * iDotH + etaT * oDotH);
 	if( focusTermDenom == 0.0f ){
 		return (float3)(0.0f, 0.0f, 0.0f);
 	}

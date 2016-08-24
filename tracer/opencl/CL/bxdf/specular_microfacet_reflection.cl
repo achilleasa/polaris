@@ -28,7 +28,6 @@ float microfacetReflectionPdf( Surface *surface, MaterialNode *matNode, __global
 	float roughness = clamp(matGetSample1f(surface->uv, matNode->nval, matNode->nvalTex, texMeta, texData), MIN_ROUGHNESS, 1.0f);
 	roughness *= roughness;
 
-	float iDotN = dot(inRayDir, surface->normal);
 	float3 h = normalize(inRayDir + outRayDir);
 
 	return ggxGetReflectionPdf(roughness, inRayDir, outRayDir, surface->normal, h);
@@ -43,14 +42,8 @@ float3 microfacetReflectionEval( Surface *surface, MaterialNode *matNode, __glob
 	float iDotN = dot(inRayDir, surface->normal);
 	float oDotN = dot(outRayDir, surface->normal);
 
-	// Eval fresnel term
-	float etaI = 1.0f;
-	float etaT = matGetSample1f(surface->uv, matNode->ior, matNode->iorTex, texMeta, texData);
-	float eta = etaI / etaT;
-	float r0 = ((eta - 1.0f) * (eta - 1.0f)) / ((eta + 1.0f) * (eta + 1.0f));
-	float c = 1.0f - fabs(iDotN);
-	float c1 = c * c;
-	float f = r0 + (1.0f - r0)*c1*c1*c;
+	// Eval fresnel term (use ks as r0)
+	float3 f = fresnelForDielectricFromSpecular(matGetSample3f(surface->uv, matNode->kval, matNode->kvalTex, texMeta, texData), iDotN);
 	
 	float3 h = normalize(inRayDir + outRayDir);
 
@@ -60,9 +53,7 @@ float3 microfacetReflectionEval( Surface *surface, MaterialNode *matNode, __glob
 
 	// Eval sample (equation 20)
 	float denom = 4.0f * iDotN * oDotN;
-	return denom > 0.0f 
-		? matGetSample3f(surface->uv, matNode->kval, matNode->kvalTex, texMeta, texData) * f * d * g / denom 
-		: 0.0f;
+	return denom > 0.0f ?  f * d * g / denom : 0.0f;
 }
 
 #endif

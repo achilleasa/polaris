@@ -25,7 +25,7 @@ float3 environmentLightGetSample(
 		float *distToEmissive
 		){
 
-	*outRayDir = rayGetCosWeightedHemisphereSample(surface->normal, randSample);
+	*outRayDir = cosWeightedHemisphereGetSample(surface->normal, randSample);
 	*pdf = max(0.0f, dot(surface->normal, *outRayDir)) * C_1_PI;
 	*distToEmissive = FLT_MAX;
 

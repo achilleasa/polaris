@@ -6,5 +6,6 @@
 #include "morton.cl"
 #include "transform.cl"
 #include "surface.cl"
+#include "fresnel.cl"
 
 #endif

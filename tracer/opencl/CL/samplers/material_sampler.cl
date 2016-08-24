@@ -20,30 +20,26 @@ void matSelectNode(Surface *surface, float3 inRayDir, MaterialNode *selectedMate
 
 		if(node->blendFunc == MAT_BLEND_FUNC_FRESNEL){
 			// inRayDir point *away* from surface
-			float cosI = dot(inRayDir, surface->normal);
+			float iDotN = dot(inRayDir, surface->normal);
 
 			float etaI = 1.0f;
 			float etaT = nval;
 
 			// If we are exiting the area we need to flip the normal and incident/transmission etas 
-			if( cosI < 0.0f ) {
+			if( iDotN < 0.0f ) {
 				etaI = etaT;
 				etaT = 1.0f;
-				cosI = -cosI;
 			}
 
 			// The following formulas are taken from: https://en.wikipedia.org/wiki/Refractive_index
 			float eta = etaI / etaT;
-			float sqISinI = 1.0f - cosI * cosI;
+			float sqISinI = 1.0f - iDotN * iDotN;
 			float sqSinT = eta * eta * sqISinI;
 
 			// Calculate the fresnel value if TIR does not occur (TIR when sqSinT > 1.0)
 			nval = 1.0f;
 			if( sqSinT <= 1.0f ){
-				// Uae Schlick's approximation for the fresnel:
-				// R = r0 + (1-r0) * (1-cosI)^5
-				float r0 = ((1.0f - eta) * (1.0f - eta)) / ((1.0f + eta) * (1.0f + eta));
-				nval = r0 + (1.0f - r0) * native_powr(fabs(1.0f - cosI), 5);
+				nval = fresnelForDielectric(eta, iDotN);
 			}
 		}
 

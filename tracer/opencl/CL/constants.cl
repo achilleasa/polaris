@@ -24,6 +24,6 @@
 #define INTERSECTION_WITH_LIGHT_EPSILON (INTERSECTION_EPSILON * 1e3f)
 
 // GGX distribution explodes if roughness is set to 0 (microfacet bxdf)
-#define MIN_ROUGHNESS 0.0001f
+#define MIN_ROUGHNESS 0.1f
 
 #endif

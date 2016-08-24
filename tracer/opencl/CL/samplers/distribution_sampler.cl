@@ -77,10 +77,31 @@ float ggxGetReflectionPdf(float roughness, float3 inRayDir, float3 outRayDir, fl
 	return denom == 0.0f ? 0.0f : ggxGetD(roughness, n, h) * nDotH / denom; 
 }
 
-float ggxGetRefractionPdf(float roughness, float etaT, float3 inRayDir, float3 outRayDir, float3 n, float3 h) {
+float ggxGetRefractionPdf(float roughness, float etaI, float etaT, float3 inRayDir, float3 outRayDir, float3 n, float3 h) {
+	float iDotH = fabs(dot(inRayDir, h));
 	float oDotH = fabs(dot(outRayDir, h));
 	float hDotN = fabs(dot(h, n));
-	return ggxGetD(roughness, n, h) * hDotN * oDotH * etaT * etaT; 
+
+	// pdf = D * hDotN * focusTerm where
+	// focusTerm = etaT * etaT * oDotH / (etaI * iDotH + etaT * oDotH)^2
+	float denom = (etaI * iDotH + etaT * oDotH) * (etaI * iDotH + etaT * oDotH);
+	return denom > 0.0f ? ggxGetD(roughness, n, h) * hDotN * oDotH * etaT * etaT / denom : 0.0f; 
+}
+
+// Sample hemisphere direction using a cosine weighted distribution
+// 
+// PDF = cos(theta) / pi
+float3 cosWeightedHemisphereGetSample(float3 normal, float2 randSample) {
+	// Generate point on disk
+	float rd = sqrt(randSample.x);
+	float phi = C_TWO_TIMES_PI*randSample.y;
+
+	// Generate tangent, bi-tangent vectors
+	float3 u = normalize(cross((fabs(normal.z) < .999f ? (float3)(0.0f, 0.0f, 1.0f) : (float3)(1.0f, 0.0f, 0.0f)), normal));
+	float3 v = cross(normal,u);
+
+	// Project disk point to unit hemisphere and rotate so that the normal points up
+	return normalize(u * rd * native_cos(phi) + v * rd * native_sin(phi) + normal * native_sqrt(1 - randSample.x));
 }
 
 #endif

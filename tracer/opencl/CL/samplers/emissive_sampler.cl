@@ -95,7 +95,7 @@ float3 areaLightGetSample(
 
 	// Apply normal map
 	if(matNode.normalTex != -1){
-		emissiveNormal = matGetNormalSample3f(emissiveNormal, emissiveUV, matNode.normalTex, texMeta, texData);
+		emissiveNormal = matGetNormalSample3f(matNode.flags, emissiveNormal, emissiveUV, matNode.normalTex, texMeta, texData);
 	}
 
 	float3 emissiveRay = emissivePoint - surface->point;
@@ -172,11 +172,12 @@ float areaLightGetPdf(
 	// Apply normal map
 	float3 emissiveNormal = normalize(cross(edge01, edge02));
 	int normalTex = materialNodes[emissive->matNodeIndex].normalTex;
+	uint matFlags = materialNodes[emissive->matNodeIndex].flags;
 	if(normalTex != -1){
 		float2 emissiveUV = (1.0f - u - v) * uv[offset] + 
 		 			        u * uv[offset+1] + 
 				  			v * uv[offset+2];
-		emissiveNormal = matGetNormalSample3f(emissiveNormal, emissiveUV, normalTex, texMeta, texData);
+		emissiveNormal = matGetNormalSample3f(matFlags, emissiveNormal, emissiveUV, normalTex, texMeta, texData);
 	}
 
 	// The cos term allows us to convert from the uniform pdf 1/|A| from area measure 

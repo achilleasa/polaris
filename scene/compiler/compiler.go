@@ -285,7 +285,7 @@ func (sc *sceneCompiler) partitionGeometry() error {
 // Perform a DFS in a layered material tree trying to locate anode with a particular BXDF.
 func (sc *sceneCompiler) findMaterialNodeByBxdf(nodeIndex uint32, bxdf scene.MatBxdfType) int32 {
 	node := sc.optimizedScene.MaterialNodeList[nodeIndex]
-	if node.IsNode == 0 {
+	if node.Flags&scene.IsNode == 0 {
 		if node.GetBxdfType() == bxdf {
 			return int32(nodeIndex)
 		}

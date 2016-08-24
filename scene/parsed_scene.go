@@ -134,6 +134,7 @@ type ParsedMaterial struct {
 	KsTex     *ParsedTexture
 	KeTex     *ParsedTexture
 	TfTex     *ParsedTexture
+	BumpTex   *ParsedTexture
 	NormalTex *ParsedTexture
 	NiTex     *ParsedTexture
 	NrTex     *ParsedTexture
@@ -162,6 +163,9 @@ func (pm *ParsedMaterial) MarkTexturesAsUsed() {
 	}
 	if pm.TfTex != nil {
 		pm.TfTex.Used = true
+	}
+	if pm.BumpTex != nil {
+		pm.BumpTex.Used = true
 	}
 	if pm.NormalTex != nil {
 		pm.NormalTex.Used = true

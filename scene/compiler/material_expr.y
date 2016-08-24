@@ -49,7 +49,7 @@ blend_func:
 	{
 		node := &scene.MaterialNode{}
 		node.Init()
-		node.IsNode = 1
+		node.Flags = scene.IsNode
 		node.SetLeftIndex($3)
 		node.SetRightIndex($5)
 		node.SetBlendFunc(scene.Mix)
@@ -61,7 +61,7 @@ blend_func:
 	{
 		node := &scene.MaterialNode{}
 		node.Init()
-		node.IsNode = 1
+		node.Flags = scene.IsNode
 		node.SetLeftIndex($3)
 		node.SetRightIndex($5)
 		node.SetBlendFunc(scene.Fresnel)
@@ -81,7 +81,7 @@ BSDF:
 		node.Init()
 		node.Kval = exprVAL.material.Kd.Vec4(0)
 		node.SetKvalTex(exprVAL.material.KdTex)
-		node.SetNormalTex(exprVAL.material.NormalTex)
+		node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
 		node.SetBxdfType(scene.Diffuse)
 		$$ = exprVAL.compiler.appendMaterialNode(node)
 	}
@@ -91,7 +91,7 @@ BSDF:
 		node.Init()
 		node.Kval = exprVAL.material.Ks.Vec4(0)
 		node.SetKvalTex(exprVAL.material.KsTex)
-		node.SetNormalTex(exprVAL.material.NormalTex)
+		node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
 		node.SetBxdfType(scene.SpecularReflection)
 		$$ = exprVAL.compiler.appendMaterialNode(node)
 	}
@@ -101,7 +101,7 @@ BSDF:
 		node.Init()
 		node.Kval = exprVAL.material.Tf.Vec4(0)
 		node.SetKvalTex(exprVAL.material.TfTex)
-		node.SetNormalTex(exprVAL.material.NormalTex)
+		node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
 		if exprVAL.material.Ni <= 0.0 {
 			exprVAL.material.Ni = 1.0
 		}
@@ -116,7 +116,7 @@ BSDF:
 		node.Init()
 		node.Kval = exprVAL.material.Ks.Vec4(0)
 		node.SetKvalTex(exprVAL.material.KsTex)
-		node.SetNormalTex(exprVAL.material.NormalTex)
+		node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
 		node.Nval = exprVAL.material.Nr
 		node.SetNvalTex(exprVAL.material.NrTex)
 		if exprVAL.material.Ni <= 0.0 {
@@ -133,7 +133,7 @@ BSDF:
 		node.Init()
 		node.Kval = exprVAL.material.Tf.Vec4(0)
 		node.SetKvalTex(exprVAL.material.TfTex)
-		node.SetNormalTex(exprVAL.material.NormalTex)
+		node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
 		node.Nval = exprVAL.material.Nr
 		node.SetNvalTex(exprVAL.material.NrTex)
 		if exprVAL.material.Ni <= 0.0 {
@@ -150,7 +150,7 @@ BSDF:
 		node.Init()
 		node.Kval = exprVAL.material.Ke.Vec4(0)
 		node.SetKvalTex(exprVAL.material.KeTex)
-		node.SetNormalTex(exprVAL.material.NormalTex)
+		node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
 		node.SetBxdfType(scene.Emissive)
 		$$ = exprVAL.compiler.appendMaterialNode(node)
 	}

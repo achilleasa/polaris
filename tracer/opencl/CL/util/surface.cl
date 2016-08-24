@@ -1,6 +1,10 @@
 #ifndef SURFACE_CL
 #define SURFACE_CL
 
+#define TANGENT_VECTORS(normal, u, v) \
+	u = normalize(cross((fabs(normal.z) < .999f ? (float3)(0.0f, 0.0f, 1.0f) : (float3)(1.0f, 0.0f, 0.0f)), normal)); \
+	v = cross(normal, u);
+
 void surfaceInit(Surface *surface, __global Intersection *intersection, __global float4 *vertices, __global float4 *normals, __global float2 *uv, __global uint *matIndices);
 void printSurface(Surface *surface);
 

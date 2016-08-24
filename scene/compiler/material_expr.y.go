@@ -616,7 +616,7 @@ exprdefault:
 		{
 			node := &scene.MaterialNode{}
 			node.Init()
-			node.IsNode = 1
+			node.Flags = scene.IsNode
 			node.SetLeftIndex(exprDollar[3].nodeId)
 			node.SetRightIndex(exprDollar[5].nodeId)
 			node.SetBlendFunc(scene.Mix)
@@ -630,7 +630,7 @@ exprdefault:
 		{
 			node := &scene.MaterialNode{}
 			node.Init()
-			node.IsNode = 1
+			node.Flags = scene.IsNode
 			node.SetLeftIndex(exprDollar[3].nodeId)
 			node.SetRightIndex(exprDollar[5].nodeId)
 			node.SetBlendFunc(scene.Fresnel)
@@ -646,7 +646,7 @@ exprdefault:
 			node.Init()
 			node.Kval = exprVAL.material.Kd.Vec4(0)
 			node.SetKvalTex(exprVAL.material.KdTex)
-			node.SetNormalTex(exprVAL.material.NormalTex)
+			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
 			node.SetBxdfType(scene.Diffuse)
 			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
 		}
@@ -658,7 +658,7 @@ exprdefault:
 			node.Init()
 			node.Kval = exprVAL.material.Ks.Vec4(0)
 			node.SetKvalTex(exprVAL.material.KsTex)
-			node.SetNormalTex(exprVAL.material.NormalTex)
+			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
 			node.SetBxdfType(scene.SpecularReflection)
 			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
 		}
@@ -670,7 +670,7 @@ exprdefault:
 			node.Init()
 			node.Kval = exprVAL.material.Tf.Vec4(0)
 			node.SetKvalTex(exprVAL.material.TfTex)
-			node.SetNormalTex(exprVAL.material.NormalTex)
+			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
 			if exprVAL.material.Ni <= 0.0 {
 				exprVAL.material.Ni = 1.0
 			}
@@ -687,7 +687,7 @@ exprdefault:
 			node.Init()
 			node.Kval = exprVAL.material.Ks.Vec4(0)
 			node.SetKvalTex(exprVAL.material.KsTex)
-			node.SetNormalTex(exprVAL.material.NormalTex)
+			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
 			node.Nval = exprVAL.material.Nr
 			node.SetNvalTex(exprVAL.material.NrTex)
 			if exprVAL.material.Ni <= 0.0 {
@@ -706,7 +706,7 @@ exprdefault:
 			node.Init()
 			node.Kval = exprVAL.material.Tf.Vec4(0)
 			node.SetKvalTex(exprVAL.material.TfTex)
-			node.SetNormalTex(exprVAL.material.NormalTex)
+			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
 			node.Nval = exprVAL.material.Nr
 			node.SetNvalTex(exprVAL.material.NrTex)
 			if exprVAL.material.Ni <= 0.0 {
@@ -725,7 +725,7 @@ exprdefault:
 			node.Init()
 			node.Kval = exprVAL.material.Ke.Vec4(0)
 			node.SetKvalTex(exprVAL.material.KeTex)
-			node.SetNormalTex(exprVAL.material.NormalTex)
+			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
 			node.SetBxdfType(scene.Emissive)
 			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
 		}

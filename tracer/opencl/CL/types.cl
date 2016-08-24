@@ -124,7 +124,8 @@ typedef struct {
 	// texture index for overriding ior
 	int iorTex;
 	
-	uint isNode;
+	// flags 
+	uint flags;
 
 	union {
 		// For intermediate nodes
@@ -138,7 +139,7 @@ typedef struct {
 		// For intermediate nodes
 		uint rightChild;
 
-		// texture index for normal map
+		// texture index for bump/normal map
 		int normalTex;
 	};
 

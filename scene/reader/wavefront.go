@@ -555,7 +555,7 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 				}
 
 				*target, err = parseFloat32(lineTokens)
-			case "map_Kd", "map_Ks", "map_Ke", "map_Tf", "map_bump", "map_Ni", "map_Nr":
+			case "map_Kd", "map_Ks", "map_Ke", "map_Tf", "map_bump", "map_normal", "map_Ni", "map_Nr":
 				var target **scenePkg.ParsedTexture
 				switch lineTokens[0] {
 				case "map_Kd":
@@ -567,6 +567,8 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 				case "map_Tf":
 					target = &curMaterial.TfTex
 				case "map_bump":
+					target = &curMaterial.BumpTex
+				case "map_normal":
 					target = &curMaterial.NormalTex
 				case "map_Ni":
 					target = &curMaterial.NiTex

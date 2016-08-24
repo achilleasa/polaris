@@ -104,7 +104,7 @@ __kernel void shadeHits(
 
 			// Apply normal map
 			if(materialNode.normalTex != -1){
-				surface.normal = matGetNormalSample3f(surface.normal, surface.uv, materialNode.normalTex, texMeta, texData);
+				surface.normal = matGetNormalSample3f(materialNode.flags, surface.normal, surface.uv, materialNode.normalTex, texMeta, texData);
 			}
 
 			float inRayDotNormal = dot(inRayDir, surface.normal);

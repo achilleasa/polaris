@@ -92,7 +92,7 @@ __kernel void debugRayIntersectionNormals(
 	// Apply normal map
 	int normalTex = materialNode.normalTex;
 	if(normalTex != -1){
-		surface.normal = matGetNormalSample3f(surface.normal, surface.uv, normalTex, texMeta, texData);
+		surface.normal = matGetNormalSample3f(materialNode.flags, surface.normal, surface.uv, normalTex, texMeta, texData);
 	}
 	
 	// convert normal from [-1, 1] -> [0, 255]

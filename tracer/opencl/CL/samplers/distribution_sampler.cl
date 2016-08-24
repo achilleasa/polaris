@@ -47,8 +47,8 @@ float ggxGetD(float roughness, float3 n, float3 m){
 // Sample GGX distribution to generate a normal that will be used for microfacet calculations.
 float3 ggxGetSample(float roughness, float3 inRayDir, float3 n, float2 randSample){
 	// Generate tangent, bi-tangent vectors
-	float3 u = normalize(cross((fabs(n.z) < .999f ? (float3)(0.0f, 0.0f, 1.0f) : (float3)(1.0f, 0.0f, 0.0f)), n));
-	float3 v = cross(n,u);
+	float3 u,v;
+	TANGENT_VECTORS(n, u, v);
 
 	// According to equations (35, 36) for sampling GGX:
 	// theta = atan( a * sqrt(randSample.x / 1 - randSample.x) )
@@ -97,8 +97,8 @@ float3 cosWeightedHemisphereGetSample(float3 normal, float2 randSample) {
 	float phi = C_TWO_TIMES_PI*randSample.y;
 
 	// Generate tangent, bi-tangent vectors
-	float3 u = normalize(cross((fabs(normal.z) < .999f ? (float3)(0.0f, 0.0f, 1.0f) : (float3)(1.0f, 0.0f, 0.0f)), normal));
-	float3 v = cross(normal,u);
+	float3 u,v;
+	TANGENT_VECTORS(normal, u, v);
 
 	// Project disk point to unit hemisphere and rotate so that the normal points up
 	return normalize(u * rd * native_cos(phi) + v * rd * native_sin(phi) + normal * native_sqrt(1 - randSample.x));

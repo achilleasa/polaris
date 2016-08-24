@@ -100,6 +100,14 @@ const (
 	SpecularMicrofacetTransmission
 )
 
+type MatFlag uint32
+
+const (
+	IsNode MatFlag = 1 << iota
+	UseNormalMap
+	UseBumpMap
+)
+
 // Materials are represented as a tree where nodes define a blending operation
 // and leaves define a BRDF for the surface. This allows us to define complex
 // materials (e.g. 20% diffuse and 80% specular). In order to use the same structure
@@ -122,8 +130,8 @@ type MaterialNode struct {
 	IOR    float32
 	IORTex int32
 
-	// Set to 1 if this is a node; 0 if this is a leaf
-	IsNode uint32
+	// Node flags.
+	Flags MatFlag
 
 	// This union like structure has different contents depending on the node
 	// type.
@@ -199,12 +207,21 @@ func (m *MaterialNode) GetKvalTex() int32 {
 }
 
 // Set normal tex index.
-func (m *MaterialNode) SetNormalTex(tex *ParsedTexture) {
-	if tex == nil {
+func (m *MaterialNode) SetNormalTex(bumpTex *ParsedTexture, normalTex *ParsedTexture) {
+	if bumpTex == nil && normalTex == nil {
 		m.UnionData[1] = -1
 		return
 	}
-	m.UnionData[1] = int32(tex.TexIndex)
+
+	// Choose between bump map and normal map and set the proper node flags
+	// If both are defined we prefer the normal map
+	if normalTex != nil {
+		m.Flags |= UseNormalMap
+		m.UnionData[1] = int32(normalTex.TexIndex)
+	} else {
+		m.Flags |= UseBumpMap
+		m.UnionData[1] = int32(bumpTex.TexIndex)
+	}
 }
 
 // Set Nval tex index.

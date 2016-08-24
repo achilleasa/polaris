@@ -151,6 +151,8 @@ BSDF:
 		node.Kval = exprVAL.material.Ke.Vec4(0)
 		node.SetKvalTex(exprVAL.material.KeTex)
 		node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
+		node.Nval = exprVAL.material.KeScaler
+		node.SetNvalTex(exprVAL.material.KeScalerTex)
 		node.SetBxdfType(scene.Emissive)
 		$$ = exprVAL.compiler.appendMaterialNode(node)
 	}

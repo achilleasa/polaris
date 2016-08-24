@@ -58,7 +58,7 @@ const exprEofCode = 1
 const exprErrCode = 2
 const exprInitialStackSize = 16
 
-//line material_expr.y:157
+//line material_expr.y:159
 
 // The parser expects the lexer to return 0 on EOF.
 const EOF = 0
@@ -726,6 +726,8 @@ exprdefault:
 			node.Kval = exprVAL.material.Ke.Vec4(0)
 			node.SetKvalTex(exprVAL.material.KeTex)
 			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
+			node.Nval = exprVAL.material.KeScaler
+			node.SetNvalTex(exprVAL.material.KeScalerTex)
 			node.SetBxdfType(scene.Emissive)
 			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
 		}

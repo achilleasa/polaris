@@ -117,8 +117,9 @@ type ParsedMaterial struct {
 	// Specular color.
 	Ks types.Vec3
 
-	// Emissive color.
-	Ke types.Vec3
+	// Emissive color and scaler.
+	Ke       types.Vec3
+	KeScaler float32
 
 	// Transmission filter
 	Tf types.Vec3
@@ -130,14 +131,15 @@ type ParsedMaterial struct {
 	Nr float32
 
 	// Textures for modulating above parameters.
-	KdTex     *ParsedTexture
-	KsTex     *ParsedTexture
-	KeTex     *ParsedTexture
-	TfTex     *ParsedTexture
-	BumpTex   *ParsedTexture
-	NormalTex *ParsedTexture
-	NiTex     *ParsedTexture
-	NrTex     *ParsedTexture
+	KdTex       *ParsedTexture
+	KsTex       *ParsedTexture
+	KeTex       *ParsedTexture
+	KeScalerTex *ParsedTexture
+	TfTex       *ParsedTexture
+	BumpTex     *ParsedTexture
+	NormalTex   *ParsedTexture
+	NiTex       *ParsedTexture
+	NrTex       *ParsedTexture
 
 	// Layered material expression.
 	MaterialExpression string
@@ -160,6 +162,9 @@ func (pm *ParsedMaterial) MarkTexturesAsUsed() {
 	}
 	if pm.KeTex != nil {
 		pm.KeTex.Used = true
+	}
+	if pm.KeScalerTex != nil {
+		pm.KeScalerTex.Used = true
 	}
 	if pm.TfTex != nil {
 		pm.TfTex.Used = true
@@ -258,6 +263,7 @@ func NewParsedMesh(name string) *ParsedMesh {
 // Create a new parsed material.
 func NewParsedMaterial(name string) *ParsedMaterial {
 	return &ParsedMaterial{
-		Name: name,
+		Name:     name,
+		KeScaler: 1.0,
 	}
 }

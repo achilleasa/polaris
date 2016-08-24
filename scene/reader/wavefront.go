@@ -555,7 +555,7 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 				}
 
 				*target, err = parseFloat32(lineTokens)
-			case "map_Kd", "map_Ks", "map_Ke", "map_Tf", "map_bump", "map_normal", "map_Ni", "map_Nr":
+			case "map_Kd", "map_Ks", "map_Ke", "map_KeScaler", "map_Tf", "map_bump", "map_normal", "map_Ni", "map_Nr":
 				var target **scenePkg.ParsedTexture
 				switch lineTokens[0] {
 				case "map_Kd":
@@ -564,6 +564,8 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 					target = &curMaterial.KsTex
 				case "map_Ke":
 					target = &curMaterial.KeTex
+				case "map_KeScaler":
+					target = &curMaterial.KeScalerTex
 				case "map_Tf":
 					target = &curMaterial.TfTex
 				case "map_bump":
@@ -594,6 +596,11 @@ func (r *wavefrontSceneReader) parseMaterials(res *resource) error {
 					return r.emitError(res.Path(), lineNum, `unsupported syntax for "%s"; expected 1 argument; got %d`, lineTokens[0], len(lineTokens)-1)
 				}
 				curMaterial.MaterialExpression = strings.Join(lineTokens[1:], " ")
+			case "KeScaler":
+				if len(lineTokens) < 2 {
+					return r.emitError(res.Path(), lineNum, `unsupported syntax for "%s"; expected 1 argument; got %d`, lineTokens[0], len(lineTokens)-1)
+				}
+				curMaterial.KeScaler, err = parseFloat32(lineTokens)
 			}
 
 			// Report any errors

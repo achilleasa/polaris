@@ -33,7 +33,8 @@ float3 environmentLightGetSample(
 	float2 uv = rayToLatLongUV(*outRayDir);
 	MaterialNode matNode = materialNodes[emissive->matNodeIndex];
 
-	return matGetSample3f(uv, matNode.kval, matNode.kvalTex, texMeta, texData) * C_1_PI;
+	float scaler = matGetSample1f(uv, matNode.nval, matNode.nvalTex, texMeta, texData);
+	return scaler * matGetSample3f(uv, matNode.kval, matNode.kvalTex, texMeta, texData) * C_1_PI;
 }
 
 float environmentLightGetPdf(
@@ -107,10 +108,12 @@ float3 areaLightGetSample(
 	if( nDotOutRay > 0.0f ){
 		*pdf = 1.0f / emissive->area;
 
+		float scaler = matGetSample1f(emissiveUV, matNode.nval, matNode.nvalTex, texMeta, texData);
+
 		// convert from area to solid angle using formula (25) from total compedium:
 		// ω = cos(θy) / dist^2
 		float3 ke = matGetSample3f(emissiveUV, matNode.kval, matNode.kvalTex, texMeta, texData);
-		return ke * nDotOutRay / squaredDistToLight;
+		return scaler * ke * nDotOutRay / squaredDistToLight;
 	}
 
 	*pdf = 0.0f;

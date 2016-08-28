@@ -15,7 +15,7 @@ import (
 	cVal rune
 	fVal float32
 	sVal string
-	node exprNode
+	node ExprNode
 }
 
 /* basic entities */
@@ -72,15 +72,15 @@ import (
 
 %%
 material_def: bxdf_spec 
-	    { exprlex.(*matExprLexer).parsedExpression = &ParsedExpression{expressionAST: $1} }
+	    { exprlex.(*matExprLexer).parsedExpression = $1 }
 	    | blend_spec
-	    { exprlex.(*matExprLexer).parsedExpression = &ParsedExpression{expressionAST: $1} }
+	    { exprlex.(*matExprLexer).parsedExpression = $1 } 
 
 bxdf_spec: bxdf_type tokLPAREN opt_bxdf_parameter_list tokRPAREN
 	 { 
-	 	$$ = bxdfNode {
+	 	$$ = BxdfNode {
 			Type: bxdfTypeFromName($1),
-			Parameters: $3.(bxdfParameterList),
+			Parameters: $3.(BxdfParameterList),
 		}
 	}
 
@@ -92,63 +92,63 @@ bxdf_type: tokDIFFUSE
 	 | tokEMISSIVE
 
 opt_bxdf_parameter_list: /* empty */
-		       { $$ = make(bxdfParameterList, 0) }
+		       { $$ = make(BxdfParameterList, 0) }
 		       | bxdf_parameter_list
 
 bxdf_parameter_list: bxdf_parameter
-		   { $$ = bxdfParameterList{$1.(bxdfParamNode)} }
+		   { $$ = BxdfParameterList{$1.(BxdfParamNode)} }
 	           | bxdf_parameter_list tokCOMMA bxdf_parameter
-		   { $$ = append($1.(bxdfParameterList), $3.(bxdfParamNode)) }
+		   { $$ = append($1.(BxdfParameterList), $3.(BxdfParamNode)) }
 
 bxdf_parameter: tokREFLECTANCE tokCOLON float3_or_texture
-	      { $$ = bxdfParamNode{Name: $1, Value: $3} }
+	      { $$ = BxdfParamNode{Name: $1, Value: $3} }
 	      | tokSPECULARITY tokCOLON float3_or_texture
-	      { $$ = bxdfParamNode{Name: $1, Value: $3} }
+	      { $$ = BxdfParamNode{Name: $1, Value: $3} }
 	      | tokTRANSMITTANCE tokCOLON float3_or_texture
-	      { $$ = bxdfParamNode{Name: $1, Value: $3} }
+	      { $$ = BxdfParamNode{Name: $1, Value: $3} }
 	      | tokRADIANCE tokCOLON float3_or_texture
-	      { $$ = bxdfParamNode{Name: $1, Value: $3} }
+	      { $$ = BxdfParamNode{Name: $1, Value: $3} }
 	      | tokINT_IOR tokCOLON float_or_name_or_texture
-	      { $$ = bxdfParamNode{Name: $1, Value: $3} }
+	      { $$ = BxdfParamNode{Name: $1, Value: $3} }
 	      | tokEXT_IOR tokCOLON float_or_name_or_texture
-	      { $$ = bxdfParamNode{Name: $1, Value: $3} }
+	      { $$ = BxdfParamNode{Name: $1, Value: $3} }
 	      | tokSCALE tokCOLON tokFLOAT
-	      { $$ = bxdfParamNode{Name: $1, Value: floatNode($3)} }
+	      { $$ = BxdfParamNode{Name: $1, Value: FloatNode($3)} }
 	      | tokROUGHNESS tokCOLON float_or_texture
-	      { $$ = bxdfParamNode{Name: $1, Value: $3} }
+	      { $$ = BxdfParamNode{Name: $1, Value: $3} }
 
 float3_or_texture: float3
-		 | tokTEXTURE { $$ = textureNode($1) }
+		 | tokTEXTURE { $$ = TextureNode($1) }
 
 float3: tokLCURLY tokFLOAT tokCOMMA tokFLOAT tokCOMMA tokFLOAT tokRCURLY 
-      	{ $$ = vec3Node{$2, $4, $6} }
+      	{ $$ = Vec3Node{$2, $4, $6} }
 
-float_or_name_or_texture: tokFLOAT { $$ = floatNode($1) }
-			| tokMATERIAL_NAME { $$ = materialNameNode($1) }
-			| tokTEXTURE { $$ = textureNode($1) }
+float_or_name_or_texture: tokFLOAT { $$ = FloatNode($1) }
+			| tokMATERIAL_NAME { $$ = MaterialNameNode($1) }
+			| tokTEXTURE { $$ = TextureNode($1) }
 
-float_or_texture: tokFLOAT { $$ = floatNode($1) }
-		| tokTEXTURE { $$ = textureNode($1) }
+float_or_texture: tokFLOAT { $$ = FloatNode($1) }
+		| tokTEXTURE { $$ = TextureNode($1) }
 
 blend_spec: tokMIX tokLPAREN bxdf_or_blend_spec tokCOMMA bxdf_or_blend_spec tokCOMMA tokFLOAT tokCOMMA tokFLOAT tokRPAREN
 	  { 
-	  	$$ = mixNode{ 
-	  		Expressions: [2]exprNode{$3, $5},
+	  	$$ = MixNode{ 
+	  		Expressions: [2]ExprNode{$3, $5},
 			Weights: [2]float32{$7, $9},
 		}
 	  }
 	  | tokBUMP_MAP tokLPAREN bxdf_or_blend_spec tokCOMMA tokTEXTURE tokRPAREN
 	  {
-	  	$$ = bumpMapNode {
+	  	$$ = BumpMapNode {
 			Expression: $3,
-			Texture: textureNode($5),
+			Texture: TextureNode($5),
 		}
 	  }
 	  | tokNORMAL_MAP tokLPAREN bxdf_or_blend_spec tokCOMMA tokTEXTURE tokRPAREN
 	  {
-	  	$$ = normalMapNode {
+	  	$$ = NormalMapNode {
 			Expression: $3,
-			Texture: textureNode($5),
+			Texture: TextureNode($5),
 		}
 	  }
 
@@ -166,7 +166,7 @@ type matExprLexer struct {
 	peek rune
 	tokenBuf bytes.Buffer
 
-	parsedExpression *ParsedExpression
+	parsedExpression ExprNode
 
 	lastError error
 }
@@ -285,14 +285,14 @@ func (x *matExprLexer) lexIdentifier(c rune, yylval *exprSymType) int {
 	case "bumpMap": return tokBUMP_MAP
 	case "normalMap": return tokNORMAL_MAP
 	// Parameters
-	case paramReflectance: return tokREFLECTANCE
-	case paramSpecularity: return tokSPECULARITY
-	case paramTransmittance: return tokTRANSMITTANCE
-	case paramRadiance: return tokRADIANCE
-	case paramIntIOR: return tokINT_IOR
-	case paramExtIOR: return tokEXT_IOR
-	case paramScale: return tokSCALE
-	case paramRoughness: return tokROUGHNESS
+	case ParamReflectance: return tokREFLECTANCE
+	case ParamSpecularity: return tokSPECULARITY
+	case ParamTransmittance: return tokTRANSMITTANCE
+	case ParamRadiance: return tokRADIANCE
+	case ParamIntIOR: return tokINT_IOR
+	case ParamExtIOR: return tokEXT_IOR
+	case ParamScale: return tokSCALE
+	case ParamRoughness: return tokROUGHNESS
 	default:
 		x.Error(fmt.Sprintf("invalid expression %q", yylval.sVal))
 		return tokEOF
@@ -332,7 +332,7 @@ func (x *matExprLexer) Error(s string) {
 }
 
 // Parser interface.
-func ParseExpression(input string) (*ParsedExpression, error) {
+func ParseExpression(input string) (ExprNode, error) {
 	matLexer := &matExprLexer{ line : []byte(input) }
 	exprNewParser().Parse(matLexer)
 	if matLexer.lastError != nil {

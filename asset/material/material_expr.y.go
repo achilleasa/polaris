@@ -19,7 +19,7 @@ type exprSymType struct {
 	cVal rune
 	fVal float32
 	sVal string
-	node exprNode
+	node ExprNode
 }
 
 const tokLPAREN = 57346
@@ -98,7 +98,7 @@ type matExprLexer struct {
 	peek     rune
 	tokenBuf bytes.Buffer
 
-	parsedExpression *ParsedExpression
+	parsedExpression ExprNode
 
 	lastError error
 }
@@ -226,21 +226,21 @@ func (x *matExprLexer) lexIdentifier(c rune, yylval *exprSymType) int {
 	case "normalMap":
 		return tokNORMAL_MAP
 	// Parameters
-	case paramReflectance:
+	case ParamReflectance:
 		return tokREFLECTANCE
-	case paramSpecularity:
+	case ParamSpecularity:
 		return tokSPECULARITY
-	case paramTransmittance:
+	case ParamTransmittance:
 		return tokTRANSMITTANCE
-	case paramRadiance:
+	case ParamRadiance:
 		return tokRADIANCE
-	case paramIntIOR:
+	case ParamIntIOR:
 		return tokINT_IOR
-	case paramExtIOR:
+	case ParamExtIOR:
 		return tokEXT_IOR
-	case paramScale:
+	case ParamScale:
 		return tokSCALE
-	case paramRoughness:
+	case ParamRoughness:
 		return tokROUGHNESS
 	default:
 		x.Error(fmt.Sprintf("invalid expression %q", yylval.sVal))
@@ -281,7 +281,7 @@ func (x *matExprLexer) Error(s string) {
 }
 
 // Parser interface.
-func ParseExpression(input string) (*ParsedExpression, error) {
+func ParseExpression(input string) (ExprNode, error) {
 	matLexer := &matExprLexer{line: []byte(input)}
 	exprNewParser().Parse(matLexer)
 	if matLexer.lastError != nil {
@@ -724,137 +724,137 @@ exprdefault:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
 		//line material_expr.y:75
 		{
-			exprlex.(*matExprLexer).parsedExpression = &ParsedExpression{expressionAST: exprDollar[1].node}
+			exprlex.(*matExprLexer).parsedExpression = exprDollar[1].node
 		}
 	case 2:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
 		//line material_expr.y:77
 		{
-			exprlex.(*matExprLexer).parsedExpression = &ParsedExpression{expressionAST: exprDollar[1].node}
+			exprlex.(*matExprLexer).parsedExpression = exprDollar[1].node
 		}
 	case 3:
 		exprDollar = exprS[exprpt-4 : exprpt+1]
 		//line material_expr.y:80
 		{
-			exprVAL.node = bxdfNode{
+			exprVAL.node = BxdfNode{
 				Type:       bxdfTypeFromName(exprDollar[1].sVal),
-				Parameters: exprDollar[3].node.(bxdfParameterList),
+				Parameters: exprDollar[3].node.(BxdfParameterList),
 			}
 		}
 	case 10:
 		exprDollar = exprS[exprpt-0 : exprpt+1]
 		//line material_expr.y:95
 		{
-			exprVAL.node = make(bxdfParameterList, 0)
+			exprVAL.node = make(BxdfParameterList, 0)
 		}
 	case 12:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
 		//line material_expr.y:99
 		{
-			exprVAL.node = bxdfParameterList{exprDollar[1].node.(bxdfParamNode)}
+			exprVAL.node = BxdfParameterList{exprDollar[1].node.(BxdfParamNode)}
 		}
 	case 13:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
 		//line material_expr.y:101
 		{
-			exprVAL.node = append(exprDollar[1].node.(bxdfParameterList), exprDollar[3].node.(bxdfParamNode))
+			exprVAL.node = append(exprDollar[1].node.(BxdfParameterList), exprDollar[3].node.(BxdfParamNode))
 		}
 	case 14:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
 		//line material_expr.y:104
 		{
-			exprVAL.node = bxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 15:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
 		//line material_expr.y:106
 		{
-			exprVAL.node = bxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 16:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
 		//line material_expr.y:108
 		{
-			exprVAL.node = bxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 17:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
 		//line material_expr.y:110
 		{
-			exprVAL.node = bxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 18:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
 		//line material_expr.y:112
 		{
-			exprVAL.node = bxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 19:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
 		//line material_expr.y:114
 		{
-			exprVAL.node = bxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 20:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
 		//line material_expr.y:116
 		{
-			exprVAL.node = bxdfParamNode{Name: exprDollar[1].sVal, Value: floatNode(exprDollar[3].fVal)}
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: FloatNode(exprDollar[3].fVal)}
 		}
 	case 21:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
 		//line material_expr.y:118
 		{
-			exprVAL.node = bxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 23:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
 		//line material_expr.y:121
 		{
-			exprVAL.node = textureNode(exprDollar[1].sVal)
+			exprVAL.node = TextureNode(exprDollar[1].sVal)
 		}
 	case 24:
 		exprDollar = exprS[exprpt-7 : exprpt+1]
 		//line material_expr.y:124
 		{
-			exprVAL.node = vec3Node{exprDollar[2].fVal, exprDollar[4].fVal, exprDollar[6].fVal}
+			exprVAL.node = Vec3Node{exprDollar[2].fVal, exprDollar[4].fVal, exprDollar[6].fVal}
 		}
 	case 25:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
 		//line material_expr.y:126
 		{
-			exprVAL.node = floatNode(exprDollar[1].fVal)
+			exprVAL.node = FloatNode(exprDollar[1].fVal)
 		}
 	case 26:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
 		//line material_expr.y:127
 		{
-			exprVAL.node = materialNameNode(exprDollar[1].sVal)
+			exprVAL.node = MaterialNameNode(exprDollar[1].sVal)
 		}
 	case 27:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
 		//line material_expr.y:128
 		{
-			exprVAL.node = textureNode(exprDollar[1].sVal)
+			exprVAL.node = TextureNode(exprDollar[1].sVal)
 		}
 	case 28:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
 		//line material_expr.y:130
 		{
-			exprVAL.node = floatNode(exprDollar[1].fVal)
+			exprVAL.node = FloatNode(exprDollar[1].fVal)
 		}
 	case 29:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
 		//line material_expr.y:131
 		{
-			exprVAL.node = textureNode(exprDollar[1].sVal)
+			exprVAL.node = TextureNode(exprDollar[1].sVal)
 		}
 	case 30:
 		exprDollar = exprS[exprpt-10 : exprpt+1]
 		//line material_expr.y:134
 		{
-			exprVAL.node = mixNode{
-				Expressions: [2]exprNode{exprDollar[3].node, exprDollar[5].node},
+			exprVAL.node = MixNode{
+				Expressions: [2]ExprNode{exprDollar[3].node, exprDollar[5].node},
 				Weights:     [2]float32{exprDollar[7].fVal, exprDollar[9].fVal},
 			}
 		}
@@ -862,18 +862,18 @@ exprdefault:
 		exprDollar = exprS[exprpt-6 : exprpt+1]
 		//line material_expr.y:141
 		{
-			exprVAL.node = bumpMapNode{
+			exprVAL.node = BumpMapNode{
 				Expression: exprDollar[3].node,
-				Texture:    textureNode(exprDollar[5].sVal),
+				Texture:    TextureNode(exprDollar[5].sVal),
 			}
 		}
 	case 32:
 		exprDollar = exprS[exprpt-6 : exprpt+1]
 		//line material_expr.y:148
 		{
-			exprVAL.node = normalMapNode{
+			exprVAL.node = NormalMapNode{
 				Expression: exprDollar[3].node,
-				Texture:    textureNode(exprDollar[5].sVal),
+				Texture:    TextureNode(exprDollar[5].sVal),
 			}
 		}
 	}

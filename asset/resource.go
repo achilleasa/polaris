@@ -88,3 +88,12 @@ func NewResource(pathToResource string, relTo *Resource) (*Resource, error) {
 		url:        url,
 	}, nil
 }
+
+// Create a resource from a reader.
+func NewResourceFromStream(name string, source io.Reader) *Resource {
+	url, _ := url.Parse(name)
+	return &Resource{
+		ReadCloser: ioutil.NopCloser(source)),
+		url:        url,
+	}
+}

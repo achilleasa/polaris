@@ -2,10 +2,8 @@ package asset
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -91,12 +89,5 @@ func TestResourceConnectionRefusedError(t *testing.T) {
 	_, err := NewResource("http://localhost:12345/foo.go", nil)
 	if err == nil || !strings.Contains(err.Error(), "connection refused") {
 		t.Fatalf("expected to get 'connection refused error'; got %v", err)
-	}
-}
-func mockResource(payload string) *Resource {
-	url, _ := url.Parse("embedded")
-	return &Resource{
-		ReadCloser: ioutil.NopCloser(strings.NewReader(payload)),
-		url:        url,
 	}
 }

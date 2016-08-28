@@ -1,4 +1,4 @@
-package resource
+package asset
 
 import (
 	"fmt"

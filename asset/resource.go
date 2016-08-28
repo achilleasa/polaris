@@ -1,4 +1,4 @@
-package resource
+package asset
 
 import (
 	"fmt"
@@ -47,7 +47,7 @@ func NewResource(pathToResource string, relTo *Resource) (*Resource, error) {
 		if url.Scheme == "" {
 			prefix, err = filepath.Abs(relTo.url.String())
 			if err != nil {
-				return nil, fmt.Errorf("Resource: could not detect abs path for %s; %s", relTo.url.String(), err.Error())
+				return nil, fmt.Errorf("resource: could not detect abs path for %s; %s", relTo.url.String(), err.Error())
 			}
 		}
 		url.Path = filepath.Dir(prefix) + "/" + path
@@ -63,14 +63,14 @@ func NewResource(pathToResource string, relTo *Resource) (*Resource, error) {
 	case "http", "https":
 		resp, err := http.Get(url.String())
 		if err != nil {
-			return nil, fmt.Errorf("Resource: could not fetch '%s': %s", url.String(), err)
+			return nil, fmt.Errorf("resource: could not fetch '%s': %s", url.String(), err)
 		}
 		if resp.StatusCode >= 400 {
-			return nil, fmt.Errorf("Resource: could not fetch '%s': status %d", url.String(), resp.StatusCode)
+			return nil, fmt.Errorf("resource: could not fetch '%s': status %d", url.String(), resp.StatusCode)
 		}
 		reader = resp.Body
 	default:
-		return nil, fmt.Errorf("Resource: unsupported scheme '%s'", url.Scheme)
+		return nil, fmt.Errorf("resource: unsupported scheme '%s'", url.Scheme)
 	}
 
 	return &Resource{

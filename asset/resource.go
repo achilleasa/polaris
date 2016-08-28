@@ -16,9 +16,19 @@ type Resource struct {
 	url *url.URL
 }
 
-// Returns the path to this Resource.
+// Returns the path to this resource.
 func (r *Resource) Path() string {
 	return r.url.String()
+}
+
+// Return the remote path to this resource. If this is a remote resource then
+// this method returns the base path (without leading /) of the remote URL.
+// Otherwise, this method returns the same value as Path().
+func (r *Resource) RemotePath() string {
+	if r.IsRemote() {
+		return filepath.Base(r.url.Path)
+	}
+	return r.Path()
 }
 
 // Returns true if the Resource is streamed over http/https.

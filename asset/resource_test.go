@@ -35,6 +35,11 @@ func TestHttpResource(t *testing.T) {
 	}
 	defer res.Close()
 
+	base := res.RemotePath()
+	if base != filepath.Base(thisFile) {
+		t.Fatalf("expected RemotePath() to return %q; got %q", filepath.Base(thisFile), base)
+	}
+
 	fetchUrl = server.URL + "/file-not-found.foo"
 	expError := fmt.Sprintf("resource: could not fetch '%s': status %d", fetchUrl, 404)
 	_, err = NewResource(fetchUrl, nil)

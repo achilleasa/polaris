@@ -1,4 +1,4 @@
-package scene
+package texture
 
 type TextureFormat uint32
 

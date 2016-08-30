@@ -3,7 +3,7 @@ package opencl
 import (
 	"reflect"
 
-	"github.com/achilleasa/go-pathtrace/scene"
+	"github.com/achilleasa/go-pathtrace/asset/scene"
 	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
 	"github.com/achilleasa/gopencl/v1.2/cl"
 )

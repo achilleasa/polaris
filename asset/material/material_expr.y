@@ -58,13 +58,13 @@ import (
 %type <node> float3
 %type <node> bxdf_parameter
 %type <node> float3_or_texture
-%type <node> float_or_name_or_texture
+%type <node> float_or_name
 %type <node> float_or_texture
-%type <node> blend_spec
+%type <node> op_spec
 %type <node> opt_bxdf_parameter_list
 %type <node> bxdf_parameter_list
 %type <node> bxdf_spec
-%type <node> bxdf_or_blend_spec
+%type <node> bxdf_or_op_spec
 %type <sVal> bxdf_type
 
 /* rule entry point */
@@ -73,7 +73,7 @@ import (
 %%
 material_def: bxdf_spec 
 	    { exprlex.(*matExprLexer).parsedExpression = $1 }
-	    | blend_spec
+	    | op_spec
 	    { exprlex.(*matExprLexer).parsedExpression = $1 } 
 
 bxdf_spec: bxdf_type tokLPAREN opt_bxdf_parameter_list tokRPAREN
@@ -108,9 +108,9 @@ bxdf_parameter: tokREFLECTANCE tokCOLON float3_or_texture
 	      { $$ = BxdfParamNode{Name: $1, Value: $3} }
 	      | tokRADIANCE tokCOLON float3_or_texture
 	      { $$ = BxdfParamNode{Name: $1, Value: $3} }
-	      | tokINT_IOR tokCOLON float_or_name_or_texture
+	      | tokINT_IOR tokCOLON float_or_name
 	      { $$ = BxdfParamNode{Name: $1, Value: $3} }
-	      | tokEXT_IOR tokCOLON float_or_name_or_texture
+	      | tokEXT_IOR tokCOLON float_or_name
 	      { $$ = BxdfParamNode{Name: $1, Value: $3} }
 	      | tokSCALE tokCOLON tokFLOAT
 	      { $$ = BxdfParamNode{Name: $1, Value: FloatNode($3)} }
@@ -123,28 +123,27 @@ float3_or_texture: float3
 float3: tokLCURLY tokFLOAT tokCOMMA tokFLOAT tokCOMMA tokFLOAT tokRCURLY 
       	{ $$ = Vec3Node{$2, $4, $6} }
 
-float_or_name_or_texture: tokFLOAT { $$ = FloatNode($1) }
-			| tokMATERIAL_NAME { $$ = MaterialNameNode($1) }
-			| tokTEXTURE { $$ = TextureNode($1) }
+float_or_name: tokFLOAT { $$ = FloatNode($1) }
+ 	     | tokMATERIAL_NAME { $$ = MaterialNameNode($1) }
 
 float_or_texture: tokFLOAT { $$ = FloatNode($1) }
 		| tokTEXTURE { $$ = TextureNode($1) }
 
-blend_spec: tokMIX tokLPAREN bxdf_or_blend_spec tokCOMMA bxdf_or_blend_spec tokCOMMA tokFLOAT tokCOMMA tokFLOAT tokRPAREN
+op_spec: tokMIX tokLPAREN bxdf_or_op_spec tokCOMMA bxdf_or_op_spec tokCOMMA tokFLOAT tokCOMMA tokFLOAT tokRPAREN
 	  { 
 	  	$$ = MixNode{ 
 	  		Expressions: [2]ExprNode{$3, $5},
 			Weights: [2]float32{$7, $9},
 		}
 	  }
-	  | tokBUMP_MAP tokLPAREN bxdf_or_blend_spec tokCOMMA tokTEXTURE tokRPAREN
+	  | tokBUMP_MAP tokLPAREN bxdf_or_op_spec tokCOMMA tokTEXTURE tokRPAREN
 	  {
 	  	$$ = BumpMapNode {
 			Expression: $3,
 			Texture: TextureNode($5),
 		}
 	  }
-	  | tokNORMAL_MAP tokLPAREN bxdf_or_blend_spec tokCOMMA tokTEXTURE tokRPAREN
+	  | tokNORMAL_MAP tokLPAREN bxdf_or_op_spec tokCOMMA tokTEXTURE tokRPAREN
 	  {
 	  	$$ = NormalMapNode {
 			Expression: $3,
@@ -152,8 +151,8 @@ blend_spec: tokMIX tokLPAREN bxdf_or_blend_spec tokCOMMA bxdf_or_blend_spec tokC
 		}
 	  }
 
-bxdf_or_blend_spec: bxdf_spec
-		  | blend_spec
+bxdf_or_op_spec: bxdf_spec
+	       | op_spec
 %%
 
 // The parser expects the lexer to return 0 on kEOF.

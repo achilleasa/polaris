@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/achilleasa/go-pathtrace/scene/reader"
+	"github.com/achilleasa/go-pathtrace/asset/scene/reader"
 	"github.com/achilleasa/go-pathtrace/tracer"
 	"github.com/achilleasa/go-pathtrace/tracer/opencl"
 	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
@@ -46,7 +46,7 @@ func Debug(ctx *cli.Context) error {
 	sc.Camera.SetupProjection(float32(frameW) / float32(frameH))
 
 	// Setup tracer
-	dev, err := findDevice([]string{ /*"CPU", */ "AMD", "CPU", "Iris", "CPU"})
+	dev, err := findDevice([]string{"CPU", "AMD", "CPU", "Iris", "CPU"})
 	if err != nil {
 		logger.Error(err)
 		return err
@@ -55,11 +55,11 @@ func Debug(ctx *cli.Context) error {
 
 	// Setup pipeline
 	pipeline := opencl.DefaultPipeline(
-		opencl.PrimaryRayIntersectionDepth|opencl.PrimaryRayIntersectionNormals|
-			opencl.VisibleEmissiveSamples|opencl.Throughput|opencl.Accumulator|
+		opencl.Off |
+			//opencl.PrimaryRayIntersectionDepth | opencl.PrimaryRayIntersectionNormals |
+			//opencl.AllEmissiveSamples | opencl.VisibleEmissiveSamples |
+			//opencl.Throughput | opencl.Accumulator |
 			opencl.FrameBuffer,
-		6,
-		1.5,
 	)
 
 	tr, _ := opencl.NewTracer("tr-0", dev, pipeline)
@@ -84,6 +84,8 @@ func Debug(ctx *cli.Context) error {
 		BlockW:          frameW,
 		BlockH:          frameH,
 		SamplesPerPixel: 1,
+		Exposure:        1.2,
+		NumBounces:      5,
 	}
 
 	// Render

@@ -261,7 +261,7 @@ var (
 	iorLUT map[string]float32
 )
 
-func iorForMaterial(name MaterialNameNode) (float32, error) {
+func IOR(name MaterialNameNode) (float32, error) {
 	if ior, exists := iorLUT[strings.ToUpper(string(name))]; exists {
 		return ior, nil
 	}

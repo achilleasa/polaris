@@ -4,18 +4,19 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/achilleasa/go-pathtrace/scene"
+	"github.com/achilleasa/go-pathtrace/asset"
+	"github.com/achilleasa/go-pathtrace/asset/scene"
 )
 
 // The Reader interface is implemented by all scene readers.
 type Reader interface {
 	// Read scene definition from a resource.
-	Read(*resource) (*scene.Scene, error)
+	Read(*asset.Resource) (*scene.Scene, error)
 }
 
 // Read scene from file.
 func ReadScene(filename string) (*scene.Scene, error) {
-	res, err := newResource(filename, nil)
+	res, err := asset.NewResource(filename, nil)
 	if err != nil {
 		return nil, err
 	}

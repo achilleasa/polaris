@@ -13,7 +13,7 @@ import (
 
 // A texture image and its metadata.
 type Texture struct {
-	Format TextureFormat
+	Format Format
 
 	Width  uint32
 	Height uint32
@@ -22,7 +22,7 @@ type Texture struct {
 }
 
 // Create a new texture from a Resource.
-func NewTexture(res *asset.Resource) (*Texture, error) {
+func New(res *asset.Resource) (*Texture, error) {
 	var pathToFile string
 
 	// If this is a remote Resource save it to a temp file so that oiio can load it
@@ -60,7 +60,7 @@ func NewTexture(res *asset.Resource) (*Texture, error) {
 	}
 
 	// Select tex format
-	var texFmt TextureFormat
+	var texFmt Format
 	var convertTo oiio.TypeDesc
 	switch spec.Format() {
 	case oiio.TypeUint8:

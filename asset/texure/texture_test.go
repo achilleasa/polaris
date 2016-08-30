@@ -19,7 +19,7 @@ func TestRgba8Texture(t *testing.T) {
 	defer imgRes.Close()
 	defer os.Remove(imgRes.Path())
 
-	tex, err := NewTexture(imgRes)
+	tex, err := New(imgRes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestRgb32Texture(t *testing.T) {
 	defer imgRes.Close()
 	defer os.Remove(imgRes.Path())
 
-	tex, err := NewTexture(imgRes)
+	tex, err := New(imgRes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestStreamHttpTexture(t *testing.T) {
 	}
 	defer imgRes.Close()
 
-	tex, err := NewTexture(imgRes)
+	tex, err := New(imgRes)
 	if err != nil {
 		t.Fatal(err)
 	}

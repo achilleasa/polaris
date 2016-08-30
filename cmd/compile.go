@@ -3,8 +3,8 @@ package cmd
 import (
 	"strings"
 
-	"github.com/achilleasa/go-pathtrace/scene/reader"
-	"github.com/achilleasa/go-pathtrace/scene/writer"
+	"github.com/achilleasa/go-pathtrace/asset/scene/reader"
+	"github.com/achilleasa/go-pathtrace/asset/scene/writer"
 	"github.com/urfave/cli"
 )
 

@@ -132,7 +132,7 @@ func (n BxdfParamNode) Validate() error {
 		}
 	case ParamIntIOR, ParamExtIOR:
 		if v, isMat := n.Value.(MaterialNameNode); isMat {
-			_, err := iorForMaterial(v)
+			_, err := IOR(v)
 			if err != nil {
 				return err
 			}

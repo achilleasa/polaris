@@ -3,6 +3,7 @@ package asset
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -93,7 +94,7 @@ func NewResource(pathToResource string, relTo *Resource) (*Resource, error) {
 func NewResourceFromStream(name string, source io.Reader) *Resource {
 	url, _ := url.Parse(name)
 	return &Resource{
-		ReadCloser: ioutil.NopCloser(source)),
+		ReadCloser: ioutil.NopCloser(source),
 		url:        url,
 	}
 }

@@ -102,25 +102,20 @@ __kernel void shadeHits(
 			MaterialNode materialNode;
 			matSelectNode(&surface, inRayDir, &materialNode, materialNodes, &rndState, texMeta, texData);
 
-			// Apply normal map
-			if(materialNode.normalTex != -1){
-				surface.normal = matGetNormalSample3f(materialNode.flags, surface.normal, surface.uv, materialNode.normalTex, texMeta, texData);
-			}
-
 			float inRayDotNormal = dot(inRayDir, surface.normal);
 
 			// Check if we hit an emissive node. If so, we need to accumulate implicit
 			// light and terminate the path.
-			if( BXDF_IS_EMISSIVE(materialNode.bxdfType) ){
+			if( BXDF_IS_EMISSIVE(materialNode.type) ){
 				// Make sure that the incoming ray is facing the emissive.
 				if( inRayDotNormal > 0.0f ){
-					accumulator[rayPathIndex] += curPathThroughput * matGetSample3f(surface.uv, materialNode.kval, materialNode.kvalTex, texMeta, texData);
+					accumulator[rayPathIndex] += curPathThroughput * materialNode.scale * matGetSample3f(surface.uv, materialNode.radiance, materialNode.radianceTex, texMeta, texData);
 				}
 			} else {
 				// Implement RR to terminate paths with no significant contribution
 				// killing paths with a probability less than sample2.x while also
 				// boosting surving paths by the same probablility.
-				bool rejectSample = false;
+				bool rejectSample = materialNode.type == BXDF_INVALID;
 				if(bounce >= MIN_BOUNCES_FOR_RR) {
 					float rrProbability = max(
 							// convert throughput to luminance
@@ -135,18 +130,18 @@ __kernel void shadeHits(
 				}
 
 				if( !rejectSample ){
+					// Get BXDF sample and generate outgoing ray based on surface BXDF
+					bxdfSample = bxdfGetSample(&surface, &materialNode, texMeta, texData, sample0, inRayDir, &bxdfOutRayDir, &bxdfPdf);
+
 					// To calculate the origin for occlusion/indirect rays we displace the 
 					// surface hit point by a small epsilon along the normal to ensure that 
 					// we don't register an intersection with the same surface.  If this 
 					// material is refractive and we are hitting it from the outside we 
 					// need to ensure that the outgoing ray starts inside the surface.
-					float displaceDir = BXDF_IS_TRANSMISSION(materialNode.bxdfType) ? -sign(inRayDotNormal) : 1.0f;
+					float displaceDir = sign(dot(surface.normal, bxdfOutRayDir));
 					outBxdfRayOrigin = DISPLACE_BY_EPSILON(surface.point, surface.normal * displaceDir);
 					// The emissive ray always starts away from the surface. This allows us to shade BTDFs
 					outEmissiveRayOrigin = DISPLACE_BY_EPSILON(surface.point, surface.normal);
-
-					// Get BXDF sample and generate outgoing ray based on surface BXDF
-					bxdfSample = bxdfGetSample(&surface, &materialNode, texMeta, texData, sample0, inRayDir, &bxdfOutRayDir, &bxdfPdf);
 
 					// Select and sample emissive source
 					int emissiveIndex = numEmissives > 0 ? emissiveSelect(numEmissives, sample1.x, &emissiveSelectionPdf) : -1;
@@ -174,7 +169,7 @@ __kernel void shadeHits(
 					}
 
 					// Disable bxdfWeight for singular surfaces (ideal mirror/dielectric)
-					if( BXDF_IS_SINGULAR(materialNode.bxdfType) ){
+					if( BXDF_IS_SINGULAR(materialNode.type) ){
 						bxdfWeight = 1.0f;
 					}
 
@@ -248,7 +243,7 @@ __kernel void shadePrimaryRayMisses(
 	int rayPathIndex;
 	float2 uv = rayToLatLongUV(rayGetDirAndPathIndex(rays + globalId, &rayPathIndex));
 
-	float3 kd = matGetSample3f(uv, matNode.kval, matNode.kvalTex, texMeta, texData);
+	float3 kd = matGetSample3f(uv, matNode.reflectance, matNode.reflectanceTex, texMeta, texData);
 	accumulator[rayPathIndex] += kd;
 }
 
@@ -281,7 +276,7 @@ __kernel void shadeIndirectRayMisses(
 
 	// As this is an indirect ray we need to multiply the path throughput with the diffuse sample
 	// and accumulate that.
-	float3 kd = matGetSample3f(uv, matNode.kval, matNode.kvalTex, texMeta, texData);
+	float3 kd = matGetSample3f(uv, matNode.reflectance, matNode.reflectanceTex, texMeta, texData);
 	accumulator[rayPathIndex] += paths[rayPathIndex].throughput * kd;
 }
 

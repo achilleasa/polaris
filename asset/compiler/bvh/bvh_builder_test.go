@@ -1,4 +1,4 @@
-package compiler
+package bvh
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	"github.com/achilleasa/go-pathtrace/types"
 )
 
-func TestBVHLeafCallback(t *testing.T) {
+func TestLeafCallback(t *testing.T) {
 	type primSpec struct {
 		min types.Vec3
 		max types.Vec3
@@ -42,7 +42,7 @@ func TestBVHLeafCallback(t *testing.T) {
 	// Partition each item in a single leaf
 	cbCount = 0
 	expItemListCount = 1
-	treeNodes := BuildBVH(itemList, 1, cb)
+	treeNodes := Build(itemList, 1, cb, SurfaceAreaHeuristic)
 
 	expCount = 4
 	if cbCount != expCount {
@@ -56,7 +56,7 @@ func TestBVHLeafCallback(t *testing.T) {
 	// Partition two items in a single leaf
 	cbCount = 0
 	expItemListCount = 2
-	treeNodes = BuildBVH(itemList, 2, cb)
+	treeNodes = Build(itemList, 2, cb, SurfaceAreaHeuristic)
 
 	expCount = 2
 	if cbCount != expCount {

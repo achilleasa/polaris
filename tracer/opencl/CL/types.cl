@@ -111,50 +111,56 @@ typedef struct {
 } TextureMetadata;
 
 typedef struct {
-	// "color" for node. Depends on BRDF type
-	float3 kval;
-
-	// BRDF-specific parameter (roughness e.t.c) for leafs and blend parameter
-	// (IOR, mix probability) for nodes
-	float nval;
+	// Node type
+	uint type;
 	
-	// Index of refraction
-	float ior;
-
-	// texture index for overriding ior
-	int iorTex;
-	
-	// flags 
-	uint flags;
+	uint leftChild;
 
 	union {
-		// For intermediate nodes
-		uint leftChild;
-
-		// texture index for node "color"
-		int kvalTex;
-	};
-
-	union {
-		// For intermediate nodes
 		uint rightChild;
 
-		// texture index for bump/normal map
-		int normalTex;
+		int transmittanceTex;
 	};
 
 	union {
-		// texture index for overriding nval
-		int nvalTex;
+		// Texture for bump/normal nodes
+		int bumpTex;
+
+		int reflectanceTex;
+		int specularityTex;
+		int radianceTex;
 	};
 
 	union {
-		// For intermediate nodes; defines the blend function to use
-		// for selecting the left or right child
-		uint blendFunc;
+		float3 reflectance;
+		float3 specularity;
+		float3 radiance;
 
-		// BXDF type (diffuse, specular e.t.c.) if this is a leaf
-		uint bxdfType;
+		// mix node
+		float2 mixWeights;
+	};
+	
+	union {
+		float3 transmittance;
+	};
+
+	union {
+		float intIOR;
+	};
+
+	union {
+		float extIOR;
+	};
+
+	union {
+		// Radiance scaler
+		float scale;
+
+		float roughness;
+	};
+
+	union {
+		int roughnessTex;
 	};
 } MaterialNode;
 

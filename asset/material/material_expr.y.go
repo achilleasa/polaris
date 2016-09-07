@@ -1,7 +1,7 @@
 //line material_expr.y:2
 
 //go:generate go tool yacc -o material_expr.y.go -p expr material_expr.y
-package compiler
+package material
 
 import __yyfmt__ "fmt"
 
@@ -11,46 +11,74 @@ import (
 	"fmt"
 	"strconv"
 	"unicode/utf8"
-
-	"github.com/achilleasa/go-pathtrace/scene"
 )
 
-//line material_expr.y:16
+//line material_expr.y:14
 type exprSymType struct {
-	yys    int
-	num    float32
-	nodeId uint32
-
-	compiler *sceneCompiler
-	material *scene.ParsedMaterial
+	yys  int
+	cVal rune
+	fVal float32
+	sVal string
+	node ExprNode
 }
 
-const NUM = 57346
-const MIX = 57347
-const FRESNEL = 57348
-const DIFFUSE = 57349
-const SPECULAR_REFLECTION = 57350
-const SPECULAR_TRANSMISSION = 57351
-const SPECULAR_MICROFACET_REFLECTION = 57352
-const SPECULAR_MICROFACET_TRANSMISSION = 57353
-const EMISSIVE = 57354
+const tokLPAREN = 57346
+const tokRPAREN = 57347
+const tokLCURLY = 57348
+const tokRCURLY = 57349
+const tokCOMMA = 57350
+const tokCOLON = 57351
+const tokFLOAT = 57352
+const tokMATERIAL_NAME = 57353
+const tokTEXTURE = 57354
+const tokREFLECTANCE = 57355
+const tokSPECULARITY = 57356
+const tokTRANSMITTANCE = 57357
+const tokRADIANCE = 57358
+const tokINT_IOR = 57359
+const tokEXT_IOR = 57360
+const tokSCALE = 57361
+const tokROUGHNESS = 57362
+const tokDIFFUSE = 57363
+const tokCONDUCTOR = 57364
+const tokROUGH_CONDUCTOR = 57365
+const tokDIELECTRIC = 57366
+const tokROUGH_DIELECTRIC = 57367
+const tokEMISSIVE = 57368
+const tokMIX = 57369
+const tokBUMP_MAP = 57370
+const tokNORMAL_MAP = 57371
 
 var exprToknames = [...]string{
 	"$end",
 	"error",
 	"$unk",
-	"'('",
-	"')'",
-	"','",
-	"NUM",
-	"MIX",
-	"FRESNEL",
-	"DIFFUSE",
-	"SPECULAR_REFLECTION",
-	"SPECULAR_TRANSMISSION",
-	"SPECULAR_MICROFACET_REFLECTION",
-	"SPECULAR_MICROFACET_TRANSMISSION",
-	"EMISSIVE",
+	"tokLPAREN",
+	"tokRPAREN",
+	"tokLCURLY",
+	"tokRCURLY",
+	"tokCOMMA",
+	"tokCOLON",
+	"tokFLOAT",
+	"tokMATERIAL_NAME",
+	"tokTEXTURE",
+	"tokREFLECTANCE",
+	"tokSPECULARITY",
+	"tokTRANSMITTANCE",
+	"tokRADIANCE",
+	"tokINT_IOR",
+	"tokEXT_IOR",
+	"tokSCALE",
+	"tokROUGHNESS",
+	"tokDIFFUSE",
+	"tokCONDUCTOR",
+	"tokROUGH_CONDUCTOR",
+	"tokDIELECTRIC",
+	"tokROUGH_DIELECTRIC",
+	"tokEMISSIVE",
+	"tokMIX",
+	"tokBUMP_MAP",
+	"tokNORMAL_MAP",
 }
 var exprStatenames = [...]string{}
 
@@ -58,133 +86,182 @@ const exprEofCode = 1
 const exprErrCode = 2
 const exprInitialStackSize = 16
 
-//line material_expr.y:159
+//line material_expr.y:156
 
-// The parser expects the lexer to return 0 on EOF.
-const EOF = 0
-
-type matNode struct {
-	ntype       int
-	left, right *matNode
-}
+// The parser expects the lexer to return 0 on kEOF.
+const tokEOF = 0
 
 // The parser uses the type <prefix>Lex as a lexer.  It must provide
 // the methods Lex(*<prefix>SymType) int and Error(string).
-type exprLex struct {
+type matExprLexer struct {
 	line     []byte
 	peek     rune
 	tokenBuf bytes.Buffer
 
-	compiler  *sceneCompiler
-	material  *scene.ParsedMaterial
+	parsedExpression ExprNode
+
 	lastError error
 }
 
 // The parser calls this method to get each new token.
-func (x *exprLex) Lex(yylval *exprSymType) int {
-	// Pass compiler/material references to symbol
-	yylval.compiler = x.compiler
-	yylval.material = x.material
-
+func (x *matExprLexer) Lex(yylval *exprSymType) int {
 	for {
 		c := x.next()
 		switch c {
-		case EOF:
-			return EOF
-		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		case tokEOF:
+			return tokEOF
+		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.':
 			x.tokenBuf.Reset()
 			return x.lexFloat32(c, yylval)
-		case '(', ')', ',':
-			return int(c)
+		case '"':
+			x.tokenBuf.Reset()
+			return x.lexLiteral(c, yylval)
+		case '(':
+			return tokLPAREN
+		case ')':
+			return tokRPAREN
+		case ',':
+			return tokCOMMA
+		case '{':
+			return tokLCURLY
+		case '}':
+			return tokRCURLY
+		case ':':
+			return tokCOLON
 		case ' ', '\t', '\n', '\r':
 		default:
 			x.tokenBuf.Reset()
-			return x.lexText(c, yylval)
+			return x.lexIdentifier(c, yylval)
 		}
 	}
 }
 
 // Lex a float.
-func (x *exprLex) lexFloat32(c rune, yylval *exprSymType) int {
+func (x *matExprLexer) lexFloat32(c rune, yylval *exprSymType) int {
 	x.captureRune(c)
 	for {
 		c = x.next()
-		if (c >= '0' && c <= '9') || (c == '.' || c == 'e' || c == 'E') {
+		if (c >= '0' && c <= '9') || (c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-') {
 			x.captureRune(c)
 			continue
 		}
 		break
 	}
 
-	if c != EOF {
+	if c != tokEOF {
 		x.peek = c
 	}
 
 	val, err := strconv.ParseFloat(x.tokenBuf.String(), 32)
 	if err != nil {
 		x.Error(fmt.Sprintf("invalid float value %q: %v", x.tokenBuf.String(), err))
-		return EOF
+		return tokEOF
 	}
 
-	yylval.num = float32(val)
-	return NUM
+	yylval.fVal = float32(val)
+	return tokFLOAT
 }
 
-// Lex a text token.
-func (x *exprLex) lexText(c rune, yylval *exprSymType) int {
+// Lex literal.
+func (x *matExprLexer) lexLiteral(c rune, yylval *exprSymType) int {
+	for {
+		c = x.next()
+		if c == tokEOF || c == '"' {
+			break
+		}
+
+		x.captureRune(c)
+	}
+
+	if c == tokEOF {
+		x.Error("unterminated string litera")
+		return tokEOF
+	}
+
+	yylval.sVal = x.tokenBuf.String()
+	if supportedImageRegex.MatchString(yylval.sVal) {
+		return tokTEXTURE
+	}
+
+	return tokMATERIAL_NAME
+}
+
+// Lex identifier.
+func (x *matExprLexer) lexIdentifier(c rune, yylval *exprSymType) int {
 	x.captureRune(c)
 	for {
 		c = x.next()
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_' || c == '-') {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' {
 			x.captureRune(c)
 			continue
 		}
 		break
 	}
 
-	if c != EOF {
+	if c != tokEOF {
 		x.peek = c
 	}
 
-	val := x.tokenBuf.String()
+	yylval.sVal = x.tokenBuf.String()
 
-	switch val {
-	case "D":
-		return DIFFUSE
-	case "S":
-		return SPECULAR_REFLECTION
-	case "T":
-		return SPECULAR_TRANSMISSION
-	case "M_S":
-		return SPECULAR_MICROFACET_REFLECTION
-	case "M_T":
-		return SPECULAR_MICROFACET_TRANSMISSION
-	case "E":
-		return EMISSIVE
+	switch yylval.sVal {
+	// BXDFS
+	case "diffuse":
+		return tokDIFFUSE
+	case "conductor":
+		return tokCONDUCTOR
+	case "roughConductor":
+		return tokROUGH_CONDUCTOR
+	case "dielectric":
+		return tokDIELECTRIC
+	case "roughDielectric":
+		return tokROUGH_DIELECTRIC
+	case "emissive":
+		return tokEMISSIVE
+	// Blend funcs
 	case "mix":
-		return MIX
-	case "fresnel":
-		return FRESNEL
+		return tokMIX
+	case "bumpMap":
+		return tokBUMP_MAP
+	case "normalMap":
+		return tokNORMAL_MAP
+	// Parameters
+	case ParamReflectance:
+		return tokREFLECTANCE
+	case ParamSpecularity:
+		return tokSPECULARITY
+	case ParamTransmittance:
+		return tokTRANSMITTANCE
+	case ParamRadiance:
+		return tokRADIANCE
+	case ParamIntIOR:
+		return tokINT_IOR
+	case ParamExtIOR:
+		return tokEXT_IOR
+	case ParamScale:
+		return tokSCALE
+	case ParamRoughness:
+		return tokROUGHNESS
 	default:
-		x.Error(fmt.Sprintf("invalid expression %q", val))
-		return EOF
+		x.Error(fmt.Sprintf("invalid expression %q", yylval.sVal))
+		return tokEOF
 	}
 }
 
-// Append a rune to the toke buffer.
-func (x *exprLex) captureRune(c rune) {
+// Append a rune to the token buffer.
+func (x *matExprLexer) captureRune(c rune) {
 	x.tokenBuf.WriteRune(c)
 }
 
 // Return the next rune for the lexer.
-func (x *exprLex) next() rune {
-	if x.peek != EOF {
+func (x *matExprLexer) next() rune {
+	if x.peek != tokEOF {
 		r := x.peek
-		x.peek = EOF
+		x.peek = tokEOF
 		return r
 	}
 	if len(x.line) == 0 {
-		return EOF
+		return tokEOF
 	}
 	c, size := utf8.DecodeRune(x.line)
 	x.line = x.line[size:]
@@ -196,11 +273,22 @@ func (x *exprLex) next() rune {
 }
 
 // The parser calls this method on a parse error.
-func (x *exprLex) Error(s string) {
-	// Keep the first error we encountered
+func (x *matExprLexer) Error(s string) {
+	// tokKeep the first error we encountered
 	if x.lastError == nil {
 		x.lastError = fmt.Errorf(s)
 	}
+}
+
+// Parser interface.
+func ParseExpression(input string) (ExprNode, error) {
+	matLexer := &matExprLexer{line: []byte(input)}
+	exprNewParser().Parse(matLexer)
+	if matLexer.lastError != nil {
+		return nil, matLexer.lastError
+	}
+
+	return matLexer.parsedExpression, nil
 }
 
 //line yacctab:1
@@ -210,64 +298,86 @@ var exprExca = [...]int{
 	-2, 0,
 }
 
-const exprNprod = 13
+const exprNprod = 34
 const exprPrivate = 57344
 
 var exprTokenNames []string
 var exprStates []string
 
-const exprLast = 29
+const exprLast = 78
 
 var exprAct = [...]int{
 
-	10, 11, 4, 5, 6, 7, 8, 9, 14, 24,
-	22, 19, 18, 25, 23, 13, 12, 16, 3, 15,
-	2, 1, 17, 0, 0, 0, 0, 20, 21,
+	29, 55, 48, 8, 9, 10, 11, 12, 13, 5,
+	6, 7, 20, 61, 65, 62, 64, 32, 33, 21,
+	22, 23, 24, 25, 26, 27, 28, 51, 56, 57,
+	76, 74, 75, 50, 72, 71, 66, 59, 43, 42,
+	52, 53, 54, 58, 41, 63, 40, 39, 47, 38,
+	37, 36, 73, 70, 67, 46, 45, 44, 35, 78,
+	77, 69, 68, 34, 17, 16, 15, 14, 30, 2,
+	31, 3, 4, 19, 18, 60, 49, 1,
 }
 var exprPact = [...]int{
 
-	-8, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000,
-	12, 11, -8, -8, 6, -1000, -1000, 5, -8, -8,
-	4, 9, 2, -1000, 8, -1000,
+	-18, -1000, -1000, -1000, 63, 62, 61, 60, -1000, -1000,
+	-1000, -1000, -1000, -1000, 6, -18, -18, -18, 58, 50,
+	-1000, 42, 41, 40, 38, 37, 35, 30, 29, 49,
+	-1000, -1000, 48, 47, -1000, 6, 21, 21, 21, 21,
+	18, 18, 27, 3, -18, 4, 2, -1000, -1000, -1000,
+	-1000, 26, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000,
+	-1000, -1000, -1000, 46, 57, 56, 45, 25, -1000, -1000,
+	24, 44, 23, 22, 20, 55, 52, -1000, -1000,
 }
 var exprPgo = [...]int{
 
-	0, 19, 17, 8, 21,
+	0, 77, 76, 12, 2, 1, 75, 70, 74, 73,
+	68, 0, 72,
 }
 var exprR1 = [...]int{
 
-	0, 4, 4, 2, 2, 3, 3, 1, 1, 1,
-	1, 1, 1,
+	0, 1, 1, 10, 12, 12, 12, 12, 12, 12,
+	8, 8, 9, 9, 3, 3, 3, 3, 3, 3,
+	3, 3, 4, 4, 2, 5, 5, 6, 6, 7,
+	7, 7, 11, 11,
 }
 var exprR2 = [...]int{
 
-	0, 1, 1, 8, 6, 1, 1, 1, 1, 1,
-	1, 1, 1,
+	0, 1, 1, 4, 1, 1, 1, 1, 1, 1,
+	0, 1, 1, 3, 3, 3, 3, 3, 3, 3,
+	3, 3, 1, 1, 7, 1, 1, 1, 1, 10,
+	6, 6, 1, 1,
 }
 var exprChk = [...]int{
 
-	-1000, -4, -1, -2, 10, 11, 12, 13, 14, 15,
-	8, 9, 4, 4, -3, -1, -2, -3, 6, 6,
-	-3, -3, 6, 5, 7, 5,
+	-1000, -1, -10, -7, -12, 27, 28, 29, 21, 22,
+	23, 24, 25, 26, 4, 4, 4, 4, -8, -9,
+	-3, 13, 14, 15, 16, 17, 18, 19, 20, -11,
+	-10, -7, -11, -11, 5, 8, 9, 9, 9, 9,
+	9, 9, 9, 9, 8, 8, 8, -3, -4, -2,
+	12, 6, -4, -4, -4, -5, 10, 11, -5, 10,
+	-6, 10, 12, -11, 12, 12, 10, 8, 5, 5,
+	8, 10, 10, 8, 8, 10, 10, 5, 7,
 }
 var exprDef = [...]int{
 
-	0, -2, 1, 2, 7, 8, 9, 10, 11, 12,
-	0, 0, 0, 0, 0, 5, 6, 0, 0, 0,
-	0, 0, 0, 4, 0, 3,
+	0, -2, 1, 2, 0, 0, 0, 0, 4, 5,
+	6, 7, 8, 9, 10, 0, 0, 0, 0, 11,
+	12, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	32, 33, 0, 0, 3, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 13, 14, 22,
+	23, 0, 15, 16, 17, 18, 25, 26, 19, 20,
+	21, 27, 28, 0, 0, 0, 0, 0, 30, 31,
+	0, 0, 0, 0, 0, 0, 0, 29, 24,
 }
 var exprTok1 = [...]int{
 
-	1, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-	3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-	3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-	3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-	4, 5, 3, 3, 6,
+	1,
 }
 var exprTok2 = [...]int{
 
-	2, 3, 7, 8, 9, 10, 11, 12, 13, 14,
-	15,
+	2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+	12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+	22, 23, 24, 25, 26, 27, 28, 29,
 }
 var exprTok3 = [...]int{
 	0,
@@ -610,126 +720,155 @@ exprdefault:
 	// dummy call; replaced with literal code
 	switch exprnt {
 
+	case 1:
+		exprDollar = exprS[exprpt-1 : exprpt+1]
+		//line material_expr.y:75
+		{
+			exprlex.(*matExprLexer).parsedExpression = exprDollar[1].node
+		}
+	case 2:
+		exprDollar = exprS[exprpt-1 : exprpt+1]
+		//line material_expr.y:77
+		{
+			exprlex.(*matExprLexer).parsedExpression = exprDollar[1].node
+		}
 	case 3:
-		exprDollar = exprS[exprpt-8 : exprpt+1]
-		//line material_expr.y:49
+		exprDollar = exprS[exprpt-4 : exprpt+1]
+		//line material_expr.y:80
 		{
-			node := &scene.MaterialNode{}
-			node.Init()
-			node.Flags = scene.IsNode
-			node.SetLeftIndex(exprDollar[3].nodeId)
-			node.SetRightIndex(exprDollar[5].nodeId)
-			node.SetBlendFunc(scene.Mix)
-			node.Nval = exprDollar[7].num
-			node.SetNvalTex(exprVAL.material.NiTex)
-			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
-		}
-	case 4:
-		exprDollar = exprS[exprpt-6 : exprpt+1]
-		//line material_expr.y:61
-		{
-			node := &scene.MaterialNode{}
-			node.Init()
-			node.Flags = scene.IsNode
-			node.SetLeftIndex(exprDollar[3].nodeId)
-			node.SetRightIndex(exprDollar[5].nodeId)
-			node.SetBlendFunc(scene.Fresnel)
-			node.Nval = exprVAL.material.Ni
-			node.SetNvalTex(exprVAL.material.NiTex)
-			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
-		}
-	case 7:
-		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:79
-		{
-			node := &scene.MaterialNode{}
-			node.Init()
-			node.Kval = exprVAL.material.Kd.Vec4(0)
-			node.SetKvalTex(exprVAL.material.KdTex)
-			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
-			node.SetBxdfType(scene.Diffuse)
-			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
-		}
-	case 8:
-		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:89
-		{
-			node := &scene.MaterialNode{}
-			node.Init()
-			node.Kval = exprVAL.material.Ks.Vec4(0)
-			node.SetKvalTex(exprVAL.material.KsTex)
-			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
-			node.SetBxdfType(scene.SpecularReflection)
-			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
-		}
-	case 9:
-		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:99
-		{
-			node := &scene.MaterialNode{}
-			node.Init()
-			node.Kval = exprVAL.material.Tf.Vec4(0)
-			node.SetKvalTex(exprVAL.material.TfTex)
-			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
-			if exprVAL.material.Ni <= 0.0 {
-				exprVAL.material.Ni = 1.0
+			exprVAL.node = BxdfNode{
+				Type:       bxdfTypeFromName(exprDollar[1].sVal),
+				Parameters: exprDollar[3].node.(BxdfParameterList),
 			}
-			node.IOR = exprVAL.material.Ni
-			node.SetIORTex(exprVAL.material.NiTex)
-			node.SetBxdfType(scene.SpecularTransmission)
-			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
 		}
 	case 10:
-		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:114
+		exprDollar = exprS[exprpt-0 : exprpt+1]
+		//line material_expr.y:95
 		{
-			node := &scene.MaterialNode{}
-			node.Init()
-			node.Kval = exprVAL.material.Ks.Vec4(0)
-			node.SetKvalTex(exprVAL.material.KsTex)
-			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
-			node.Nval = exprVAL.material.Nr
-			node.SetNvalTex(exprVAL.material.NrTex)
-			if exprVAL.material.Ni <= 0.0 {
-				exprVAL.material.Ni = 1.0
-			}
-			node.IOR = exprVAL.material.Ni
-			node.SetIORTex(exprVAL.material.NiTex)
-			node.SetBxdfType(scene.SpecularMicrofacetReflection)
-			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
-		}
-	case 11:
-		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:131
-		{
-			node := &scene.MaterialNode{}
-			node.Init()
-			node.Kval = exprVAL.material.Tf.Vec4(0)
-			node.SetKvalTex(exprVAL.material.TfTex)
-			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
-			node.Nval = exprVAL.material.Nr
-			node.SetNvalTex(exprVAL.material.NrTex)
-			if exprVAL.material.Ni <= 0.0 {
-				exprVAL.material.Ni = 1.0
-			}
-			node.IOR = exprVAL.material.Ni
-			node.SetIORTex(exprVAL.material.NiTex)
-			node.SetBxdfType(scene.SpecularMicrofacetTransmission)
-			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
+			exprVAL.node = make(BxdfParameterList, 0)
 		}
 	case 12:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:148
+		//line material_expr.y:99
 		{
-			node := &scene.MaterialNode{}
-			node.Init()
-			node.Kval = exprVAL.material.Ke.Vec4(0)
-			node.SetKvalTex(exprVAL.material.KeTex)
-			node.SetNormalTex(exprVAL.material.BumpTex, exprVAL.material.NormalTex)
-			node.Nval = exprVAL.material.KeScaler
-			node.SetNvalTex(exprVAL.material.KeScalerTex)
-			node.SetBxdfType(scene.Emissive)
-			exprVAL.nodeId = exprVAL.compiler.appendMaterialNode(node)
+			exprVAL.node = BxdfParameterList{exprDollar[1].node.(BxdfParamNode)}
+		}
+	case 13:
+		exprDollar = exprS[exprpt-3 : exprpt+1]
+		//line material_expr.y:101
+		{
+			exprVAL.node = append(exprDollar[1].node.(BxdfParameterList), exprDollar[3].node.(BxdfParamNode))
+		}
+	case 14:
+		exprDollar = exprS[exprpt-3 : exprpt+1]
+		//line material_expr.y:104
+		{
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+		}
+	case 15:
+		exprDollar = exprS[exprpt-3 : exprpt+1]
+		//line material_expr.y:106
+		{
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+		}
+	case 16:
+		exprDollar = exprS[exprpt-3 : exprpt+1]
+		//line material_expr.y:108
+		{
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+		}
+	case 17:
+		exprDollar = exprS[exprpt-3 : exprpt+1]
+		//line material_expr.y:110
+		{
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+		}
+	case 18:
+		exprDollar = exprS[exprpt-3 : exprpt+1]
+		//line material_expr.y:112
+		{
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+		}
+	case 19:
+		exprDollar = exprS[exprpt-3 : exprpt+1]
+		//line material_expr.y:114
+		{
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+		}
+	case 20:
+		exprDollar = exprS[exprpt-3 : exprpt+1]
+		//line material_expr.y:116
+		{
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: FloatNode(exprDollar[3].fVal)}
+		}
+	case 21:
+		exprDollar = exprS[exprpt-3 : exprpt+1]
+		//line material_expr.y:118
+		{
+			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
+		}
+	case 23:
+		exprDollar = exprS[exprpt-1 : exprpt+1]
+		//line material_expr.y:121
+		{
+			exprVAL.node = TextureNode(exprDollar[1].sVal)
+		}
+	case 24:
+		exprDollar = exprS[exprpt-7 : exprpt+1]
+		//line material_expr.y:124
+		{
+			exprVAL.node = Vec3Node{exprDollar[2].fVal, exprDollar[4].fVal, exprDollar[6].fVal}
+		}
+	case 25:
+		exprDollar = exprS[exprpt-1 : exprpt+1]
+		//line material_expr.y:126
+		{
+			exprVAL.node = FloatNode(exprDollar[1].fVal)
+		}
+	case 26:
+		exprDollar = exprS[exprpt-1 : exprpt+1]
+		//line material_expr.y:127
+		{
+			exprVAL.node = MaterialNameNode(exprDollar[1].sVal)
+		}
+	case 27:
+		exprDollar = exprS[exprpt-1 : exprpt+1]
+		//line material_expr.y:129
+		{
+			exprVAL.node = FloatNode(exprDollar[1].fVal)
+		}
+	case 28:
+		exprDollar = exprS[exprpt-1 : exprpt+1]
+		//line material_expr.y:130
+		{
+			exprVAL.node = TextureNode(exprDollar[1].sVal)
+		}
+	case 29:
+		exprDollar = exprS[exprpt-10 : exprpt+1]
+		//line material_expr.y:133
+		{
+			exprVAL.node = MixNode{
+				Expressions: [2]ExprNode{exprDollar[3].node, exprDollar[5].node},
+				Weights:     [2]float32{exprDollar[7].fVal, exprDollar[9].fVal},
+			}
+		}
+	case 30:
+		exprDollar = exprS[exprpt-6 : exprpt+1]
+		//line material_expr.y:140
+		{
+			exprVAL.node = BumpMapNode{
+				Expression: exprDollar[3].node,
+				Texture:    TextureNode(exprDollar[5].sVal),
+			}
+		}
+	case 31:
+		exprDollar = exprS[exprpt-6 : exprpt+1]
+		//line material_expr.y:147
+		{
+			exprVAL.node = NormalMapNode{
+				Expression: exprDollar[3].node,
+				Texture:    TextureNode(exprDollar[5].sVal),
+			}
 		}
 	}
 	goto exprstack /* stack new state and value */

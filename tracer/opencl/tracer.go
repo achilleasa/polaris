@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/achilleasa/go-pathtrace/asset/scene"
 	"github.com/achilleasa/go-pathtrace/log"
-	"github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/go-pathtrace/tracer"
 	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
 	"github.com/achilleasa/go-pathtrace/types"

@@ -573,3 +573,7 @@ map_Kd invalid.png
 		t.Fatalf("expected kdTex to be -1 for missing texture; got %d", mat.KdTex)
 	}
 }
+
+func mockResource(payload string) *asset.Resource {
+	return asset.NewResourceFromStream("embedded", strings.NewReader(payload))
+}

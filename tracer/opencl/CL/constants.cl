@@ -26,4 +26,8 @@
 // GGX distribution explodes if roughness is set to 0 (microfacet bxdf)
 #define MIN_ROUGHNESS 0.1f
 
+#ifndef NULL 
+#define NULL 0
+#endif
+
 #endif

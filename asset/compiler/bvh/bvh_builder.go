@@ -1,16 +1,21 @@
-package compiler
+package bvh
 
 import (
 	"math"
 	"time"
 
+	"github.com/achilleasa/go-pathtrace/asset/scene"
 	"github.com/achilleasa/go-pathtrace/log"
-
-	"github.com/achilleasa/go-pathtrace/scene"
 	"github.com/achilleasa/go-pathtrace/types"
 )
 
+type Axis uint8
+
 const (
+	XAxis Axis = iota
+	YAxis
+	ZAxis
+
 	// The BVH builder will not attempt to calculate split candidates
 	// if the node bbox along an axis is less than this threshold.
 	minSideLength float32 = 1e-3
@@ -21,6 +26,11 @@ const (
 	minSplitStep float32 = 1e-5
 )
 
+var (
+	// A split scoring strategy that uses the surface area heuristic (SAH).
+	SurfaceAreaHeuristic = surfaceAreaHeuristic{}
+)
+
 // The BoundedVolume interface is implemented by all meshes/primitives that can
 // be partitioned by the bvh builder.
 type BoundedVolume interface {
@@ -29,16 +39,26 @@ type BoundedVolume interface {
 }
 
 // A callback that is called whenever the BVH builder creates a new leaf.
-type BvhLeafCallback func(leaf *scene.BvhNode, itemList []BoundedVolume)
+type LeafCallback func(leaf *scene.BvhNode, itemList []BoundedVolume)
 
-type bvhSplitCandidate struct {
-	axis                  int
-	splitPoint            float32
+// A split scoring strategy.
+type ScoreStrategy interface {
+	// Calculate a score for splitting workList at splitPoint along a particular Axis.
+	ScoreSplit(workList []BoundedVolume, splitAxis Axis, splitPoint float32) (leftCount, rightCount int, score float32)
+
+	// Calculate a score for all items in workList.
+	ScorePartition(workList []BoundedVolume) (score float32)
+}
+
+type splitScore struct {
+	axis       Axis
+	splitPoint float32
+
 	leftCount, rightCount int
 	score                 float32
 }
 
-type bvhStats struct {
+type stats struct {
 	partitionedItems int
 	totalItems       int
 	nodes            int
@@ -46,7 +66,7 @@ type bvhStats struct {
 	maxDepth         int
 }
 
-type bvhBuilder struct {
+type builder struct {
 	logger log.Logger
 
 	// Bvh nodes stored as a contiguous list
@@ -54,16 +74,19 @@ type bvhBuilder struct {
 
 	// A callback invoked to set up BVH leafs depending on the type of
 	// partitioned bounding volume
-	leafCb BvhLeafCallback
+	leafCb LeafCallback
 
 	// The minimum number of items that are required for creating a leaf.
 	minLeafItems int
 
-	// Score result chan
-	scoreChan chan bvhSplitCandidate
+	// A channel for receiving score results.
+	scoreChan chan splitScore
+
+	// The split scoring strategy to use.
+	scoreStrategy ScoreStrategy
 
 	// Stats
-	stats bvhStats
+	stats stats
 }
 
 // Construct a BVH from a set of bounded volumes.
@@ -74,30 +97,31 @@ type bvhBuilder struct {
 // The minLeafItems param should be used to specified the minimum number of
 // items that can form a leaf. The BVH builder will automatically generate leafs
 // if the incoming work length is <= minLeafItems.
-func BuildBVH(workList []BoundedVolume, minLeafItems int, leafCb BvhLeafCallback) []scene.BvhNode {
-	builder := &bvhBuilder{
-		logger:       log.New("bvhBuilder"),
-		nodes:        make([]scene.BvhNode, 0),
-		leafCb:       leafCb,
-		minLeafItems: minLeafItems,
-		scoreChan:    make(chan bvhSplitCandidate, 0),
-		stats: bvhStats{
+func Build(workList []BoundedVolume, minLeafItems int, leafCb LeafCallback, scoreStrategy ScoreStrategy) []scene.BvhNode {
+	b := &builder{
+		logger:        log.New("builder"),
+		nodes:         make([]scene.BvhNode, 0),
+		leafCb:        leafCb,
+		minLeafItems:  minLeafItems,
+		scoreChan:     make(chan splitScore, 0),
+		scoreStrategy: scoreStrategy,
+		stats: stats{
 			totalItems: len(workList),
 		},
 	}
 
 	start := time.Now()
-	builder.partition(workList, 0)
-	builder.logger.Debugf(
+	b.partition(workList, 0)
+	b.logger.Debugf(
 		"BVH tree build time: %d ms, maxDepth: %d, nodes: %d, leafs: %d\n",
 		time.Since(start).Nanoseconds()/1e6,
-		builder.stats.maxDepth, builder.stats.nodes, builder.stats.leafs,
+		b.stats.maxDepth, b.stats.nodes, b.stats.leafs,
 	)
-	return builder.nodes
+	return b.nodes
 }
 
 // Partition worklist and return node index.
-func (b *bvhBuilder) partition(workList []BoundedVolume, depth int) uint32 {
+func (b *builder) partition(workList []BoundedVolume, depth int) uint32 {
 	if depth > b.stats.maxDepth {
 		b.stats.maxDepth = depth
 	}
@@ -120,15 +144,15 @@ func (b *bvhBuilder) partition(workList []BoundedVolume, depth int) uint32 {
 	}
 
 	// Calc current node score
-	side := node.Max.Sub(node.Min)
-	var bestScore float32 = float32(len(workList)) * (side[0]*side[1] + side[1]*side[2] + side[0]*side[2])
-	var bestSplit *bvhSplitCandidate = nil
+	var bestScore float32 = b.scoreStrategy.ScorePartition(workList)
+	var bestSplit *splitScore = nil
 
 	// Try partioning along each axis and select the split with best score
 	pendingScores := 0
 
 	// Run axis split tests in parallel
-	for axis := 0; axis < 3; axis++ {
+	side := node.Max.Sub(node.Min)
+	for axis := XAxis; axis <= ZAxis; axis++ {
 		// Skip axis if bbox dimension is too small
 		if side[axis] < minSideLength {
 			continue
@@ -141,12 +165,18 @@ func (b *bvhBuilder) partition(workList []BoundedVolume, depth int) uint32 {
 		}
 
 		for splitPoint := node.Min[axis]; splitPoint < node.Max[axis]; splitPoint += splitStep {
-			candidate := bvhSplitCandidate{
-				axis:       axis,
-				splitPoint: splitPoint,
-			}
 			pendingScores++
-			go candidate.Score(workList, b.scoreChan)
+			go func(axis Axis, splitPoint float32) {
+				lCount, rCount, score := b.scoreStrategy.ScoreSplit(workList, axis, splitPoint)
+				b.scoreChan <- splitScore{
+					axis:       axis,
+					splitPoint: splitPoint,
+
+					leftCount:  lCount,
+					rightCount: rCount,
+					score:      score,
+				}
+			}(axis, splitPoint)
 		}
 	}
 
@@ -193,45 +223,9 @@ func (b *bvhBuilder) partition(workList []BoundedVolume, depth int) uint32 {
 	return uint32(nodeIndex)
 }
 
-// Calculate the score for splitting the workList with this split candidate
-// and report the result to the supplied channel.
-func (c bvhSplitCandidate) Score(workList []BoundedVolume, resChan chan<- bvhSplitCandidate) {
-	lmin := types.Vec3{math.MaxFloat32, math.MaxFloat32, math.MaxFloat32}
-	rmin := types.Vec3{math.MaxFloat32, math.MaxFloat32, math.MaxFloat32}
-	lmax := types.Vec3{-math.MaxFloat32, -math.MaxFloat32, -math.MaxFloat32}
-	rmax := types.Vec3{-math.MaxFloat32, -math.MaxFloat32, -math.MaxFloat32}
-
-	for _, item := range workList {
-		center := item.Center()
-		itemBBox := item.BBox()
-		if center[c.axis] < c.splitPoint {
-			c.leftCount++
-			lmin = types.MinVec3(lmin, itemBBox[0])
-			lmax = types.MaxVec3(lmax, itemBBox[1])
-		} else {
-			c.rightCount++
-			rmin = types.MinVec3(rmin, itemBBox[0])
-			rmax = types.MaxVec3(rmax, itemBBox[1])
-		}
-	}
-
-	// Make sure that we got enough items of each side of the split
-	if c.leftCount == 0 || c.rightCount == 0 {
-		c.score = math.MaxFloat32
-		resChan <- c
-		return
-	}
-
-	lside := lmax.Sub(lmin)
-	rside := rmax.Sub(rmin)
-	c.score = (float32(c.leftCount) * (lside[0]*lside[1] + lside[1]*lside[2] + lside[0]*lside[2])) +
-		(float32(c.rightCount) * (rside[0]*rside[1] + rside[1]*rside[2] + rside[0]*rside[2]))
-	resChan <- c
-}
-
 // Setup the given node item as a leaf node containing all items in the work list.
 // Returns the index to the node in the bvh node array.
-func (b *bvhBuilder) createLeaf(node *scene.BvhNode, workList []BoundedVolume) uint32 {
+func (b *builder) createLeaf(node *scene.BvhNode, workList []BoundedVolume) uint32 {
 	b.leafCb(node, workList)
 
 	// append node to list
@@ -243,4 +237,72 @@ func (b *bvhBuilder) createLeaf(node *scene.BvhNode, workList []BoundedVolume) u
 	b.stats.partitionedItems += len(workList)
 
 	return uint32(nodeIndex)
+}
+
+// A score implementation that uses surface area heuristic for calculating split scores.
+type surfaceAreaHeuristic struct{}
+
+// Score a BVH split based on the surface area heuristic. The SAH calculates
+// the split score using the formula (lower score is better):
+//
+// left count * left BBOX area + rightCount * right BBOX area.
+//
+// SAH avoids splits that generate empty partitions by assigning the worst
+// possible score (MaxFloat32) when it enounters such cases.
+func (h surfaceAreaHeuristic) ScoreSplit(workList []BoundedVolume, axis Axis, splitPoint float32) (leftCount, rightCount int, score float32) {
+	lmin := types.Vec3{math.MaxFloat32, math.MaxFloat32, math.MaxFloat32}
+	rmin := types.Vec3{math.MaxFloat32, math.MaxFloat32, math.MaxFloat32}
+	lmax := types.Vec3{-math.MaxFloat32, -math.MaxFloat32, -math.MaxFloat32}
+	rmax := types.Vec3{-math.MaxFloat32, -math.MaxFloat32, -math.MaxFloat32}
+
+	leftCount = 0
+	rightCount = 0
+	for _, item := range workList {
+		center := item.Center()
+		itemBBox := item.BBox()
+		if center[axis] < splitPoint {
+			leftCount++
+			lmin = types.MinVec3(lmin, itemBBox[0])
+			lmax = types.MaxVec3(lmax, itemBBox[1])
+		} else {
+			rightCount++
+			rmin = types.MinVec3(rmin, itemBBox[0])
+			rmax = types.MaxVec3(rmax, itemBBox[1])
+		}
+	}
+
+	// Make sure that we don't generate empty partitions
+	if leftCount == 0 || rightCount == 0 {
+		return leftCount, rightCount, math.MaxFloat32
+	}
+
+	lside := lmax.Sub(lmin)
+	rside := rmax.Sub(rmin)
+	score = (float32(leftCount) * (lside[0]*lside[1] + lside[1]*lside[2] + lside[0]*lside[2])) +
+		(float32(rightCount) * (rside[0]*rside[1] + rside[1]*rside[2] + rside[0]*rside[2]))
+
+	return leftCount, rightCount, score
+}
+
+// Calculate score for a partitioned workList using formula:
+// count * BBOX area
+//
+// If the workList is empty, then this method returns the worst possible
+// score (MaxFloat32).
+func (h surfaceAreaHeuristic) ScorePartition(workList []BoundedVolume) (score float32) {
+	if len(workList) == 0 {
+		return math.MaxFloat32
+	}
+
+	min := types.Vec3{math.MaxFloat32, math.MaxFloat32, math.MaxFloat32}
+	max := types.Vec3{-math.MaxFloat32, -math.MaxFloat32, -math.MaxFloat32}
+
+	for _, item := range workList {
+		itemBBox := item.BBox()
+		min = types.MinVec3(min, itemBBox[0])
+		max = types.MaxVec3(max, itemBBox[1])
+	}
+
+	side := max.Sub(min)
+	return float32(len(workList)) * (side[0]*side[1] + side[1]*side[2] + side[0]*side[2])
 }

@@ -33,8 +33,7 @@ float3 environmentLightGetSample(
 	float2 uv = rayToLatLongUV(*outRayDir);
 	MaterialNode matNode = materialNodes[emissive->matNodeIndex];
 
-	float scaler = matGetSample1f(uv, matNode.nval, matNode.nvalTex, texMeta, texData);
-	return scaler * matGetSample3f(uv, matNode.kval, matNode.kvalTex, texMeta, texData) * C_1_PI;
+	return matNode.scale * matGetSample3f(uv, matNode.radiance, matNode.radianceTex, texMeta, texData) * C_1_PI;
 }
 
 float environmentLightGetPdf(
@@ -94,11 +93,6 @@ float3 areaLightGetSample(
 
 	MaterialNode matNode = materialNodes[emissive->matNodeIndex];
 
-	// Apply normal map
-	if(matNode.normalTex != -1){
-		emissiveNormal = matGetNormalSample3f(matNode.flags, emissiveNormal, emissiveUV, matNode.normalTex, texMeta, texData);
-	}
-
 	float3 emissiveRay = emissivePoint - surface->point;
 	float squaredDistToLight = dot(emissiveRay, emissiveRay);
 	*outRayDir = normalize(emissiveRay);
@@ -108,12 +102,10 @@ float3 areaLightGetSample(
 	if( nDotOutRay > 0.0f ){
 		*pdf = 1.0f / emissive->area;
 
-		float scaler = matGetSample1f(emissiveUV, matNode.nval, matNode.nvalTex, texMeta, texData);
-
 		// convert from area to solid angle using formula (25) from total compedium:
 		// ω = cos(θy) / dist^2
-		float3 ke = matGetSample3f(emissiveUV, matNode.kval, matNode.kvalTex, texMeta, texData);
-		return scaler * ke * nDotOutRay / squaredDistToLight;
+		float3 ke = matGetSample3f(emissiveUV, matNode.radiance, matNode.radianceTex, texMeta, texData);
+		return matNode.scale * ke * nDotOutRay / squaredDistToLight;
 	}
 
 	*pdf = 0.0f;
@@ -172,16 +164,7 @@ float areaLightGetPdf(
 		return 0.0f;
 	}
 
-	// Apply normal map
 	float3 emissiveNormal = normalize(cross(edge01, edge02));
-	int normalTex = materialNodes[emissive->matNodeIndex].normalTex;
-	uint matFlags = materialNodes[emissive->matNodeIndex].flags;
-	if(normalTex != -1){
-		float2 emissiveUV = (1.0f - u - v) * uv[offset] + 
-		 			        u * uv[offset+1] + 
-				  			v * uv[offset+2];
-		emissiveNormal = matGetNormalSample3f(matFlags, emissiveNormal, emissiveUV, normalTex, texMeta, texData);
-	}
 
 	// The cos term allows us to convert from the uniform pdf 1/|A| from area measure 
 	// to the solid angle measure

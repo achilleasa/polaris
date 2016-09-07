@@ -1,12 +1,19 @@
 #ifndef DISTRIBUTION_SAMPLER_CL
 #define DISTRIBUTION_SAMPLER_CL
 
+float _ggxGetG1(float roughness, float3 v, float3 n, float3 m);
+float ggxGetG(float roughness, float3 inRayDir, float3 outRayDir, float3 n, float3 m);
+float ggxGetD(float roughness, float3 n, float3 m);
+float3 ggxGetSample(float roughness, float3 inRayDir, float3 n, float2 randSample);
+float ggxGetReflectionPdf(float roughness, float3 inRayDir, float3 outRayDir, float3 n, float3 h);
+float ggxGetRefractionPdf(float roughness, float etaI, float etaT, float3 inRayDir, float3 outRayDir, float3 n, float3 h);
+float3 cosWeightedHemisphereGetSample(float3 normal, float2 randSample);
+
 // See https://www.cs.cornell.edu/~srm/publications/EGSR07-btdf.pdf
 // for GGX distribution formulas
 
 // G1(v, m) = 2 / 1 + sqrt( 1 + a^2 * tanv^2 )  (formula 34)
-float _ggxGetG1(float roughness, float3 v, float3 n, float3 m)
-{
+float _ggxGetG1(float roughness, float3 v, float3 n, float3 m){
 	float nDotV = dot(n,v);
 	float mDotV = dot(m,v);
 	if( nDotV * mDotV <= 0.0f ){

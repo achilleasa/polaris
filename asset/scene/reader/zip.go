@@ -8,9 +8,9 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/achilleasa/go-pathtrace/asset"
+	"github.com/achilleasa/go-pathtrace/asset/scene"
 	"github.com/achilleasa/go-pathtrace/log"
-
-	"github.com/achilleasa/go-pathtrace/scene"
 )
 
 const (
@@ -29,7 +29,7 @@ func newZipSceneReader() *zipSceneReader {
 }
 
 // Read scene definition from zip file.
-func (p *zipSceneReader) Read(sceneRes *resource) (*scene.Scene, error) {
+func (p *zipSceneReader) Read(sceneRes *asset.Resource) (*scene.Scene, error) {
 	p.logger.Noticef(`parsing compiled scene from "%s"`, sceneRes.Path())
 	start := time.Now()
 

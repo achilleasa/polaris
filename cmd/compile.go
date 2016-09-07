@@ -3,8 +3,8 @@ package cmd
 import (
 	"strings"
 
-	"github.com/achilleasa/go-pathtrace/scene/reader"
-	"github.com/achilleasa/go-pathtrace/scene/writer"
+	"github.com/achilleasa/go-pathtrace/asset/scene/reader"
+	"github.com/achilleasa/go-pathtrace/asset/scene/writer"
 	"github.com/urfave/cli"
 )
 
@@ -24,6 +24,8 @@ func CompileScene(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
+
+		logger.Notice(sc.Stats())
 
 		zipFile := strings.Replace(sceneFile, ".obj", ".zip", -1)
 		err = writer.WriteScene(sc, zipFile)

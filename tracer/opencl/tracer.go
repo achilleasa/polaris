@@ -246,3 +246,19 @@ func (tr *Tracer) SyncFramebuffer(blockReq *tracer.BlockRequest) (time.Duration,
 
 	return time.Since(start), nil
 }
+
+// Merge accumulator output from another tracer into this tracer's buffer.
+func (tr *Tracer) MergeOutput(other tracer.Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
+	src, isClTracer := other.(*Tracer)
+	if !isClTracer {
+		return 0, fmt.Errorf("merge failed: unsupported tracer instance")
+	}
+
+	start := time.Now()
+
+	// Each accumulator entry is 16 bytes long (float3 stored as float4)
+	dstOffset := int((blockReq.BlockY * blockReq.FrameW * 16) + (blockReq.BlockX * 16))
+	bytes := int((blockReq.BlockW * blockReq.BlockH * 16))
+
+	return time.Since(start), tr.resources.buffers.Accumulator.CopyDataFrom(src.resources.buffers.Accumulator, dstOffset, dstOffset, bytes)
+}

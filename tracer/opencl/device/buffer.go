@@ -199,6 +199,30 @@ func (b *Buffer) Release() {
 	}
 }
 
+// Copy data from the given buffer into this buffer.
+func (b *Buffer) CopyDataFrom(src *Buffer, srcOffset, dstOffset, size int) error {
+	if size == 0 {
+		return nil
+	}
+
+	errCode := cl.EnqueueCopyBuffer(
+		b.device.cmdQueue,
+		src.bufHandle,
+		b.bufHandle,
+		uint64(srcOffset),
+		uint64(dstOffset),
+		uint64(size),
+		0,
+		nil,
+		nil,
+	)
+
+	if errCode != cl.SUCCESS {
+		return fmt.Errorf("opencl device(%s): error copying device data from buffer %s to buffer %s (errCode %d)", b.device.Name, src.name, b.name, errCode)
+	}
+	return nil
+}
+
 // Get opencl buffer handle.
 func (b *Buffer) Handle() cl.Mem {
 	return b.bufHandle

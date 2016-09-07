@@ -77,19 +77,18 @@ func (dr *deviceResources) Close() {
 	}
 }
 
-// Clear accumulator.
+// Clear a rectangular region of the output accumulator.
 func (dr *deviceResources) ClearAccumulator(blockReq *tracer.BlockRequest) (time.Duration, error) {
 	kernel := dr.kernels[clearAccumulator]
-	numPixels := int(blockReq.FrameW * blockReq.BlockH)
-
 	err := kernel.SetArgs(
 		dr.buffers.Accumulator,
+		blockReq.BlockW,
 	)
 	if err != nil {
 		return 0, err
 	}
 
-	return kernel.Exec1D(0, numPixels, 0)
+	return kernel.Exec2D(0, int(blockReq.BlockY), int(blockReq.BlockW), int(blockReq.BlockH), 0, 0)
 }
 
 // Generate primary rays.
@@ -112,6 +111,7 @@ func (dr *deviceResources) GeneratePrimaryRays(blockReq *tracer.BlockRequest, ca
 		cameraEyePos,
 		texelDims,
 		blockReq.BlockY,
+		blockReq.BlockH,
 		blockReq.FrameW,
 		blockReq.FrameH,
 		blockReq.Seed,
@@ -295,6 +295,7 @@ func (dr *deviceResources) AccumulateEmissiveSamples(rayBufferIndex uint32, numP
 	err := kernel.SetArgs(
 		dr.buffers.Rays[rayBufferIndex],
 		dr.buffers.RayCounters[rayBufferIndex],
+		dr.buffers.Paths,
 		dr.buffers.HitFlags,
 		dr.buffers.EmissiveSamples,
 		dr.buffers.Accumulator,
@@ -328,7 +329,7 @@ func (dr *deviceResources) TonemapSimpleReinhard(blockReq *tracer.BlockRequest) 
 // Clear debug buffer
 func (dr *deviceResources) DebugClearBuffer(blockReq *tracer.BlockRequest) (time.Duration, error) {
 	kernel := dr.kernels[debugClearBuffer]
-	numPixels := int(blockReq.FrameW * blockReq.BlockH)
+	numPixels := int(blockReq.FrameW * blockReq.FrameH)
 
 	err := kernel.SetArgs(
 		dr.buffers.DebugOutput,

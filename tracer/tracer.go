@@ -99,6 +99,9 @@ type Tracer interface {
 	// Process block request.
 	Trace(*BlockRequest) (time.Duration, error)
 
+	// Merge accumulator output from another tracer into this tracer's buffer.
+	MergeOutput(Tracer, *BlockRequest) (time.Duration, error)
+
 	// Run post-process filters to the accumulated trace data and
 	// update the output frame buffer.
 	SyncFramebuffer(*BlockRequest) (time.Duration, error)

@@ -14,6 +14,10 @@ const (
 	relativePathToMainKernel = "CL/main.cl"
 )
 
+var (
+	counterResetPattern []int32 = []int32{0}
+)
+
 // A container that stores handles to open CL kernels and any allocated device buffers.
 type deviceResources struct {
 	// The allocated device buffers.
@@ -190,7 +194,18 @@ func (dr *deviceResources) RayPacketIntersectionQuery(rayBufferIndex uint32, num
 func (dr *deviceResources) ShadeHits(bounce, randSeed, numEmissives, rayBufferIndex uint32, numPixels int) (time.Duration, error) {
 	kernel := dr.kernels[shadeHits]
 
-	err := kernel.SetArgs(
+	// Clear indirect ray counters
+	err := dr.buffers.RayCounters[2].WriteData(counterResetPattern, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	err = dr.buffers.RayCounters[1-rayBufferIndex].WriteData(counterResetPattern, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	err = kernel.SetArgs(
 		dr.buffers.Rays[rayBufferIndex],
 		dr.buffers.RayCounters[rayBufferIndex],
 		dr.buffers.Paths,

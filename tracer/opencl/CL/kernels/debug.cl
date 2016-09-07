@@ -111,7 +111,7 @@ __kernel void debugEmissiveSamples(
 		return;
 	}
 
-	int pathIndex = rayGetdPathIndex(rays + globalId);
+	uint pathIndex = rayGetPathIndex(rays + globalId);
 	uint pixelIndex = paths[pathIndex].pixelIndex;
 
 	// Masked output

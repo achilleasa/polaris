@@ -38,11 +38,11 @@ __kernel void shadeHits(
 		const uint randSeed,
 		// occlusion rays and samples
 		__global Ray *occlusionRays,
-		volatile global int *numOcclusionRays,
+		volatile __global int *numOcclusionRays,
 		__global float3 *emissiveSamples,
 		// indirect rays
 		__global Ray *indirectRays,
-		volatile global int *numIndirectRays,
+		volatile __global int *numIndirectRays,
 		// output accumulator
 		__global float3 *accumulator
 		){
@@ -56,12 +56,6 @@ __kernel void shadeHits(
 	int localId = get_local_id(0);
 	int globalId = get_global_id(0);
 
-	// The first thread should initialize the global counters
-	if(globalId == 0){
-		*numOcclusionRays = 0;
-		*numIndirectRays = 0;
-	}
-
 	// The first thread in this WG should initialize the local counters
 	if(localId == 0){
 		wgNumOcclusionRays = 0;
@@ -71,7 +65,7 @@ __kernel void shadeHits(
 	barrier(CLK_LOCAL_MEM_FENCE);
 	
 	Surface surface;
-	int rayPathIndex;
+	uint rayPathIndex;
 	float3 outBxdfRayOrigin, outEmissiveRayOrigin;
 	float3 curPathThroughput;
 	float3 bxdfOutRayDir, bxdfSample, bxdfEmissiveSample, emissiveOutRayDir, emissiveSample;
@@ -165,7 +159,7 @@ __kernel void shadeHits(
 					if( MAX_VEC3_COMPONENT(emissiveSample) > 0.0f && emissivePdf > 0.0f && nDotEmissiveOutRay > 0.0f){
 						bxdfEmissiveSample = bxdfEval(&surface, &materialNode, texMeta, texData, inRayDir, emissiveOutRayDir);
 						emissiveSample *= emissiveWeight * bxdfEmissiveSample * curPathThroughput * nDotEmissiveOutRay / (emissivePdf * emissiveSelectionPdf);
-						wgOcclusionRayIndex = atomic_inc(&wgNumOcclusionRays);
+						wgOcclusionRayIndex = MAX_VEC3_COMPONENT(emissiveSample) > 0.0f ? atomic_inc(&wgNumOcclusionRays) : -1;
 					}
 
 					// Disable bxdfWeight for singular surfaces (ideal mirror/dielectric)
@@ -203,7 +197,7 @@ __kernel void shadeHits(
 	barrier(CLK_LOCAL_MEM_FENCE);
 
 	// Emit occlusion ray and sample
-	if( wgOcclusionRayIndex != -1 && MAX_VEC3_COMPONENT(emissiveSample) > 0.0f ){
+	if( wgOcclusionRayIndex != -1 ){
 		wgOcclusionRayIndex += wgNumOcclusionRays;
 		emissiveSamples[wgOcclusionRayIndex] = emissiveSample;
 		rayNew(occlusionRays + wgOcclusionRayIndex, outEmissiveRayOrigin, emissiveOutRayDir, distToEmissive - INTERSECTION_WITH_LIGHT_EPSILON, rayPathIndex);
@@ -240,7 +234,7 @@ __kernel void shadePrimaryRayMisses(
 
 	// Just sample global env map or use scene bg color
 	MaterialNode matNode = materialNodes[sceneDiffuseMatNodeIndex];
-	int rayPathIndex;
+	uint rayPathIndex;
 	float2 uv = rayToLatLongUV(rayGetDirAndPathIndex(rays + globalId, &rayPathIndex));
 
 	float3 kd = matGetSample3f(uv, matNode.reflectance, matNode.reflectanceTex, texMeta, texData);
@@ -271,7 +265,7 @@ __kernel void shadeIndirectRayMisses(
 
 	// Just sample global env map or use scene bg color
 	MaterialNode matNode = materialNodes[sceneDiffuseMatNodeIndex];
-	int rayPathIndex;
+	uint rayPathIndex;
 	float2 uv = rayToLatLongUV(rayGetDirAndPathIndex(rays + globalId, &rayPathIndex));
 
 	// As this is an indirect ray we need to multiply the path throughput with the diffuse sample
@@ -296,7 +290,8 @@ __kernel void accumulateEmissiveSamples(
 		return;
 	}
 
-	int pathIndex = rayGetdPathIndex(rays + globalId);
+	uint pathIndex = rayGetPathIndex(rays + globalId);
+	//printf("%d\n", pathIndex);
 	accumulator[pathIndex] += emissiveSamples[globalId];
 }
 

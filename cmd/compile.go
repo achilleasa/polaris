@@ -25,6 +25,8 @@ func CompileScene(ctx *cli.Context) error {
 			return err
 		}
 
+		logger.Notice(sc.Stats())
+
 		zipFile := strings.Replace(sceneFile, ".obj", ".zip", -1)
 		err = writer.WriteScene(sc, zipFile)
 		if err != nil {

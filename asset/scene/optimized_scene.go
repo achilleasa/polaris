@@ -1,6 +1,10 @@
 package scene
 
 import (
+	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/achilleasa/go-pathtrace/asset/texure"
 	"github.com/achilleasa/go-pathtrace/types"
 )
@@ -179,4 +183,68 @@ type Scene struct {
 
 	// The scene camera.
 	Camera *Camera
+}
+
+func (sc *Scene) Stats() string {
+	return fmt.Sprintf(`optimized scene data: %s
+Breakdown:	
+---------
+
+- Geometry:         %s
+    Vertices:       %s
+    Normals:        %s
+    UVs:            %s
+    BVH:            %s
+
+- Mesh/emissives:   %s
+    Mesh Instances: %s
+    Emissives:      %s
+
+- Materials:        %s
+    Mat. Indices:   %s
+    Mat. Nodes:     %s
+
+- Textures:         %s
+    Metadata:       %s
+    Data:           %s
+
+`,
+		strings.TrimLeft(fmtSize(sc.VertexList, sc.NormalList, sc.UvList, sc.BvhNodeList, sc.MeshInstanceList, sc.EmissivePrimitives, sc.MaterialNodeList, sc.MaterialIndex, sc.TextureMetadata, sc.TextureData), " "),
+		fmtSize(sc.VertexList, sc.NormalList, sc.UvList, sc.BvhNodeList),
+		fmtSize(sc.VertexList),
+		fmtSize(sc.NormalList),
+		fmtSize(sc.UvList),
+		fmtSize(sc.BvhNodeList),
+		fmtSize(sc.MeshInstanceList, sc.EmissivePrimitives),
+		fmtSize(sc.MeshInstanceList),
+		fmtSize(sc.EmissivePrimitives),
+		fmtSize(sc.MaterialIndex, sc.MaterialNodeList),
+		fmtSize(sc.MaterialIndex),
+		fmtSize(sc.MaterialNodeList),
+		fmtSize(sc.TextureMetadata, sc.TextureData),
+		fmtSize(sc.TextureMetadata),
+		fmtSize(sc.TextureData),
+	)
+}
+
+// Sum the total space used by a set of slices and return back a formatted
+// value with the appropriate byte/kb/mb unit.
+func fmtSize(items ...interface{}) string {
+	var totalBytes float32 = 0.0
+	for _, item := range items {
+		t := reflect.TypeOf(item)
+		v := reflect.ValueOf(item)
+		if v.Len() == 0 {
+			continue
+		}
+
+		totalBytes += float32(int(t.Elem().Size()) * v.Len())
+	}
+
+	if totalBytes < 1e3 {
+		return fmt.Sprintf("%3d bytes", int(totalBytes))
+	} else if totalBytes < 1e6 {
+		return fmt.Sprintf("%3.1f kb", totalBytes/1e3)
+	}
+	return fmt.Sprintf("%5.1f mb", totalBytes/1e6)
 }

@@ -238,7 +238,7 @@ __kernel void shadePrimaryRayMisses(
 	float2 uv = rayToLatLongUV(rayGetDirAndPathIndex(rays + globalId, &rayPathIndex));
 
 	float3 kd = matGetSample3f(uv, matNode.reflectance, matNode.reflectanceTex, texMeta, texData);
-	accumulator[rayPathIndex] += kd;
+	accumulator[paths[rayPathIndex].pixelIndex] += kd;
 }
 
 // Shade indirect ray misses by sampling the scene background.
@@ -271,13 +271,14 @@ __kernel void shadeIndirectRayMisses(
 	// As this is an indirect ray we need to multiply the path throughput with the diffuse sample
 	// and accumulate that.
 	float3 kd = matGetSample3f(uv, matNode.reflectance, matNode.reflectanceTex, texMeta, texData);
-	accumulator[rayPathIndex] += paths[rayPathIndex].throughput * kd;
+	accumulator[paths[rayPathIndex].pixelIndex] += paths[rayPathIndex].throughput * kd;
 }
 
 // Accumulate emissive samples for emissive surfaces that are not occluded.
 __kernel void accumulateEmissiveSamples(
 		__global Ray *rays,
 		__global const int *numRays,
+		__global Path *paths,
 		__global uint *hitFlags,
 		__global float3 *emissiveSamples,
 		__global float3 *accumulator
@@ -291,8 +292,7 @@ __kernel void accumulateEmissiveSamples(
 	}
 
 	uint pathIndex = rayGetPathIndex(rays + globalId);
-	//printf("%d\n", pathIndex);
-	accumulator[pathIndex] += emissiveSamples[globalId];
+	accumulator[paths[pathIndex].pixelIndex] += emissiveSamples[globalId];
 }
 
 #endif

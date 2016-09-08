@@ -12,8 +12,8 @@ __kernel void generatePrimaryRays(
 		const float4 frustrumBR,
 		const float3 eyePos,
 		const float2 texelDims,
-		const int blockY,
-		const int blockH,
+		const uint blockY,
+		const uint blockH,
 		const uint frameW,
 		const uint frameH,
 		const uint randSeed

@@ -28,7 +28,7 @@ __kernel void generatePrimaryRays(
 	}
 
 	if( globalId.x < frameW && globalId.y < blockH ){
-		uint index = morton2d(globalId);
+		uint index = (globalId.y * frameW) + globalId.x;
 		uint pixelIndex = ((globalId.y + blockY) * frameW) + globalId.x;
 
 		// Apply stratified sampling using a tent filter. This will wrap our

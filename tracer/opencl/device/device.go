@@ -204,11 +204,7 @@ func (d *Device) detectSpeed() error {
 	if errCode != cl.SUCCESS {
 		return fmt.Errorf("opencl device (%s): could not query MAX_CLOCK_FREQUENCY (error: %s; code %d)", d.Name, ErrorName(errCode), errCode)
 	}
-	var opsPerCycle uint32 = 2
-	if d.Type == CpuDevice {
-		opsPerCycle = 4
-	}
-	d.Speed = d.compUnits * opsPerCycle * d.clockSpeed / 1000
+	d.Speed = d.compUnits * d.clockSpeed / 1000
 
 	return nil
 }

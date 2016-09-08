@@ -16,7 +16,7 @@ import (
 type DebugFlag uint16
 
 const (
-	Off                         DebugFlag = 0
+	NoDebug                     DebugFlag = 0
 	PrimaryRayIntersectionDepth           = 1 << iota
 	PrimaryRayIntersectionNormals
 	AllEmissiveSamples
@@ -61,7 +61,7 @@ func DefaultPipeline(debugFlags DebugFlag) *Pipeline {
 	}
 
 	if debugFlags&FrameBuffer == FrameBuffer {
-		pipeline.PostProcess = append(pipeline.PostProcess, DebugFrameBuffer("debug-fb.png"))
+		pipeline.PostProcess = append(pipeline.PostProcess, SaveFrameBuffer("debug-fb.png"))
 	}
 
 	return pipeline
@@ -141,7 +141,7 @@ func MonteCarloIntegrator(debugFlags DebugFlag) PipelineStage {
 			}
 
 			// Shade hits
-			_, err = tr.resources.ShadeHits(bounce, rand.Uint32(), numEmissives, activeRayBuf, numPixels)
+			_, err = tr.resources.ShadeHits(bounce, blockReq.MinBouncesForRR, rand.Uint32(), numEmissives, activeRayBuf, numPixels)
 			if err != nil {
 				return time.Since(start), err
 			}
@@ -210,8 +210,8 @@ func MonteCarloIntegrator(debugFlags DebugFlag) PipelineStage {
 	}
 }
 
-// Dump a copy of the RGBA framebuffer.
-func DebugFrameBuffer(imgFile string) PipelineStage {
+// Save a copy of the RGBA framebuffer.
+func SaveFrameBuffer(imgFile string) PipelineStage {
 	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
 		start := time.Now()
 

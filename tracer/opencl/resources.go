@@ -191,7 +191,7 @@ func (dr *deviceResources) RayPacketIntersectionQuery(rayBufferIndex uint32, num
 // Evaluate shading for intersections. For each intersection, this kernel may
 // generate an occlusion ray and a emissive sample as well as an indirect
 // ray to be used for future bounces.
-func (dr *deviceResources) ShadeHits(bounce, randSeed, numEmissives, rayBufferIndex uint32, numPixels int) (time.Duration, error) {
+func (dr *deviceResources) ShadeHits(bounce, minBouncesForRR, randSeed, numEmissives, rayBufferIndex uint32, numPixels int) (time.Duration, error) {
 	kernel := dr.kernels[shadeHits]
 
 	// Clear indirect ray counters
@@ -221,6 +221,7 @@ func (dr *deviceResources) ShadeHits(bounce, randSeed, numEmissives, rayBufferIn
 		dr.buffers.TextureMetadata,
 		dr.buffers.Textures,
 		bounce,
+		minBouncesForRR,
 		randSeed,
 		// Occlusion rays and emissive samples
 		dr.buffers.Rays[2], // occlusion rays always go to last ray buf

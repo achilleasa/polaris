@@ -71,7 +71,12 @@ func (tr *Tracer) Id() string {
 
 // Get tracer flags.
 func (tr *Tracer) Flags() tracer.Flag {
-	return tracer.Local | tracer.GLInterop
+	flags := tracer.Local | tracer.GLInterop
+	if tr.device.Type == device.CpuDevice {
+		flags |= tracer.CpuDevice
+	}
+
+	return flags
 }
 
 // Get the computation speed estimate (in GFlops).

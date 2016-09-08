@@ -20,6 +20,9 @@ type BlockRequest struct {
 	// The number of bounces to trace.
 	NumBounces uint32
 
+	// Number of bounces before applying russian roulette to terminate paths.
+	MinBouncesForRR uint32
+
 	// The exposure value controls HDR -> LDR mapping.
 	Exposure float32
 
@@ -51,10 +54,13 @@ const (
 	Local Flag = 1 << iota
 
 	// Remote device.
-	Remote = 1 << iota
+	Remote
 
 	// Supports GL interop.
-	GLInterop = 1 << iota
+	GLInterop
+
+	// CPU-based
+	CpuDevice
 )
 
 type UpdateMode uint8

@@ -5,8 +5,6 @@
 #define MIN_VEC3_COMPONENT(v) (min(v.x,min(v.y,v.z)))
 #define DISPLACE_BY_EPSILON(v,n) (v + n * INTERSECTION_EPSILON)
 
-#define MIN_BOUNCES_FOR_RR 3
-
 #define BALANCE_HEURISTIC(a,b) a/(a+b)
 #define POWER_HEURISTIC(a,b) (a*a)/(a*a+b*b)
 
@@ -35,6 +33,7 @@ __kernel void shadeHits(
 		__global uchar *texData,
 		// state
 		const uint bounce,
+		const uint minBouncesForRR,
 		const uint randSeed,
 		// occlusion rays and samples
 		__global Ray *occlusionRays,
@@ -110,7 +109,7 @@ __kernel void shadeHits(
 				// killing paths with a probability less than sample2.x while also
 				// boosting surving paths by the same probablility.
 				bool rejectSample = materialNode.type == BXDF_INVALID;
-				if(bounce >= MIN_BOUNCES_FOR_RR) {
+				if(bounce >= minBouncesForRR) {
 					float rrProbability = max(
 							// convert throughput to luminance
 							min(0.5f, 0.2126f * curPathThroughput.x + 0.7152f * curPathThroughput.y + 0.0722f * curPathThroughput.z),

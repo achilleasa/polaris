@@ -71,7 +71,7 @@ func (d Device) String() string {
 }
 
 // Initialize device.
-func (d *Device) Init(programFile string) error {
+func (d *Device) Init(programFile string, ctx *cl.Context) error {
 	var errCode cl.ErrorCode
 
 	// Already initialized
@@ -79,11 +79,14 @@ func (d *Device) Init(programFile string) error {
 		return nil
 	}
 
-	// Create context
-	d.ctx = cl.CreateContext(nil, 1, &d.Id, nil, nil, (*int32)(&errCode))
-	if errCode != cl.SUCCESS {
-		defer d.Close()
-		return fmt.Errorf("opencl device (%s): could not create opencl context (error: %s; code %d)", d.Name, ErrorName(errCode), errCode)
+	// Create context if one is not supplied
+	d.ctx = ctx
+	if d.ctx == nil {
+		d.ctx = cl.CreateContext(nil, 1, &d.Id, nil, nil, (*int32)(&errCode))
+		if errCode != cl.SUCCESS {
+			defer d.Close()
+			return fmt.Errorf("opencl device (%s): could not create opencl context (error: %s; code %d)", d.Name, ErrorName(errCode), errCode)
+		}
 	}
 
 	// Create command queue

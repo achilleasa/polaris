@@ -13,6 +13,7 @@ import (
 	"github.com/achilleasa/go-pathtrace/tracer"
 	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
 	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/gopencl/v1.2/cl"
 )
 
 type Tracer struct {
@@ -23,6 +24,11 @@ type Tracer struct {
 
 	// The device associated with this tracer instance.
 	device *device.Device
+
+	// An optional opencl context. It can be nil when rendering using
+	// a single device. In multi-device mode all devices need to share
+	// the same context.
+	ctx *cl.Context
 
 	// The allocated device resources.
 	resources *deviceResources
@@ -49,7 +55,7 @@ type Tracer struct {
 }
 
 // Create a new opencl tracer.
-func NewTracer(id string, device *device.Device, pipeline *Pipeline) (tracer.Tracer, error) {
+func NewTracer(id string, device *device.Device, ctx *cl.Context, pipeline *Pipeline) (tracer.Tracer, error) {
 	loggerName := fmt.Sprintf("opencl tracer (%s)", device.Name)
 
 	tr := &Tracer{
@@ -59,6 +65,7 @@ func NewTracer(id string, device *device.Device, pipeline *Pipeline) (tracer.Tra
 		changeBuffer: make(map[tracer.ChangeType]interface{}, 0),
 		stats:        &tracer.Stats{},
 		pipeline:     pipeline,
+		ctx:          ctx,
 	}
 
 	return tr, nil
@@ -93,7 +100,7 @@ func (tr *Tracer) Init() error {
 	// Init device
 	_, thisFile, _, _ := runtime.Caller(0)
 	pathToMainKernel := path.Join(path.Dir(thisFile), relativePathToMainKernel)
-	err = tr.device.Init(pathToMainKernel)
+	err = tr.device.Init(pathToMainKernel, tr.ctx)
 	if err != nil {
 		tr.cleanup()
 		return err
@@ -226,7 +233,8 @@ func (tr *Tracer) Trace(blockReq *tracer.BlockRequest) (time.Duration, error) {
 		}
 	}
 
-	return time.Since(start), nil
+	tr.stats.RenderTime = time.Since(start)
+	return tr.stats.RenderTime, nil
 }
 
 // Run post-process filters and update the framebuffer with the processed output.

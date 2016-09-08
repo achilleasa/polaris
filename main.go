@@ -151,10 +151,6 @@ func main() {
 				},
 			},
 		},
-		{
-			Name:   "debug",
-			Action: cmd.Debug,
-		},
 	}
 
 	err := app.Run(os.Args)

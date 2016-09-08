@@ -8,6 +8,16 @@ import (
 	"github.com/urfave/cli"
 )
 
+var (
+	sceneCompileHelp = `
+Parse a scene definition from a wavefront obj file, build a BVH tree to optimize
+ray intersection tests and package scene assets in a GPU-friendly format.
+
+The optimized scene data is then written to a zip archive which can be supplied
+as an argument to the render commands.
+`
+)
+
 func main() {
 	cli.VersionFlag = cli.BoolFlag{
 		Name:  "version",
@@ -30,16 +40,22 @@ func main() {
 	}
 	app.Commands = []cli.Command{
 		{
-			Name:  "compile",
-			Usage: "compile text scene representation into a binary compressed format",
-			Description: `
-Parse a scene definition from a wavefront obj file, build a BVH tree to optimize
-ray intersection tests and package scene elements in a GPU-friendly format.
-
-The optimized scene data is then written to a zip archive which can be supplied
-as an argument to the render command.`,
-			ArgsUsage: "scene_file1.obj scene_file2.obj ...",
-			Action:    cmd.CompileScene,
+			Name: "scene",
+			Subcommands: []cli.Command{
+				{
+					Name:        "compile",
+					Usage:       "compile text scene representation into a binary compressed format",
+					Description: sceneCompileHelp,
+					ArgsUsage:   "scene_file1.obj scene_file2.obj ...",
+					Action:      cmd.CompileScene,
+				},
+				{
+					Name:      "info",
+					Usage:     "print the size of the various compiled scene assets",
+					ArgsUsage: "scene_file.zip",
+					Action:    cmd.ShowSceneInfo,
+				},
+			},
 		},
 		{
 			Name:   "list-devices",
@@ -55,15 +71,16 @@ as an argument to the render command.`,
 					Name:        "frame",
 					Usage:       "render single frame",
 					Description: `Render a single frame.`,
+					ArgsUsage:   "scene_file.zip or scene_file.obj",
 					Flags: []cli.Flag{
 						cli.IntFlag{
 							Name:  "width",
-							Value: 512,
+							Value: 1024,
 							Usage: "frame width",
 						},
 						cli.IntFlag{
 							Name:  "height",
-							Value: 512,
+							Value: 1024,
 							Usage: "frame height",
 						},
 						cli.IntFlag{
@@ -71,9 +88,19 @@ as an argument to the render command.`,
 							Value: 16,
 							Usage: "samples per pixel",
 						},
+						cli.IntFlag{
+							Name:  "num-bounces, nb",
+							Value: 5,
+							Usage: "number of indirect ray bounces",
+						},
+						cli.IntFlag{
+							Name:  "rr-bounces, nr",
+							Value: 3,
+							Usage: "number of indirect ray bounces before applying RR (disabled if 0 or >= than num-bounces)",
+						},
 						cli.Float64Flag{
 							Name:  "exposure",
-							Value: 1.0,
+							Value: 1.2,
 							Usage: "camera exposure for tone-mapping",
 						},
 						cli.StringSliceFlag{
@@ -82,12 +109,17 @@ as an argument to the render command.`,
 							Usage: "blacklist opencl device whose names contain this value",
 						},
 						cli.StringFlag{
+							Name:  "force-primary",
+							Value: "",
+							Usage: "force a particular device name as the primary device",
+						},
+						cli.StringFlag{
 							Name:  "out, o",
 							Value: "frame.png",
 							Usage: "image filename for the rendered frame",
 						},
 					},
-					//	Action: cmd.RenderFrame,
+					Action: cmd.RenderFrame,
 				},
 				{
 					Name:        "interactive",

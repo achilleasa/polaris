@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
+	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli"
 )
 
@@ -12,22 +13,26 @@ import (
 func ListDevices(ctx *cli.Context) error {
 	setupLogging(ctx)
 
-	var storage []byte
-	buf := bytes.NewBuffer(storage)
+	var buf bytes.Buffer
 
 	clPlatforms, err := device.GetPlatformInfo()
 	if err != nil {
 		return fmt.Errorf("could not list devices: %s", err.Error())
 	}
 
-	buf.WriteString(fmt.Sprintf("\nSystem provides %d opencl platform(s):\n\n", len(clPlatforms)))
-	for pIdx, platformInfo := range clPlatforms {
-		buf.WriteString(fmt.Sprintf("[Platform %02d]\n  Name    %s\n  Version %s\n  Profile %s\n  Devices %d\n\n", pIdx, platformInfo.Name, platformInfo.Version, platformInfo.Profile, len(platformInfo.Devices)))
-		for dIdx, dev := range platformInfo.Devices {
-			buf.WriteString(fmt.Sprintf("  [Device %02d]\n    Name  %s\n    Type  %s\n    Speed %d GFlops\n\n", dIdx, dev.Name, dev.Type, dev.Speed))
+	table := tablewriter.NewWriter(&buf)
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.SetAutoFormatHeaders(false)
+	table.SetAutoWrapText(false)
+	table.SetHeader([]string{"Device", "Type", "Estimated speed", "Vendor", "Version"})
+
+	for _, platformInfo := range clPlatforms {
+		for _, dev := range platformInfo.Devices {
+			table.Append([]string{dev.Name, dev.Type.String(), fmt.Sprintf("%d GFlops", dev.Speed), platformInfo.Name, platformInfo.Version})
 		}
 	}
+	table.Render()
 
-	fmt.Printf(buf.String())
+	logger.Noticef("system provides %d opencl platform(s)\n%s", len(clPlatforms), buf.String())
 	return nil
 }

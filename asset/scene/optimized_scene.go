@@ -1,12 +1,14 @@
 package scene
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/achilleasa/go-pathtrace/asset/texure"
 	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/olekukonko/tablewriter"
 )
 
 // Bvh nodes are comprised of two Vec3 and two multipurpose int32 parameters
@@ -185,46 +187,34 @@ type Scene struct {
 	Camera *Camera
 }
 
+// Build a tabular representation of scene statistics.
 func (sc *Scene) Stats() string {
-	return fmt.Sprintf(`optimized scene data: %s
-Breakdown:	
----------
+	var buf bytes.Buffer
+	table := tablewriter.NewWriter(&buf)
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.SetAutoFormatHeaders(false)
+	table.SetHeader([]string{"Asset Type", "Asset", "Size"})
+	table.Append([]string{"Geometry", "---", fmtSize(sc.VertexList, sc.NormalList, sc.UvList, sc.BvhNodeList)})
+	table.Append([]string{"", "Vertices", fmtSize(sc.VertexList)})
+	table.Append([]string{"", "Normals", fmtSize(sc.NormalList)})
+	table.Append([]string{"", "UVs", fmtSize(sc.UvList)})
+	table.Append([]string{"", "BVH", fmtSize(sc.BvhNodeList)})
+	table.Append([]string{" ", " ", " "})
+	table.Append([]string{"Mesh/emissives", "---", fmtSize(sc.MeshInstanceList, sc.EmissivePrimitives)})
+	table.Append([]string{"", "Mesh instances", fmtSize(sc.MeshInstanceList)})
+	table.Append([]string{"", "Emissives", fmtSize(sc.EmissivePrimitives)})
+	table.Append([]string{" ", " ", " "})
+	table.Append([]string{"Materials", "---", fmtSize(sc.MaterialIndex, sc.MaterialNodeList)})
+	table.Append([]string{"", "Mat. indices", fmtSize(sc.MaterialIndex)})
+	table.Append([]string{"", "Mat. nodes", fmtSize(sc.MaterialNodeList)})
+	table.Append([]string{" ", " ", " "})
+	table.Append([]string{"Textures", "---", fmtSize(sc.TextureMetadata, sc.TextureData)})
+	table.Append([]string{"", "Metadata", fmtSize(sc.TextureMetadata)})
+	table.Append([]string{"", "Data", fmtSize(sc.TextureData)})
+	table.SetFooter([]string{"Total", " ", strings.TrimLeft(fmtSize(sc.VertexList, sc.NormalList, sc.UvList, sc.BvhNodeList, sc.MeshInstanceList, sc.EmissivePrimitives, sc.MaterialNodeList, sc.MaterialIndex, sc.TextureMetadata, sc.TextureData), " ")})
 
-- Geometry:         %s
-    Vertices:       %s
-    Normals:        %s
-    UVs:            %s
-    BVH:            %s
-
-- Mesh/emissives:   %s
-    Mesh Instances: %s
-    Emissives:      %s
-
-- Materials:        %s
-    Mat. Indices:   %s
-    Mat. Nodes:     %s
-
-- Textures:         %s
-    Metadata:       %s
-    Data:           %s
-
-`,
-		strings.TrimLeft(fmtSize(sc.VertexList, sc.NormalList, sc.UvList, sc.BvhNodeList, sc.MeshInstanceList, sc.EmissivePrimitives, sc.MaterialNodeList, sc.MaterialIndex, sc.TextureMetadata, sc.TextureData), " "),
-		fmtSize(sc.VertexList, sc.NormalList, sc.UvList, sc.BvhNodeList),
-		fmtSize(sc.VertexList),
-		fmtSize(sc.NormalList),
-		fmtSize(sc.UvList),
-		fmtSize(sc.BvhNodeList),
-		fmtSize(sc.MeshInstanceList, sc.EmissivePrimitives),
-		fmtSize(sc.MeshInstanceList),
-		fmtSize(sc.EmissivePrimitives),
-		fmtSize(sc.MaterialIndex, sc.MaterialNodeList),
-		fmtSize(sc.MaterialIndex),
-		fmtSize(sc.MaterialNodeList),
-		fmtSize(sc.TextureMetadata, sc.TextureData),
-		fmtSize(sc.TextureMetadata),
-		fmtSize(sc.TextureData),
-	)
+	table.Render()
+	return buf.String()
 }
 
 // Sum the total space used by a set of slices and return back a formatted

@@ -19,15 +19,12 @@ float3 matGetNormalSample3f(float3 normal, float2 uv, int texIndex, __global Tex
 void matSelectNode(Surface *surface, float3 inRayDir, MaterialNode *selectedMaterial, __global MaterialNode* materialNodes, uint2 *rndState, __global TextureMetadata *texMeta, __global uchar *texData ){
 	__global MaterialNode* node = materialNodes + surface->matNodeIndex;
 	float2 sample;
-	while( node != NULL && MAT_NODE_IS_OP(node) ){
+	while(MAT_NODE_IS_OP(node)) {
 		switch(node->type){
 			case MAT_OP_MIX: 
-				// Depending on the sample, follow left, right or absorb (set out node to nil)
+				// Depending on the sample, follow left or right
 				sample = randomGetSample2f(rndState);
-
-				node = sample.x < node->mixWeights.x
-						? materialNodes + node->leftChild 
-						: (sample.x < node->mixWeights.x + node->mixWeights.y ? materialNodes + node->rightChild : NULL);
+				node = materialNodes + (sample.x < node->mixWeights.x ? node->leftChild : node->rightChild);
 				break;
 			case MAT_OP_BUMP_MAP:
 				surface->normal = matGetBumpSample3f(surface->normal, surface->uv, node->bumpTex, texMeta, texData);
@@ -40,11 +37,7 @@ void matSelectNode(Surface *surface, float3 inRayDir, MaterialNode *selectedMate
 		}
 	}
 
-	if(node == NULL) {
-		selectedMaterial->type = BXDF_INVALID;
-	} else {
-		*selectedMaterial = *node;
-	}
+	*selectedMaterial = *node;
 }
 
 // Sample texture using the supplied uv coordinates and return a float3 vector. 

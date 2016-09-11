@@ -5,7 +5,7 @@
 #include "hdr.cl"
 #include "intersect.cl"
 #include "pt_integrator.cl"
-#include "clear.cl"
+#include "accumulator.cl"
 #include "debug.cl"
 
 #endif

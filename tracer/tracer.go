@@ -20,6 +20,9 @@ type BlockRequest struct {
 	// The number of bounces to trace.
 	NumBounces uint32
 
+	// Number of bounces before applying russian roulette to terminate paths.
+	MinBouncesForRR uint32
+
 	// The exposure value controls HDR -> LDR mapping.
 	Exposure float32
 
@@ -51,10 +54,10 @@ const (
 	Local Flag = 1 << iota
 
 	// Remote device.
-	Remote = 1 << iota
+	Remote
 
-	// Supports GL interop.
-	GLInterop = 1 << iota
+	// CPU-based
+	CpuDevice
 )
 
 type UpdateMode uint8
@@ -98,6 +101,9 @@ type Tracer interface {
 
 	// Process block request.
 	Trace(*BlockRequest) (time.Duration, error)
+
+	// Merge accumulator output from another tracer into this tracer's buffer.
+	MergeOutput(Tracer, *BlockRequest) (time.Duration, error)
 
 	// Run post-process filters to the accumulated trace data and
 	// update the output frame buffer.

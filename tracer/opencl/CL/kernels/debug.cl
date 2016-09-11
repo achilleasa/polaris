@@ -148,11 +148,10 @@ __kernel void debugAccumulator(
 		){
 
 	int globalId = get_global_id(0);
-	uint pixelIndex = paths[globalId].pixelIndex;
 	
 	// gamma correct and clamp
 	float3 val = debugToneMapAndGammaCorrect(accumulator[globalId] * sampleWeight);
-	output[pixelIndex] = (uchar4)((uchar)val.x, (uchar)val.y, (uchar)val.z, 255);
+	output[globalId] = (uchar4)((uchar)val.x, (uchar)val.y, (uchar)val.z, 255);
 }
 
 #endif

@@ -3,7 +3,6 @@
 
 #include "ray.cl"
 #include "path.cl"
-#include "morton.cl"
 #include "transform.cl"
 #include "surface.cl"
 #include "fresnel.cl"

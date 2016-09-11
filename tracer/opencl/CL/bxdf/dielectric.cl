@@ -32,10 +32,10 @@ float3 dielecticSample(Surface *surface, MaterialNode *matNode, __global Texture
 	// Based on the fresnel value randomly sample the reflection ray.
 	// In the case where the ray undergoes total internal reflection we 
 	// always pick the reflection ray
-	if( cosTSq <= 0.0f|| randSample.x <= f ){
+	if( cosTSq <= 0.0f || randSample.x <= f ){
 		*outRayDir = -sign(iDotN) * 2.0f * iDotN * surface->normal - inRayDir;
 		kVal = matGetSample3f(surface->uv, matNode->specularity, matNode->specularityTex, texMeta, texData);
-		*pdf = cosTSq <= 0.0f ? 1.0 : f;
+		*pdf = cosTSq <= 0.0f ? 1.0f : f;
 	} else {
 		*outRayDir = (eta * iDotN - sign(iDotN)*sqrt(cosTSq))*surface->normal - eta * inRayDir;
 		kVal = eta * eta * matGetSample3f(surface->uv, matNode->transmittance, matNode->transmittanceTex, texMeta, texData);

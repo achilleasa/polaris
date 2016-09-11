@@ -7,16 +7,18 @@ import (
 	"math/rand"
 	"os"
 	"time"
+	"unsafe"
 
 	"github.com/achilleasa/go-pathtrace/tracer"
 	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
+	"github.com/go-gl/gl/v2.1/gl"
 )
 
 // Debug flags.
 type DebugFlag uint16
 
 const (
-	Off                         DebugFlag = 0
+	NoDebug                     DebugFlag = 0
 	PrimaryRayIntersectionDepth           = 1 << iota
 	PrimaryRayIntersectionNormals
 	AllEmissiveSamples
@@ -61,7 +63,7 @@ func DefaultPipeline(debugFlags DebugFlag) *Pipeline {
 	}
 
 	if debugFlags&FrameBuffer == FrameBuffer {
-		pipeline.PostProcess = append(pipeline.PostProcess, DebugFrameBuffer("debug-fb.png"))
+		pipeline.PostProcess = append(pipeline.PostProcess, SaveFrameBuffer("debug-fb.png"))
 	}
 
 	return pipeline
@@ -141,7 +143,7 @@ func MonteCarloIntegrator(debugFlags DebugFlag) PipelineStage {
 			}
 
 			// Shade hits
-			_, err = tr.resources.ShadeHits(bounce, rand.Uint32(), numEmissives, activeRayBuf, numPixels)
+			_, err = tr.resources.ShadeHits(bounce, blockReq.MinBouncesForRR, rand.Uint32(), numEmissives, activeRayBuf, numPixels)
 			if err != nil {
 				return time.Since(start), err
 			}
@@ -210,8 +212,8 @@ func MonteCarloIntegrator(debugFlags DebugFlag) PipelineStage {
 	}
 }
 
-// Dump a copy of the RGBA framebuffer.
-func DebugFrameBuffer(imgFile string) PipelineStage {
+// Save a copy of the RGBA framebuffer.
+func SaveFrameBuffer(imgFile string) PipelineStage {
 	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
 		start := time.Now()
 
@@ -228,6 +230,28 @@ func DebugFrameBuffer(imgFile string) PipelineStage {
 		}
 
 		return time.Since(start), png.Encode(f, im)
+	}
+}
+
+// Copy RGBA screen buffer to opengl texture. This function assumes that
+// the caller has enabled the appropriate 2D texture target.
+func CopyFrameBufferToOpenGLTexture() PipelineStage {
+	var fbBuf []byte
+	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
+		start := time.Now()
+
+		fbSizeInBytes := tr.resources.buffers.FrameBuffer.Size()
+		if fbBuf == nil || len(fbBuf) != fbSizeInBytes {
+			fbBuf = make([]byte, fbSizeInBytes)
+		}
+
+		err := tr.resources.buffers.FrameBuffer.ReadData(0, 0, fbSizeInBytes, fbBuf)
+		if err != nil {
+			return 0, err
+		}
+
+		gl.TexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, int32(blockReq.FrameW), int32(blockReq.FrameH), gl.RGBA, gl.UNSIGNED_BYTE, unsafe.Pointer(&fbBuf[0]))
+		return time.Since(start), nil
 	}
 }
 

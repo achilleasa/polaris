@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/achilleasa/go-pathtrace/asset/scene/reader"
@@ -25,7 +26,8 @@ func CompileScene(ctx *cli.Context) error {
 			return err
 		}
 
-		logger.Notice(sc.Stats())
+		// Display compiled scene info
+		logger.Noticef("scene information:\n%s", sc.Stats())
 
 		zipFile := strings.Replace(sceneFile, ".obj", ".zip", -1)
 		err = writer.WriteScene(sc, zipFile)
@@ -33,6 +35,30 @@ func CompileScene(ctx *cli.Context) error {
 			return err
 		}
 	}
+
+	return nil
+}
+
+// Display compiled scene info.
+func ShowSceneInfo(ctx *cli.Context) error {
+	setupLogging(ctx)
+
+	if ctx.NArg() != 1 {
+		return errors.New("missing compiled scene zip file")
+	}
+
+	sceneFile := ctx.Args().First()
+	if !strings.HasSuffix(sceneFile, ".zip") {
+		return errors.New("only compiled scene files with a .zip extension are supported")
+	}
+
+	sc, err := reader.ReadScene(sceneFile)
+	if err != nil {
+		return err
+	}
+
+	// Display compiled scene info
+	logger.Noticef("scene information:\n%s", sc.Stats())
 
 	return nil
 }

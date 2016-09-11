@@ -183,8 +183,8 @@ func (n MixNode) Validate() error {
 		}
 	}
 
-	if n.Weights[0]+n.Weights[1] > 1.0 {
-		return fmt.Errorf("mix weight sum must be <= 1.0")
+	if n.Weights[0]+n.Weights[1] != 1.0 {
+		return fmt.Errorf("mix weight sum must be equal to 1.0")
 	}
 
 	return nil

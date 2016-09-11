@@ -19,7 +19,7 @@ __kernel void tonemapSimpleReinhard(
 			// Apply gamma correction and scale
 			float3 normalizedOutput = clamp(pow(mapped, 1.0f / 2.2f), 0.0f, 1.0f) * 255.0f;
 
-			frameBuffer[paths[globalId].pixelIndex] = (uchar4)(
+			frameBuffer[globalId] = (uchar4)(
 					(uchar)normalizedOutput.r,
 					(uchar)normalizedOutput.g,
 					(uchar)normalizedOutput.b,

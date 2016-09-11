@@ -71,7 +71,7 @@ func (d Device) String() string {
 }
 
 // Initialize device.
-func (d *Device) Init(programFile string) error {
+func (d *Device) Init(programFile string, ctx *cl.Context) error {
 	var errCode cl.ErrorCode
 
 	// Already initialized
@@ -79,11 +79,14 @@ func (d *Device) Init(programFile string) error {
 		return nil
 	}
 
-	// Create context
-	d.ctx = cl.CreateContext(nil, 1, &d.Id, nil, nil, (*int32)(&errCode))
-	if errCode != cl.SUCCESS {
-		defer d.Close()
-		return fmt.Errorf("opencl device (%s): could not create opencl context (error: %s; code %d)", d.Name, ErrorName(errCode), errCode)
+	// Create context if one is not supplied
+	d.ctx = ctx
+	if d.ctx == nil {
+		d.ctx = cl.CreateContext(nil, 1, &d.Id, nil, nil, (*int32)(&errCode))
+		if errCode != cl.SUCCESS {
+			defer d.Close()
+			return fmt.Errorf("opencl device (%s): could not create opencl context (error: %s; code %d)", d.Name, ErrorName(errCode), errCode)
+		}
 	}
 
 	// Create command queue
@@ -204,11 +207,7 @@ func (d *Device) detectSpeed() error {
 	if errCode != cl.SUCCESS {
 		return fmt.Errorf("opencl device (%s): could not query MAX_CLOCK_FREQUENCY (error: %s; code %d)", d.Name, ErrorName(errCode), errCode)
 	}
-	var opsPerCycle uint32 = 2
-	if d.Type == CpuDevice {
-		opsPerCycle = 4
-	}
-	d.Speed = d.compUnits * opsPerCycle * d.clockSpeed / 1000
+	d.Speed = d.compUnits * d.clockSpeed / 1000
 
 	return nil
 }

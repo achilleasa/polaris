@@ -13,6 +13,7 @@ import (
 	"github.com/achilleasa/go-pathtrace/tracer"
 	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
 	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/gopencl/v1.2/cl"
 )
 
 type Tracer struct {
@@ -23,6 +24,11 @@ type Tracer struct {
 
 	// The device associated with this tracer instance.
 	device *device.Device
+
+	// An optional opencl context. It can be nil when rendering using
+	// a single device. In multi-device mode all devices need to share
+	// the same context.
+	ctx *cl.Context
 
 	// The allocated device resources.
 	resources *deviceResources
@@ -49,7 +55,7 @@ type Tracer struct {
 }
 
 // Create a new opencl tracer.
-func NewTracer(id string, device *device.Device, pipeline *Pipeline) (tracer.Tracer, error) {
+func NewTracer(id string, device *device.Device, ctx *cl.Context, pipeline *Pipeline) (tracer.Tracer, error) {
 	loggerName := fmt.Sprintf("opencl tracer (%s)", device.Name)
 
 	tr := &Tracer{
@@ -59,6 +65,7 @@ func NewTracer(id string, device *device.Device, pipeline *Pipeline) (tracer.Tra
 		changeBuffer: make(map[tracer.ChangeType]interface{}, 0),
 		stats:        &tracer.Stats{},
 		pipeline:     pipeline,
+		ctx:          ctx,
 	}
 
 	return tr, nil
@@ -71,7 +78,12 @@ func (tr *Tracer) Id() string {
 
 // Get tracer flags.
 func (tr *Tracer) Flags() tracer.Flag {
-	return tracer.Local | tracer.GLInterop
+	flags := tracer.Local
+	if tr.device.Type == device.CpuDevice {
+		flags |= tracer.CpuDevice
+	}
+
+	return flags
 }
 
 // Get the computation speed estimate (in GFlops).
@@ -88,7 +100,7 @@ func (tr *Tracer) Init() error {
 	// Init device
 	_, thisFile, _, _ := runtime.Caller(0)
 	pathToMainKernel := path.Join(path.Dir(thisFile), relativePathToMainKernel)
-	err = tr.device.Init(pathToMainKernel)
+	err = tr.device.Init(pathToMainKernel, tr.ctx)
 	if err != nil {
 		tr.cleanup()
 		return err
@@ -221,7 +233,8 @@ func (tr *Tracer) Trace(blockReq *tracer.BlockRequest) (time.Duration, error) {
 		}
 	}
 
-	return time.Since(start), nil
+	tr.stats.RenderTime = time.Since(start)
+	return tr.stats.RenderTime, nil
 }
 
 // Run post-process filters and update the framebuffer with the processed output.
@@ -245,4 +258,20 @@ func (tr *Tracer) SyncFramebuffer(blockReq *tracer.BlockRequest) (time.Duration,
 	}
 
 	return time.Since(start), nil
+}
+
+// Merge accumulator output from another tracer into this tracer's buffer.
+func (tr *Tracer) MergeOutput(other tracer.Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
+	src, isClTracer := other.(*Tracer)
+	if !isClTracer {
+		return 0, fmt.Errorf("merge failed: unsupported tracer instance")
+	}
+
+	start := time.Now()
+
+	// Each accumulator entry is 16 bytes long (float3 stored as float4)
+	dstOffset := int((blockReq.BlockY * blockReq.FrameW * 16) + (blockReq.BlockX * 16))
+	bytes := int((blockReq.BlockW * blockReq.BlockH * 16))
+
+	return time.Since(start), tr.resources.buffers.Accumulator.CopyDataFrom(src.resources.buffers.Accumulator, dstOffset, dstOffset, bytes)
 }

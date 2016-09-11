@@ -7,9 +7,11 @@ import (
 	"math/rand"
 	"os"
 	"time"
+	"unsafe"
 
 	"github.com/achilleasa/go-pathtrace/tracer"
 	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
+	"github.com/go-gl/gl/v2.1/gl"
 )
 
 // Debug flags.
@@ -228,6 +230,28 @@ func SaveFrameBuffer(imgFile string) PipelineStage {
 		}
 
 		return time.Since(start), png.Encode(f, im)
+	}
+}
+
+// Copy RGBA screen buffer to opengl texture. This function assumes that
+// the caller has enabled the appropriate 2D texture target.
+func CopyFrameBufferToOpenGLTexture() PipelineStage {
+	var fbBuf []byte
+	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
+		start := time.Now()
+
+		fbSizeInBytes := tr.resources.buffers.FrameBuffer.Size()
+		if fbBuf == nil || len(fbBuf) != fbSizeInBytes {
+			fbBuf = make([]byte, fbSizeInBytes)
+		}
+
+		err := tr.resources.buffers.FrameBuffer.ReadData(0, 0, fbSizeInBytes, fbBuf)
+		if err != nil {
+			return 0, err
+		}
+
+		gl.TexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, int32(blockReq.FrameW), int32(blockReq.FrameH), gl.RGBA, gl.UNSIGNED_BYTE, unsafe.Pointer(&fbBuf[0]))
+		return time.Since(start), nil
 	}
 }
 

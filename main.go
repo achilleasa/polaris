@@ -128,17 +128,32 @@ func main() {
 					Flags: []cli.Flag{
 						cli.IntFlag{
 							Name:  "width",
-							Value: 512,
+							Value: 1024,
 							Usage: "frame width",
 						},
 						cli.IntFlag{
 							Name:  "height",
-							Value: 512,
+							Value: 1024,
 							Usage: "frame height",
+						},
+						cli.IntFlag{
+							Name:  "spp",
+							Value: 0,
+							Usage: "samples per pixel; setting to 0 enables progressive rendering",
+						},
+						cli.IntFlag{
+							Name:  "num-bounces, nb",
+							Value: 5,
+							Usage: "number of indirect ray bounces",
+						},
+						cli.IntFlag{
+							Name:  "rr-bounces, nr",
+							Value: 3,
+							Usage: "number of indirect ray bounces before applying RR (disabled if 0 or >= than num-bounces)",
 						},
 						cli.Float64Flag{
 							Name:  "exposure",
-							Value: 1.0,
+							Value: 1.2,
 							Usage: "camera exposure for tone-mapping",
 						},
 						cli.StringSliceFlag{
@@ -146,8 +161,13 @@ func main() {
 							Value: &cli.StringSlice{},
 							Usage: "blacklist opencl device whose names contain this value",
 						},
+						cli.StringFlag{
+							Name:  "force-primary",
+							Value: "",
+							Usage: "force a particular device name as the primary device",
+						},
 					},
-					//	Action: cmd.RenderInteractive,
+					Action: cmd.RenderInteractive,
 				},
 			},
 		},

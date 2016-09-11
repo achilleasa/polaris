@@ -78,7 +78,7 @@ func (tr *Tracer) Id() string {
 
 // Get tracer flags.
 func (tr *Tracer) Flags() tracer.Flag {
-	flags := tracer.Local | tracer.GLInterop
+	flags := tracer.Local
 	if tr.device.Type == device.CpuDevice {
 		flags |= tracer.CpuDevice
 	}

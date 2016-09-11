@@ -56,9 +56,6 @@ const (
 	// Remote device.
 	Remote
 
-	// Supports GL interop.
-	GLInterop
-
 	// CPU-based
 	CpuDevice
 )

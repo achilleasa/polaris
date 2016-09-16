@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 
 	"github.com/achilleasa/go-pathtrace/asset/scene"
@@ -19,6 +20,9 @@ const (
 
 	// Camera movement speed
 	cameraMoveSpeed float32 = 0.05
+
+	// Height in pixels for stacked series widgets
+	stackedSeriesHeight uint32 = 20
 )
 
 const (
@@ -45,7 +49,8 @@ type interactiveGLRenderer struct {
 	sync.Mutex
 
 	// Display options
-	showBlockAllocations bool
+	showUI                bool
+	blockAssignmentSeries *stackedSeries
 }
 
 // Create a new interactive opengl renderer using the specified block scheduler and tracing pipeline.
@@ -69,6 +74,12 @@ func NewInteractive(sc *scene.Scene, scheduler tracer.BlockScheduler, pipeline *
 		return nil, err
 	}
 
+	err = r.initUI()
+	if err != nil {
+		r.Close()
+		return nil, err
+	}
+
 	return r, nil
 }
 
@@ -77,7 +88,7 @@ func (r *interactiveGLRenderer) Close() {
 		r.window.SetShouldClose(true)
 	}
 	if r != nil {
-		r.Close()
+		r.defaultRenderer.Close()
 	}
 }
 
@@ -88,10 +99,8 @@ func (r *interactiveGLRenderer) initGL(opts Options) error {
 	}
 
 	glfw.WindowHint(glfw.Resizable, glfw.False)
-	glfw.WindowHint(glfw.ContextVersionMajor, 4)
+	glfw.WindowHint(glfw.ContextVersionMajor, 2)
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
-	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
-	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
 	r.window, err = glfw.CreateWindow(int(opts.FrameW), int(opts.FrameH), "go-pathtrace", nil, nil)
 	if err != nil {
 		return fmt.Errorf("could not create opengl window: %s", err.Error())
@@ -147,10 +156,57 @@ func (r *interactiveGLRenderer) Render() error {
 		gl.BlitFramebuffer(0, 0, int32(r.options.FrameW), int32(r.options.FrameH), 0, 0, int32(r.options.FrameW), int32(r.options.FrameH), gl.COLOR_BUFFER_BIT, gl.LINEAR)
 		gl.BindFramebuffer(gl.READ_FRAMEBUFFER, 0)
 
+		// Display tracer stats
+		if r.showUI {
+			r.renderUI()
+		}
+
 		r.window.SwapBuffers()
 		r.Unlock()
 	}
 	return nil
+}
+
+func (r *interactiveGLRenderer) initUI() error {
+	// Setup ortho projection for UI bits
+	gl.Disable(gl.DEPTH_TEST)
+	gl.MatrixMode(gl.PROJECTION)
+	gl.LoadIdentity()
+	gl.Ortho(0, float64(r.options.FrameW), float64(r.options.FrameH), 0, -1, 1)
+	gl.Viewport(0, 0, int32(r.options.FrameW), int32(r.options.FrameH))
+	gl.MatrixMode(gl.MODELVIEW)
+	gl.LoadIdentity()
+
+	// Setup series
+	r.blockAssignmentSeries = makeStackedSeries(len(r.tracers), int(r.options.FrameW))
+
+	return nil
+}
+
+func (r *interactiveGLRenderer) onBeforeShowUI() {
+	r.blockAssignmentSeries.Clear()
+}
+
+func (r *interactiveGLRenderer) renderUI() {
+	var y int32 = 1
+	var frameW int32 = int32(r.options.FrameW) - 1
+	gl.LineWidth(2.0)
+	for seriesIndex, blockH := range r.blockAssignments {
+		gl.Color3fv(&r.blockAssignmentSeries.colors[seriesIndex][0])
+		gl.Begin(gl.LINE_LOOP)
+		gl.Vertex2i(0, y)
+		gl.Vertex2i(frameW, y)
+		gl.Vertex2i(frameW, y+int32(blockH))
+		gl.Vertex2i(0, y+int32(blockH))
+		gl.End()
+
+		y += int32(blockH)
+	}
+
+	for seriesIndex, blockH := range r.blockAssignments {
+		r.blockAssignmentSeries.Append(seriesIndex, float32(blockH))
+	}
+	r.blockAssignmentSeries.Render(r.options.FrameH-stackedSeriesHeight, stackedSeriesHeight)
 }
 
 func (r *interactiveGLRenderer) onKeyEvent(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
@@ -170,6 +226,12 @@ func (r *interactiveGLRenderer) onKeyEvent(w *glfw.Window, key glfw.Key, scancod
 		moveDir = scene.Left
 	case glfw.KeyRight:
 		moveDir = scene.Right
+	case glfw.KeyTab:
+		r.showUI = !r.showUI
+		if r.showUI {
+			r.onBeforeShowUI()
+		}
+		return
 	default:
 		return
 
@@ -235,4 +297,62 @@ func (r *interactiveGLRenderer) updateCamera() {
 	}
 
 	r.accumulatedSamples = 0
+}
+
+type stackedSeries struct {
+	series [][]float32
+	colors []types.Vec3
+}
+
+func makeStackedSeries(numSeries, histCount int) *stackedSeries {
+	s := &stackedSeries{
+		series: make([][]float32, numSeries),
+		colors: make([]types.Vec3, numSeries),
+	}
+
+	for sIndex := 0; sIndex < numSeries; sIndex++ {
+		s.series[sIndex] = make([]float32, histCount)
+		s.colors[sIndex] = types.Vec3{rand.Float32(), rand.Float32(), 1.0}
+	}
+
+	return s
+}
+
+// Clear series
+func (s *stackedSeries) Clear() {
+	histCount := len(s.series[0])
+	for sIndex := 0; sIndex < len(s.series); sIndex++ {
+		s.series[sIndex] = make([]float32, histCount)
+	}
+}
+
+// Shift series values and append new value at the end.
+func (s *stackedSeries) Append(seriesIndex int, val float32) {
+	s.series[seriesIndex] = append(s.series[seriesIndex][1:], val)
+}
+
+func (s *stackedSeries) Render(rY, rHeight uint32) {
+	gl.Begin(gl.LINES)
+	for x := 0; x < len(s.series[0]); x++ {
+		var sum float32 = 0
+		var scale float32 = 1.0
+		for seriesIndex := 0; seriesIndex < len(s.series); seriesIndex++ {
+			sum += s.series[seriesIndex][x]
+		}
+		if sum > 0.0 {
+			scale = float32(rHeight) / sum
+		}
+
+		var y float32 = float32(rY)
+		gl.LineWidth(1.0)
+		for seriesIndex := 0; seriesIndex < len(s.series); seriesIndex++ {
+			sH := s.series[seriesIndex][x] * scale
+			gl.Color3fv(&s.colors[seriesIndex][0])
+			gl.Vertex2f(float32(x), y)
+			gl.Vertex2f(float32(x), y+sH)
+			y += sH
+		}
+
+	}
+	gl.End()
 }

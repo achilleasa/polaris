@@ -19,9 +19,10 @@ const (
 	accumulateEmissiveSamples
 	// hdr kernels
 	tonemapSimpleReinhard
-	// utils
+	// accumulator
 	clearAccumulator
-	// Debugging
+	aggregateAccumulator
+	// debugging
 	debugClearBuffer
 	debugRayIntersectionDepth
 	debugRayIntersectionNormals
@@ -55,6 +56,8 @@ func (kt kernelType) String() string {
 		return "tonemapSimpleReinhard"
 	case clearAccumulator:
 		return "clearAccumulator"
+	case aggregateAccumulator:
+		return "aggregateAccumulator"
 	case debugClearBuffer:
 		return "debugClearBuffer"
 	case debugRayIntersectionDepth:

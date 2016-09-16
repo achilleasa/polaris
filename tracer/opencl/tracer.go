@@ -233,6 +233,8 @@ func (tr *Tracer) Trace(blockReq *tracer.BlockRequest) (time.Duration, error) {
 		}
 	}
 
+	tr.stats.BlockW = blockReq.BlockW
+	tr.stats.BlockH = blockReq.BlockH
 	tr.stats.RenderTime = time.Since(start)
 	return tr.stats.RenderTime, nil
 }
@@ -267,11 +269,5 @@ func (tr *Tracer) MergeOutput(other tracer.Tracer, blockReq *tracer.BlockRequest
 		return 0, fmt.Errorf("merge failed: unsupported tracer instance")
 	}
 
-	start := time.Now()
-
-	// Each accumulator entry is 16 bytes long (float3 stored as float4)
-	dstOffset := int((blockReq.BlockY * blockReq.FrameW * 16) + (blockReq.BlockX * 16))
-	bytes := int((blockReq.BlockW * blockReq.BlockH * 16))
-
-	return time.Since(start), tr.resources.buffers.Accumulator.CopyDataFrom(src.resources.buffers.Accumulator, dstOffset, dstOffset, bytes)
+	return tr.resources.AggregateAccumulator(src.resources.buffers.TraceAccumulator, blockReq)
 }

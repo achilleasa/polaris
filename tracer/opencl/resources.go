@@ -77,18 +77,50 @@ func (dr *deviceResources) Close() {
 	}
 }
 
-// Clear a rectangular region of the output accumulator.
-func (dr *deviceResources) ClearAccumulator(blockReq *tracer.BlockRequest) (time.Duration, error) {
+// Clear the frame accumulator.
+func (dr *deviceResources) ClearFrameAccumulator(blockReq *tracer.BlockRequest) (time.Duration, error) {
 	kernel := dr.kernels[clearAccumulator]
 	err := kernel.SetArgs(
-		dr.buffers.Accumulator,
-		blockReq.BlockW,
+		dr.buffers.FrameAccumulator,
 	)
 	if err != nil {
 		return 0, err
 	}
 
-	return kernel.Exec2D(0, int(blockReq.BlockY), int(blockReq.BlockW), int(blockReq.BlockH), 0, 0)
+	return kernel.Exec1D(0, int(blockReq.FrameW*blockReq.FrameH), 0)
+}
+
+// Clear the trace accumulator.
+func (dr *deviceResources) ClearTraceAccumulator(blockReq *tracer.BlockRequest) (time.Duration, error) {
+	kernel := dr.kernels[clearAccumulator]
+	err := kernel.SetArgs(
+		dr.buffers.TraceAccumulator,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return kernel.Exec1D(0, int(blockReq.FrameW*blockReq.FrameH), 0)
+}
+
+// Aggregate the trace accumulator contents from another tracer into
+// this tracer's frame accumulator.
+func (dr *deviceResources) AggregateAccumulator(srcAccumulator *device.Buffer, blockReq *tracer.BlockRequest) (time.Duration, error) {
+	kernel := dr.kernels[aggregateAccumulator]
+	err := kernel.SetArgs(
+		srcAccumulator,
+		dr.buffers.FrameAccumulator,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	// Add the contents of block specified by blockReq
+	return kernel.Exec1D(
+		int(blockReq.FrameW*blockReq.BlockY),
+		int(blockReq.BlockW*blockReq.BlockH),
+		0,
+	)
 }
 
 // Generate primary rays.
@@ -231,7 +263,7 @@ func (dr *deviceResources) ShadeHits(bounce, minBouncesForRR, randSeed, numEmiss
 		dr.buffers.Rays[1-rayBufferIndex],
 		dr.buffers.RayCounters[1-rayBufferIndex],
 		//
-		dr.buffers.Accumulator,
+		dr.buffers.TraceAccumulator,
 	)
 	if err != nil {
 		return 0, err
@@ -255,7 +287,7 @@ func (dr *deviceResources) ShadePrimaryRayMisses(diffuseMatNodeIndex, rayBufferI
 		diffuseMatNodeIndex,
 		dr.buffers.TextureMetadata,
 		dr.buffers.Textures,
-		dr.buffers.Accumulator,
+		dr.buffers.TraceAccumulator,
 	)
 	if err != nil {
 		return 0, err
@@ -279,7 +311,7 @@ func (dr *deviceResources) ShadeIndirectRayMisses(diffuseMatNodeIndex, rayBuffer
 		diffuseMatNodeIndex,
 		dr.buffers.TextureMetadata,
 		dr.buffers.Textures,
-		dr.buffers.Accumulator,
+		dr.buffers.TraceAccumulator,
 	)
 	if err != nil {
 		return 0, err
@@ -299,7 +331,7 @@ func (dr *deviceResources) AccumulateEmissiveSamples(rayBufferIndex uint32, numP
 		dr.buffers.Paths,
 		dr.buffers.HitFlags,
 		dr.buffers.EmissiveSamples,
-		dr.buffers.Accumulator,
+		dr.buffers.TraceAccumulator,
 	)
 	if err != nil {
 		return 0, err
@@ -314,7 +346,7 @@ func (dr *deviceResources) TonemapSimpleReinhard(blockReq *tracer.BlockRequest) 
 	numPixels := int(blockReq.FrameW * blockReq.BlockH)
 	sampleWeight := float32(1.0 / float32(blockReq.AccumulatedSamples+blockReq.SamplesPerPixel))
 	err := kernel.SetArgs(
-		dr.buffers.Accumulator,
+		dr.buffers.FrameAccumulator,
 		dr.buffers.Paths,
 		dr.buffers.FrameBuffer,
 		sampleWeight,
@@ -480,7 +512,7 @@ func (dr *deviceResources) DebugAccumulator(blockReq *tracer.BlockRequest) (time
 	err = kernel.SetArgs(
 		sampleWeight,
 		dr.buffers.Paths,
-		dr.buffers.Accumulator,
+		dr.buffers.TraceAccumulator,
 		dr.buffers.DebugOutput,
 	)
 	if err != nil {

@@ -139,9 +139,6 @@ func (r *defaultRenderer) renderFrame(accumulatedSamples uint32) error {
 	for _, bh := range r.blockAssignments {
 		tot += bh
 	}
-	if tot != r.options.FrameH {
-		fmt.Printf("S(assigned blocks) = %d != %d\n", tot, r.options.FrameH)
-	}
 
 	// Wait for all tracers to finish
 	pending := len(r.tracers)

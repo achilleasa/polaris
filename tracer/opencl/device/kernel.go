@@ -84,7 +84,7 @@ func (k *Kernel) SetArgs(args ...interface{}) error {
 	return nil
 }
 
-// Execute 1D kernelHandle. If localWorSize is equal to 0 then the opencl implementation
+// Execute 1D kernel. If localWorSize is equal to 0 then the opencl implementation
 // will pick the optimal worksize split for the underlying hardware.
 func (k *Kernel) Exec1D(offset, globalWorkSize, localWorkSize int) (time.Duration, error) {
 	var errCode cl.ErrorCode
@@ -129,7 +129,48 @@ func (k *Kernel) Exec1D(offset, globalWorkSize, localWorkSize int) (time.Duratio
 	return time.Since(tick), nil
 }
 
-// Execute 2D kernelHandle. If both localWorkSizeX and localWorkSizeY are 0 then the opencl implementation
+// Execute 1D kernel. If localWorSize is equal to 0 then the opencl implementation
+// will pick the optimal worksize split for the underlying hardware. This method
+// will not wait for the kernel to finish. The client must manually invoke
+// WaitForKernels() on the target device.
+func (k *Kernel) Exec1DNoWait(offset, globalWorkSize, localWorkSize int) (time.Duration, error) {
+	var errCode cl.ErrorCode
+	var offsetPtr *uint64 = nil
+	var localSizePtr *uint64 = nil
+
+	// Setup work params
+	if offset > 0 {
+		k.offsets[0] = uint64(offset)
+		offsetPtr = (*uint64)(unsafe.Pointer(&k.offsets[0]))
+	}
+	k.globalWorkSizes[0] = uint64(globalWorkSize)
+	if localWorkSize != 0 {
+		k.localWorkSizes[0] = uint64(localWorkSize)
+
+		localSizePtr = (*uint64)(unsafe.Pointer(&k.localWorkSizes[0]))
+	}
+
+	// Run kernel
+	tick := time.Now()
+	errCode = cl.EnqueueNDRangeKernel(
+		k.device.cmdQueue,
+		k.kernelHandle,
+		1,
+		offsetPtr,
+		(*uint64)(unsafe.Pointer(&k.globalWorkSizes[0])),
+		localSizePtr,
+		0,
+		nil,
+		nil,
+	)
+	if errCode != cl.SUCCESS {
+		return time.Duration(0), fmt.Errorf("opencl device (%s): unable to execute kernel %s (error: %s; code: %d)", k.device.Name, k.name, ErrorName(errCode), errCode)
+	}
+
+	return time.Since(tick), nil
+}
+
+// Execute 2D kernel. If both localWorkSizeX and localWorkSizeY are 0 then the opencl implementation
 // will pick the optimal local worksize split for the underlying hardware.
 func (k *Kernel) Exec2D(offsetX, offsetY, globalWorkSizeX, globalWorkSizeY, localWorkSizeX, localWorkSizeY int) (time.Duration, error) {
 	var errCode cl.ErrorCode

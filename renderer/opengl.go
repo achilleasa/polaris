@@ -137,18 +137,17 @@ func (r *interactiveGLRenderer) Render() error {
 	for !r.window.ShouldClose() {
 		glfw.PollEvents()
 
-		// Don't do anything if we don't require addittional samples
-		if r.options.SamplesPerPixel != 0 && r.accumulatedSamples == r.defaultRenderer.options.SamplesPerPixel {
-			continue
-		}
-
 		// Render next frame
 		r.Lock()
-		err := r.renderFrame(r.accumulatedSamples)
-		r.accumulatedSamples++
-		if err != nil {
-			r.Unlock()
-			return err
+
+		// Render frame unless we have reached our target SPP
+		if r.options.SamplesPerPixel == 0 || (r.options.SamplesPerPixel != 0 && r.accumulatedSamples < r.defaultRenderer.options.SamplesPerPixel) {
+			err := r.renderFrame(r.accumulatedSamples)
+			r.accumulatedSamples++
+			if err != nil {
+				r.Unlock()
+				return err
+			}
 		}
 
 		// Copy texture data to framebuffer

@@ -116,7 +116,7 @@ func (dr *deviceResources) AggregateAccumulator(srcAccumulator *device.Buffer, b
 	}
 
 	// Add the contents of block specified by blockReq
-	return kernel.Exec1D(
+	return kernel.Exec1DNoWait(
 		int(blockReq.FrameW*blockReq.BlockY),
 		int(blockReq.BlockW*blockReq.BlockH),
 		0,

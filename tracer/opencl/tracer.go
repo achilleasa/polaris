@@ -248,6 +248,12 @@ func (tr *Tracer) SyncFramebuffer(blockReq *tracer.BlockRequest) (time.Duration,
 		return time.Since(start), ErrNoSceneData
 	}
 
+	// Wait for async kernels to finish
+	err = tr.device.WaitForKernels()
+	if err != nil {
+		return time.Since(start), err
+	}
+
 	if tr.pipeline.PostProcess == nil {
 		return time.Since(start), nil
 	}

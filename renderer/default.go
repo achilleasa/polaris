@@ -135,6 +135,11 @@ func (r *defaultRenderer) renderFrame(accumulatedSamples uint32) error {
 		blockReq.BlockY += blockH
 	}
 
+	var tot uint32 = 0
+	for _, bh := range r.blockAssignments {
+		tot += bh
+	}
+
 	// Wait for all tracers to finish
 	pending := len(r.tracers)
 	for pending != 0 {
@@ -181,8 +186,8 @@ func (r *defaultRenderer) jobWorker(trIndex int) {
 			}
 
 			_, err := r.tracers[trIndex].Trace(&blockReq)
-			if err == nil && trIndex != r.primary {
-				// Merge accumulator output with primary tracer
+			if err == nil {
+				// Merge trace accumulator output for this pass with primary tracer's frame accumulator
 				_, err = r.tracers[r.primary].MergeOutput(r.tracers[trIndex], &blockReq)
 			}
 			r.jobCompleteChan <- err

@@ -52,7 +52,16 @@ type bufferSet struct {
 	HitFlags      *device.Buffer
 	Intersections *device.Buffer
 
-	Accumulator     *device.Buffer
+	// A buffer that stores trace samples for a single trace request. It is
+	// cleared before starting a new trace.
+	TraceAccumulator *device.Buffer
+
+	// A buffer that aggregates the trace accumulator content between
+	// multiple frames. All post-processing pipeline stages operate on
+	// this buffer. The buffer is cleared when the pipeline Reset stage
+	// is executed.
+	FrameAccumulator *device.Buffer
+
 	EmissiveSamples *device.Buffer
 	DebugOutput     *device.Buffer
 
@@ -82,12 +91,13 @@ func newBufferSet(dev *device.Device) *bufferSet {
 			dev.Buffer("rays1"),
 			dev.Buffer("rays2"),
 		},
-		Paths:           dev.Buffer("paths"),
-		HitFlags:        dev.Buffer("hitFlags"),
-		Intersections:   dev.Buffer("intersections"),
-		EmissiveSamples: dev.Buffer("emissiveSamples"),
-		Accumulator:     dev.Buffer("accumulator"),
-		DebugOutput:     dev.Buffer("debugOutput"),
+		Paths:            dev.Buffer("paths"),
+		HitFlags:         dev.Buffer("hitFlags"),
+		Intersections:    dev.Buffer("intersections"),
+		EmissiveSamples:  dev.Buffer("emissiveSamples"),
+		TraceAccumulator: dev.Buffer("traceAccumulator"),
+		FrameAccumulator: dev.Buffer("frameAccumulator"),
+		DebugOutput:      dev.Buffer("debugOutput"),
 		RayCounters: [3]*device.Buffer{
 			dev.Buffer("numRays0"),
 			dev.Buffer("numRays1"),
@@ -144,7 +154,11 @@ func (bs *bufferSet) Resize(frameW, frameH uint32) error {
 	if err != nil {
 		return err
 	}
-	err = bs.Accumulator.Allocate(int(pixels*sizeofAccumulatorSample), cl.MEM_READ_WRITE)
+	err = bs.TraceAccumulator.Allocate(int(pixels*sizeofAccumulatorSample), cl.MEM_READ_WRITE)
+	if err != nil {
+		return err
+	}
+	err = bs.FrameAccumulator.Allocate(int(pixels*sizeofAccumulatorSample), cl.MEM_READ_WRITE)
 	if err != nil {
 		return err
 	}

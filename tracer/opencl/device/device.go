@@ -196,6 +196,15 @@ func (d *Device) Buffer(name string) *Buffer {
 	}
 }
 
+// Wait for the any queued kernel executiont to compete.
+func (d *Device) WaitForKernels() error {
+	errCode := cl.Finish(d.cmdQueue)
+	if errCode != cl.SUCCESS {
+		return fmt.Errorf("opencl device (%s): wait for kernels failed (error: %s; code: %d)", d.Name, ErrorName(errCode), errCode)
+	}
+	return nil
+}
+
 // Detect device speed.
 func (d *Device) detectSpeed() error {
 	// Calculate theoretical device speed as: compute units * 2ops/cycle * clock speed

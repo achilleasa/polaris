@@ -132,14 +132,16 @@ func RenderInteractive(ctx *cli.Context) error {
 		return err
 	}
 
-	// Update projection matrix
+	// Due to the way that gl.TexSubImage2D works we need to
+	// generate a mirrored image of the frame buffer.
+	sc.Camera.InvertY = true
 	sc.Camera.SetupProjection(float32(opts.FrameW) / float32(opts.FrameH))
 
 	// Setup tracing pipeline
 	pipeline := opencl.DefaultPipeline(opencl.NoDebug)
 
 	// Create renderer
-	r, err := renderer.NewInteractive(sc, tracer.NaiveScheduler(), pipeline, opts)
+	r, err := renderer.NewInteractive(sc, tracer.PerfectScheduler(), pipeline, opts)
 	if err != nil {
 		return err
 	}

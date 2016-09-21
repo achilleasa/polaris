@@ -69,10 +69,10 @@ func DefaultPipeline(debugFlags DebugFlag) *Pipeline {
 	return pipeline
 }
 
-// Clear the accumulator buffer.
+// Clear the frame accumulator buffer.
 func ClearAccumulator() PipelineStage {
 	return func(tr *Tracer, blockReq *tracer.BlockRequest) (time.Duration, error) {
-		return tr.resources.ClearAccumulator(blockReq)
+		return tr.resources.ClearFrameAccumulator(blockReq)
 	}
 }
 
@@ -100,6 +100,11 @@ func MonteCarloIntegrator(debugFlags DebugFlag) PipelineStage {
 		numEmissives := uint32(len(tr.sceneData.EmissivePrimitives))
 
 		var activeRayBuf uint32 = 0
+
+		_, err = tr.resources.ClearTraceAccumulator(blockReq)
+		if err != nil {
+			return time.Since(start), err
+		}
 
 		// Intersect primary rays outside of the loop
 		// Use packet query intersector for GPUs as opencl forces CPU

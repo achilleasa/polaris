@@ -50,6 +50,7 @@ import (
 
 /* tokBlend functions */
 %token <sVal> tokMIX
+%token <sVal> tokMIX_MAP
 %token <sVal> tokBUMP_MAP
 %token <sVal> tokNORMAL_MAP
 
@@ -134,6 +135,13 @@ op_spec: tokMIX tokLPAREN bxdf_or_op_spec tokCOMMA bxdf_or_op_spec tokCOMMA tokF
 	  	$$ = MixNode{ 
 	  		Expressions: [2]ExprNode{$3, $5},
 			Weights: [2]float32{$7, $9},
+		}
+	  }
+	  | tokMIX_MAP tokLPAREN bxdf_or_op_spec tokCOMMA bxdf_or_op_spec tokCOMMA tokTEXTURE tokRPAREN
+	  { 
+	  	$$ = MixMapNode{ 
+	  		Expressions: [2]ExprNode{$3, $5},
+			Texture: TextureNode($7),
 		}
 	  }
 	  | tokBUMP_MAP tokLPAREN bxdf_or_op_spec tokCOMMA tokTEXTURE tokRPAREN
@@ -281,6 +289,7 @@ func (x *matExprLexer) lexIdentifier(c rune, yylval *exprSymType) int {
 	case "emissive": return tokEMISSIVE
 	// Blend funcs
 	case "mix": return tokMIX
+	case "mixMap": return tokMIX_MAP
 	case "bumpMap": return tokBUMP_MAP
 	case "normalMap": return tokNORMAL_MAP
 	// Parameters

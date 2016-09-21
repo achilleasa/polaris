@@ -8,6 +8,7 @@ const (
 	opInvalid OpType = 10000 + iota
 	//
 	OpMix
+	OpMixMap
 	OpBumpMap
 	OpNormalMap
 	//

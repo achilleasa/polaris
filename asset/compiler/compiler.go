@@ -371,6 +371,21 @@ func (sc *sceneCompiler) generateMaterialTree(mat *input.Material, exprNode mate
 
 		node.Union2[0] = t.Weights[0]
 		node.Union2[1] = t.Weights[1]
+	case material.MixMapNode:
+		node.Union1[0] = int32(material.OpMixMap)
+		node.Union1[1], err = sc.generateMaterialTree(mat, t.Expressions[0])
+		if err != nil {
+			return -1, err
+		}
+		node.Union1[2], err = sc.generateMaterialTree(mat, t.Expressions[1])
+		if err != nil {
+			return -1, err
+		}
+
+		node.Union1[3], err = sc.bakeTexture(mat, t.Texture)
+		if err != nil {
+			return -1, err
+		}
 	case material.BumpMapNode:
 		node.Union1[0] = int32(material.OpBumpMap)
 		node.Union1[1], err = sc.generateMaterialTree(mat, t.Expression)

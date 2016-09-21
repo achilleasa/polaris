@@ -2,8 +2,9 @@
 #define MATERIAL_SAMPLER_CL
 
 #define MAT_OP_MIX 		  10001
-#define MAT_OP_BUMP_MAP   10002
-#define MAT_OP_NORMAL_MAP 10003
+#define MAT_OP_MIX_MAP    10002
+#define MAT_OP_BUMP_MAP   10003
+#define MAT_OP_NORMAL_MAP 10004
 #define MAT_NODE_IS_OP(node) (node->type >= MAT_OP_MIX)
 #ifndef BXDF_INVALID
 	#define BXDF_INVALID 0
@@ -25,6 +26,12 @@ void matSelectNode(Surface *surface, float3 inRayDir, MaterialNode *selectedMate
 				// Depending on the sample, follow left or right
 				sample = randomGetSample2f(rndState);
 				node = materialNodes + (sample.x < node->mixWeights.x ? node->leftChild : node->rightChild);
+				break;
+			case MAT_OP_MIX_MAP: 
+				// Sample weight from texture
+				sample = randomGetSample2f(rndState);
+				sample.y = texGetSample1f(surface->uv, node->mixWeightsTex, texMeta, texData);
+				node = materialNodes + (sample.x < sample.y ? node->leftChild : node->rightChild);
 				break;
 			case MAT_OP_BUMP_MAP:
 				surface->normal = matGetBumpSample3f(surface->normal, surface->uv, node->bumpTex, texMeta, texData);

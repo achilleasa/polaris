@@ -125,6 +125,7 @@ typedef struct {
 	union {
 		// Texture for bump/normal nodes
 		int bumpTex;
+		int mixWeightsTex;
 
 		int reflectanceTex;
 		int specularityTex;

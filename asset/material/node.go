@@ -83,6 +83,11 @@ type BumpMapNode struct {
 	Texture    TextureNode
 }
 
+type MixMapNode struct {
+	Expressions [2]ExprNode
+	Texture     TextureNode
+}
+
 type NormalMapNode struct {
 	Expression ExprNode
 	Texture    TextureNode
@@ -164,6 +169,25 @@ func (n NormalMapNode) Validate() error {
 	err := n.Texture.Validate()
 	if err != nil {
 		return fmt.Errorf("NormalMap: %v", err)
+	}
+	return nil
+}
+
+func (n MixMapNode) Validate() error {
+	var err error
+	for argIndex, arg := range n.Expressions {
+		if arg == nil {
+			return fmt.Errorf("missing expression argument %d for %q", argIndex, "mixMap")
+		}
+		err = arg.Validate()
+		if err != nil {
+			return fmt.Errorf("mixMap argument %d: %v", argIndex, err)
+		}
+	}
+
+	err = n.Texture.Validate()
+	if err != nil {
+		return fmt.Errorf("MixMap: %v", err)
 	}
 	return nil
 }

@@ -191,6 +191,7 @@ func (r *wavefrontSceneReader) Read(sceneRes *asset.Resource) (*scene.Scene, err
 // material indices for all parsed primitives.
 func (r *wavefrontSceneReader) processMaterials() {
 	wfMaterialToSceneMaterial := make(map[int]int, 0)
+	prunedMaterials := make([]*input.Material, 0)
 	pruned := 0
 	for wfIndex, wfMat := range r.materials {
 		// Whitelist scene materials
@@ -201,6 +202,14 @@ func (r *wavefrontSceneReader) processMaterials() {
 		// Prune unused materials
 		if !wfMat.Used {
 			r.logger.Infof("skipping unused material %q", wfMat.Name)
+			prunedMaterials = append(
+				prunedMaterials,
+				&input.Material{
+					Name:         wfMat.Name,
+					Expression:   wfMat.GetExpression(),
+					AssetRelPath: wfMat.AssetRelPath,
+				},
+			)
 			pruned++
 			continue
 		}
@@ -211,6 +220,7 @@ func (r *wavefrontSceneReader) processMaterials() {
 				Name:         wfMat.Name,
 				Expression:   wfMat.GetExpression(),
 				AssetRelPath: wfMat.AssetRelPath,
+				Used:         true,
 			},
 		)
 
@@ -223,6 +233,10 @@ func (r *wavefrontSceneReader) processMaterials() {
 			prim.MaterialIndex = wfMaterialToSceneMaterial[prim.MaterialIndex]
 		}
 	}
+
+	// Append pruned materials at the end of the list as they may be
+	// referenced by material expressions.
+	r.rawScene.Materials = append(r.rawScene.Materials, prunedMaterials...)
 
 	if pruned > 0 {
 		r.logger.Noticef("pruned %d unused materials", pruned)

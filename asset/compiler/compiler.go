@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/achilleasa/go-pathtrace/asset"
@@ -34,6 +35,9 @@ type sceneCompiler struct {
 
 	// A map of material indices to an emissive layered material tree node.
 	emissiveIndexCache map[int]int32
+
+	// A list of material references for detecting circular loops.
+	matRefList []string
 }
 
 // Compile a scene representation parsed by a scene reader into a GPU-friendly
@@ -275,21 +279,19 @@ func (sc *sceneCompiler) createLayeredMaterialTrees() error {
 	sc.optimizedScene.TextureData = make([]byte, 0)
 	sc.optimizedScene.TextureMetadata = make([]scene.TextureMetadata, 0)
 
+	var err error
 	for matIndex, mat := range sc.parsedScene.Materials {
+		// Skip unused materials; those materials may be indirectly
+		// referenced from other used materials and will be lazilly
+		// processed while compiling material expressions
+		if !mat.Used {
+			continue
+		}
+
 		sc.logger.Infof(`processing material "%s"`, mat.Name)
 
-		// Parse expression and perform semantic validation
-		exprNode, err := material.ParseExpression(mat.Expression)
-		if err != nil {
-			return fmt.Errorf("material %q: %v", mat.Name, err)
-		}
-		err = exprNode.Validate()
-		if err != nil {
-			return fmt.Errorf("material %q: %v", mat.Name, err)
-		}
-
-		// Create material node tree and store its root index
-		sc.matIndexToMatRoot[matIndex], err = sc.generateMaterialTree(mat, exprNode)
+		sc.matRefList = make([]string, 0)
+		sc.matIndexToMatRoot[matIndex], err = sc.generateMaterial(mat)
 		if err != nil {
 			return err
 		}
@@ -307,6 +309,24 @@ func (sc *sceneCompiler) createLayeredMaterialTrees() error {
 	return nil
 }
 
+// Compile material expression and generate a layered material tree from it. This
+// method returns back the root material tree node index.
+func (sc *sceneCompiler) generateMaterial(mat *input.Material) (int32, error) {
+	// Parse expression and perform semantic validation
+	exprNode, err := material.ParseExpression(mat.Expression)
+	if err != nil {
+		return -1, fmt.Errorf("material %q: %v", mat.Name, err)
+	}
+	err = exprNode.Validate()
+	if err != nil {
+		return -1, fmt.Errorf("material %q: %v", mat.Name, err)
+	}
+
+	// Create material node tree and store its root index
+	sc.matRefList = append(sc.matRefList, mat.Name)
+	return sc.generateMaterialTree(mat, exprNode)
+}
+
 // Recursively construct an optimized material node tree from the given expression.
 // Returns the index of the tree root in the scene's material node list slice.
 func (sc *sceneCompiler) generateMaterialTree(mat *input.Material, exprNode material.ExprNode) (int32, error) {
@@ -321,6 +341,21 @@ func (sc *sceneCompiler) generateMaterialTree(mat *input.Material, exprNode mate
 	}
 
 	switch t := exprNode.(type) {
+	case material.MaterialRefNode:
+		matRefName := string(t)
+		for _, existingRef := range sc.matRefList {
+			if matRefName == existingRef {
+				return -1, fmt.Errorf("detected circular dependency loop while processing %q; %s => %s", sc.matRefList[0], strings.Join(sc.matRefList, " -> "), matRefName)
+			}
+		}
+
+		for _, mat := range sc.parsedScene.Materials {
+			if mat.Name == matRefName {
+				return sc.generateMaterial(mat)
+			}
+		}
+
+		return -1, fmt.Errorf("material %q references undefined material %q", mat.Name, matRefName)
 	case material.BxdfNode:
 		node.Union1[0] = int32(t.Type)
 

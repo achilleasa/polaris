@@ -161,6 +161,10 @@ op_spec: tokMIX tokLPAREN bxdf_or_op_spec tokCOMMA bxdf_or_op_spec tokCOMMA tokF
 
 bxdf_or_op_spec: bxdf_spec
 	       | op_spec
+	       | tokMATERIAL_NAME
+	       {
+	       	$$ = MaterialRefNode($1)
+	       }
 %%
 
 // The parser expects the lexer to return 0 on kEOF.

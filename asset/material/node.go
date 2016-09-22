@@ -64,6 +64,8 @@ type FloatNode float32
 
 type MaterialNameNode string
 
+type MaterialRefNode string
+
 type TextureNode string
 
 type BxdfParamNode struct {
@@ -107,6 +109,13 @@ func (n FloatNode) Validate() error {
 }
 
 func (n MaterialNameNode) Validate() error {
+	if n == "" {
+		return errors.New("material name cannot be empty")
+	}
+	return nil
+}
+
+func (n MaterialRefNode) Validate() error {
 	if n == "" {
 		return errors.New("material name cannot be empty")
 	}

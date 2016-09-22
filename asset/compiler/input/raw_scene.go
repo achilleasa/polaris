@@ -15,6 +15,9 @@ type Material struct {
 
 	// Relative path for textures.
 	AssetRelPath *asset.Resource
+
+	// True if material is referenced by scene geometry.
+	Used bool
 }
 
 // A triangle primitive

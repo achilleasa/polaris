@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/achilleasa/go-pathtrace/asset"
+	"github.com/achilleasa/polaris/asset"
 	"github.com/achilleasa/openimageigo"
 )
 

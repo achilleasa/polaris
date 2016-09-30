@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"github.com/achilleasa/go-pathtrace/log"
+	"github.com/achilleasa/polaris/log"
 	"github.com/urfave/cli"
 )
 
-var logger = log.New("go-pathtrace")
+var logger = log.New("polaris")
 
 func setupLogging(ctx *cli.Context) {
 	if ctx.GlobalBool("v") {

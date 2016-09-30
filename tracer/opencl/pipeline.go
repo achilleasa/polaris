@@ -9,8 +9,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/achilleasa/go-pathtrace/tracer"
-	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
+	"github.com/achilleasa/polaris/tracer"
+	"github.com/achilleasa/polaris/tracer/opencl/device"
 	"github.com/go-gl/gl/v2.1/gl"
 )
 

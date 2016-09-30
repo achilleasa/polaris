@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/achilleasa/go-pathtrace/scene"
-	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/polaris/scene"
+	"github.com/achilleasa/polaris/types"
 )
 
 func TestAlign16(t *testing.T) {

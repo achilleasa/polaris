@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/achilleasa/go-pathtrace/asset/scene"
-	"github.com/achilleasa/go-pathtrace/log"
+	"github.com/achilleasa/polaris/asset/scene"
+	"github.com/achilleasa/polaris/log"
 )
 
 const (

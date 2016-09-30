@@ -4,9 +4,9 @@ import (
 	"math"
 	"time"
 
-	"github.com/achilleasa/go-pathtrace/asset/scene"
-	"github.com/achilleasa/go-pathtrace/log"
-	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/polaris/asset/scene"
+	"github.com/achilleasa/polaris/log"
+	"github.com/achilleasa/polaris/types"
 )
 
 type Axis uint8

@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/achilleasa/go-pathtrace/asset/scene"
-	"github.com/achilleasa/go-pathtrace/log"
-	"github.com/achilleasa/go-pathtrace/tracer"
-	"github.com/achilleasa/go-pathtrace/tracer/opencl"
-	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
+	"github.com/achilleasa/polaris/asset/scene"
+	"github.com/achilleasa/polaris/log"
+	"github.com/achilleasa/polaris/tracer"
+	"github.com/achilleasa/polaris/tracer/opencl"
+	"github.com/achilleasa/polaris/tracer/opencl/device"
 )
 
 type defaultRenderer struct {

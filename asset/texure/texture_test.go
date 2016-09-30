@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/achilleasa/go-pathtrace/asset"
+	"github.com/achilleasa/polaris/asset"
 )
 
 func TestRgba8Texture(t *testing.T) {

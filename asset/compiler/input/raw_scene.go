@@ -3,8 +3,8 @@ package input
 import (
 	"math"
 
-	"github.com/achilleasa/go-pathtrace/asset"
-	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/polaris/asset"
+	"github.com/achilleasa/polaris/types"
 )
 
 type Material struct {

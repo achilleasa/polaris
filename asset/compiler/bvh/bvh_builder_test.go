@@ -3,8 +3,8 @@ package bvh
 import (
 	"testing"
 
-	"github.com/achilleasa/go-pathtrace/scene"
-	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/polaris/scene"
+	"github.com/achilleasa/polaris/types"
 )
 
 func TestLeafCallback(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
+	"github.com/achilleasa/polaris/tracer/opencl/device"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli"
 )

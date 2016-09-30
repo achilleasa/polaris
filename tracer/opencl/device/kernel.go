@@ -6,7 +6,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/polaris/types"
 	"github.com/achilleasa/gopencl/v1.2/cl"
 )
 

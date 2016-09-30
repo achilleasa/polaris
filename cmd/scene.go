@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/achilleasa/go-pathtrace/asset/scene/reader"
-	"github.com/achilleasa/go-pathtrace/asset/scene/writer"
+	"github.com/achilleasa/polaris/asset/scene/reader"
+	"github.com/achilleasa/polaris/asset/scene/writer"
 	"github.com/urfave/cli"
 )
 

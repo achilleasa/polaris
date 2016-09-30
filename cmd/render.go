@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/achilleasa/go-pathtrace/asset/scene/reader"
-	"github.com/achilleasa/go-pathtrace/renderer"
-	"github.com/achilleasa/go-pathtrace/tracer"
-	"github.com/achilleasa/go-pathtrace/tracer/opencl"
+	"github.com/achilleasa/polaris/asset/scene/reader"
+	"github.com/achilleasa/polaris/renderer"
+	"github.com/achilleasa/polaris/tracer"
+	"github.com/achilleasa/polaris/tracer/opencl"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli"
 )

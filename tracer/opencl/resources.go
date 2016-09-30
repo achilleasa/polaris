@@ -5,9 +5,9 @@ import (
 	"math"
 	"time"
 
-	"github.com/achilleasa/go-pathtrace/tracer"
-	"github.com/achilleasa/go-pathtrace/tracer/opencl/device"
-	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/polaris/tracer"
+	"github.com/achilleasa/polaris/tracer/opencl/device"
+	"github.com/achilleasa/polaris/types"
 )
 
 const (

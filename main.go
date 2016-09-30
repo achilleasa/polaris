@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/achilleasa/go-pathtrace/cmd"
+	"github.com/achilleasa/polaris/cmd"
 	"github.com/urfave/cli"
 )
 
@@ -25,7 +25,7 @@ func main() {
 	}
 
 	app := cli.NewApp()
-	app.Name = "go-pathtrace"
+	app.Name = "polaris"
 	app.Usage = "render scenes using path tracing"
 	app.Version = "0.0.1"
 	app.Flags = []cli.Flag{

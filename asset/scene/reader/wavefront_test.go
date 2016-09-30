@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/polaris/types"
 )
 
 func TestFloat32Parser(t *testing.T) {

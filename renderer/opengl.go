@@ -5,10 +5,10 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/achilleasa/go-pathtrace/asset/scene"
-	"github.com/achilleasa/go-pathtrace/tracer"
-	"github.com/achilleasa/go-pathtrace/tracer/opencl"
-	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/polaris/asset/scene"
+	"github.com/achilleasa/polaris/tracer"
+	"github.com/achilleasa/polaris/tracer/opencl"
+	"github.com/achilleasa/polaris/types"
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.1/glfw"
 )
@@ -101,7 +101,7 @@ func (r *interactiveGLRenderer) initGL(opts Options) error {
 	glfw.WindowHint(glfw.Resizable, glfw.False)
 	glfw.WindowHint(glfw.ContextVersionMajor, 2)
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
-	r.window, err = glfw.CreateWindow(int(opts.FrameW), int(opts.FrameH), "go-pathtrace", nil, nil)
+	r.window, err = glfw.CreateWindow(int(opts.FrameW), int(opts.FrameH), "polaris", nil, nil)
 	if err != nil {
 		return fmt.Errorf("could not create opengl window: %s", err.Error())
 	}

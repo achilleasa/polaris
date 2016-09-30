@@ -1,6 +1,6 @@
 package material
 
-import "github.com/achilleasa/go-pathtrace/types"
+import "github.com/achilleasa/polaris/types"
 
 var (
 	DefaultRoughness      float32 = 0.1

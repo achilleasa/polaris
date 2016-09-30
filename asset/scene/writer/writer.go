@@ -1,6 +1,6 @@
 package writer
 
-import "github.com/achilleasa/go-pathtrace/asset/scene"
+import "github.com/achilleasa/polaris/asset/scene"
 
 // The Writer interface is implemented by all scene writers.
 type Writer interface {

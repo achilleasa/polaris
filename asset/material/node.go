@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/polaris/types"
 )
 
 const (

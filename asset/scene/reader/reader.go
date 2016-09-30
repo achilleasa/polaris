@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/achilleasa/go-pathtrace/asset"
-	"github.com/achilleasa/go-pathtrace/asset/scene"
+	"github.com/achilleasa/polaris/asset"
+	"github.com/achilleasa/polaris/asset/scene"
 )
 
 // The Reader interface is implemented by all scene readers.

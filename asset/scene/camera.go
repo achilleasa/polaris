@@ -3,7 +3,7 @@ package scene
 import (
 	"fmt"
 
-	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/polaris/types"
 )
 
 // Constants for the directions that cameras can move.

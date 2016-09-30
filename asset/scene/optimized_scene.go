@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/achilleasa/go-pathtrace/asset/texure"
-	"github.com/achilleasa/go-pathtrace/types"
+	"github.com/achilleasa/polaris/asset/texure"
+	"github.com/achilleasa/polaris/types"
 	"github.com/olekukonko/tablewriter"
 )
 

@@ -11,6 +11,7 @@ const (
 	OpMixMap
 	OpBumpMap
 	OpNormalMap
+	OpDisperse
 	//
 	lastOpEntry
 )

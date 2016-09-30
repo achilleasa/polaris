@@ -9,18 +9,15 @@ typedef struct {
 	float4 dir;
 } Ray;
 
-#define PATH_TERMINATED 0
-#define PATH_ACTIVE 1
-
 typedef struct {
 	// The accumulated color along this path. This uses the same space as a float4
 	float3 throughput;
 
-	// Path status; active/terminated
-	uint status;
-
 	// Shaded pixel index for this path 
 	uint pixelIndex;
+	
+	// Path flags
+	uint flags;
 
 	// Padding; reseved for future use
 	uint _reserved1;
@@ -136,6 +133,7 @@ typedef struct {
 		float3 reflectance;
 		float3 specularity;
 		float3 radiance;
+		float3 intDispersionIORs;
 
 		// mix node
 		float2 mixWeights;
@@ -143,6 +141,7 @@ typedef struct {
 	
 	union {
 		float3 transmittance;
+		float3 extDispersionIORs;
 	};
 
 	union {

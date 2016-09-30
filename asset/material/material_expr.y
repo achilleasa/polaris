@@ -53,6 +53,7 @@ import (
 %token <sVal> tokMIX_MAP
 %token <sVal> tokBUMP_MAP
 %token <sVal> tokNORMAL_MAP
+%token <sVal> tokDISPERSE
 
 /* types for non-token items */
 %type <node> material_def
@@ -156,6 +157,14 @@ op_spec: tokMIX tokLPAREN bxdf_or_op_spec tokCOMMA bxdf_or_op_spec tokCOMMA tokF
 	  	$$ = NormalMapNode {
 			Expression: $3,
 			Texture: TextureNode($5),
+		}
+	  }
+	  | tokDISPERSE tokLPAREN bxdf_or_op_spec tokCOMMA tokINT_IOR tokCOLON float3 tokCOMMA tokEXT_IOR tokCOLON float3 tokRPAREN
+	  {
+	  	$$ = DisperseNode{
+			Expression: $3,
+			IntIOR: $7.(Vec3Node),
+			ExtIOR: $11.(Vec3Node),
 		}
 	  }
 
@@ -291,11 +300,12 @@ func (x *matExprLexer) lexIdentifier(c rune, yylval *exprSymType) int {
 	case "dielectric": return tokDIELECTRIC
 	case "roughDielectric": return tokROUGH_DIELECTRIC
 	case "emissive": return tokEMISSIVE
-	// Blend funcs
+	// Operators
 	case "mix": return tokMIX
 	case "mixMap": return tokMIX_MAP
 	case "bumpMap": return tokBUMP_MAP
 	case "normalMap": return tokNORMAL_MAP
+	case "disperse": return tokDISPERSE
 	// Parameters
 	case ParamReflectance: return tokREFLECTANCE
 	case ParamSpecularity: return tokSPECULARITY

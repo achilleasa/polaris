@@ -95,6 +95,12 @@ type NormalMapNode struct {
 	Texture    TextureNode
 }
 
+type DisperseNode struct {
+	Expression ExprNode
+	IntIOR     Vec3Node
+	ExtIOR     Vec3Node
+}
+
 type BxdfNode struct {
 	Type       BxdfType
 	Parameters BxdfParameterList
@@ -178,6 +184,16 @@ func (n NormalMapNode) Validate() error {
 	err := n.Texture.Validate()
 	if err != nil {
 		return fmt.Errorf("NormalMap: %v", err)
+	}
+	return nil
+}
+
+func (n DisperseNode) Validate() error {
+	if n.Expression == nil {
+		return fmt.Errorf("missing expression argument for %q", "Disperse")
+	}
+	if types.Vec3(n.IntIOR).MaxComponent() == 0.0 && types.Vec3(n.ExtIOR).MaxComponent() == 0.0 {
+		return fmt.Errorf("Disperse: at least one of the intIOR and extIOR parameters must contain a non-zero value")
 	}
 	return nil
 }

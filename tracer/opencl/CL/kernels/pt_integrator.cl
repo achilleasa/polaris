@@ -67,6 +67,7 @@ __kernel void shadeHits(
 	uint rayPathIndex;
 	float3 outBxdfRayOrigin, outEmissiveRayOrigin;
 	float3 curPathThroughput;
+	float3 bxdfTint = (float3)(1.0f, 1.0f, 1.0f);
 	float3 bxdfOutRayDir, bxdfSample, bxdfEmissiveSample, emissiveOutRayDir, emissiveSample;
 	float bxdfPdf, bxdfEmissivePdf, emissivePdf, emissiveBxdfPdf, emissiveSelectionPdf;
 	float emissiveWeight, bxdfWeight, distToEmissive;
@@ -93,7 +94,7 @@ __kernel void shadeHits(
 
 			// Select material
 			MaterialNode materialNode;
-			matSelectNode(&surface, inRayDir, &materialNode, materialNodes, &rndState, texMeta, texData);
+			matSelectNode(paths + rayPathIndex, &surface, inRayDir, &materialNode, &bxdfTint, materialNodes, &rndState, texMeta, texData);
 
 			float inRayDotNormal = dot(inRayDir, surface.normal);
 
@@ -169,7 +170,7 @@ __kernel void shadeHits(
 					// If we got a valid bxdf sample update the path throughput
 					// Note: we are using the abs value of the dot product as 
 					// it will be negative for rays entering into refractive surfaces
-					float3 throughput = bxdfWeight * bxdfSample * fabs(dot(surface.normal, bxdfOutRayDir));
+					float3 throughput = bxdfWeight * bxdfSample * bxdfTint * fabs(dot(surface.normal, bxdfOutRayDir));
 					if (MAX_VEC3_COMPONENT(throughput) > 0.0f && bxdfPdf > 0.0f){
 						pathSetThroughput(paths + rayPathIndex, curPathThroughput * throughput / bxdfPdf);
 						wgIndirectRayIndex = atomic_inc(&wgNumIndirectRays);

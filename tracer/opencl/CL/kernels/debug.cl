@@ -87,7 +87,8 @@ __kernel void debugRayIntersectionNormals(
 
 	MaterialNode materialNode;
 	uint2 rndState = (uint2)(globalId, globalId);
-	matSelectNode(&surface, inRayDir, &materialNode, materialNodes, &rndState, texMeta, texData);
+	float3 bxdfTint;
+	matSelectNode(paths + globalId, &surface, inRayDir, &materialNode, &bxdfTint, materialNodes, &rndState, texMeta, texData);
 
 	// convert normal from [-1, 1] -> [0, 255]
 	float3 val = (surface.normal + 1.0f) * 255.0f * 0.5f;

@@ -443,6 +443,15 @@ func (sc *sceneCompiler) generateMaterialTree(mat *input.Material, exprNode mate
 		if err != nil {
 			return -1, err
 		}
+	case material.DisperseNode:
+		node.Union1[0] = int32(material.OpDisperse)
+		node.Union1[1], err = sc.generateMaterialTree(mat, t.Expression)
+		if err != nil {
+			return -1, err
+		}
+
+		node.Union2 = types.Vec3(t.IntIOR).Vec4(0)
+		node.Union3 = types.Vec3(t.ExtIOR).Vec4(0)
 	default:
 		return -1, fmt.Errorf("%q: unsupported node %#+v\n", mat.Name, exprNode)
 	}

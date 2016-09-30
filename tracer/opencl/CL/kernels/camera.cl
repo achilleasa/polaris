@@ -53,7 +53,7 @@ __kernel void generatePrimaryRays(
 		);
 
 		rayNew(rays + index,  eyePos, dir.xyz, FLT_MAX, index);
-		pathNew(paths + index, PATH_ACTIVE, pixelIndex);
+		pathNew(paths + index, pixelIndex);
 	}
 }
 

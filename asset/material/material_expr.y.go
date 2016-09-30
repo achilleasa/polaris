@@ -49,6 +49,7 @@ const tokMIX = 57369
 const tokMIX_MAP = 57370
 const tokBUMP_MAP = 57371
 const tokNORMAL_MAP = 57372
+const tokDISPERSE = 57373
 
 var exprToknames = [...]string{
 	"$end",
@@ -81,6 +82,7 @@ var exprToknames = [...]string{
 	"tokMIX_MAP",
 	"tokBUMP_MAP",
 	"tokNORMAL_MAP",
+	"tokDISPERSE",
 }
 var exprStatenames = [...]string{}
 
@@ -88,7 +90,7 @@ const exprEofCode = 1
 const exprErrCode = 2
 const exprInitialStackSize = 16
 
-//line material_expr.y:168
+//line material_expr.y:177
 
 // The parser expects the lexer to return 0 on kEOF.
 const tokEOF = 0
@@ -220,7 +222,7 @@ func (x *matExprLexer) lexIdentifier(c rune, yylval *exprSymType) int {
 		return tokROUGH_DIELECTRIC
 	case "emissive":
 		return tokEMISSIVE
-	// Blend funcs
+	// Operators
 	case "mix":
 		return tokMIX
 	case "mixMap":
@@ -229,6 +231,8 @@ func (x *matExprLexer) lexIdentifier(c rune, yylval *exprSymType) int {
 		return tokBUMP_MAP
 	case "normalMap":
 		return tokNORMAL_MAP
+	case "disperse":
+		return tokDISPERSE
 	// Parameters
 	case ParamReflectance:
 		return tokREFLECTANCE
@@ -302,81 +306,86 @@ var exprExca = [...]int{
 	-2, 0,
 }
 
-const exprNprod = 36
+const exprNprod = 37
 const exprPrivate = 57344
 
 var exprTokenNames []string
 var exprStates []string
 
-const exprLast = 97
+const exprLast = 111
 
 var exprAct = [...]int{
 
-	31, 60, 53, 22, 66, 79, 67, 56, 71, 70,
-	87, 34, 85, 55, 61, 62, 84, 80, 35, 36,
-	37, 9, 10, 11, 12, 13, 14, 5, 6, 7,
-	8, 9, 10, 11, 12, 13, 14, 5, 6, 7,
-	8, 78, 72, 52, 57, 58, 59, 63, 47, 68,
-	69, 23, 24, 25, 26, 27, 28, 29, 30, 64,
-	46, 45, 44, 43, 42, 41, 40, 83, 81, 77,
-	74, 73, 51, 50, 49, 48, 39, 86, 82, 76,
-	75, 38, 19, 18, 17, 16, 15, 32, 2, 33,
-	3, 4, 21, 20, 65, 54, 1,
+	58, 33, 64, 57, 24, 25, 26, 27, 28, 29,
+	30, 31, 32, 93, 36, 76, 70, 85, 71, 75,
+	37, 38, 39, 40, 10, 11, 12, 13, 14, 15,
+	5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+	15, 5, 6, 7, 8, 9, 60, 56, 61, 62,
+	63, 67, 59, 72, 73, 74, 65, 66, 94, 92,
+	87, 84, 77, 68, 96, 82, 50, 49, 48, 47,
+	46, 45, 44, 43, 91, 90, 88, 83, 79, 78,
+	55, 54, 53, 86, 52, 51, 42, 97, 60, 99,
+	95, 89, 81, 80, 41, 21, 20, 98, 19, 18,
+	17, 16, 34, 2, 35, 3, 4, 23, 22, 69,
+	1,
 }
 var exprPact = [...]int{
 
-	10, -1000, -1000, -1000, 82, 81, 80, 79, 78, -1000,
-	-1000, -1000, -1000, -1000, -1000, 38, 0, 0, 0, 0,
-	76, 68, -1000, 57, 56, 55, 54, 53, 52, 51,
-	39, 67, -1000, -1000, -1000, 66, 65, 64, -1000, 38,
-	1, 1, 1, 1, 4, 4, 49, -6, 0, 0,
-	-3, -4, -1000, -1000, -1000, -1000, 32, -1000, -1000, -1000,
-	-1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, 63, 62,
-	75, 74, 61, 31, -7, -1000, -1000, 7, 60, 73,
-	59, 6, -1000, 2, 72, 3, -1000, -1000,
+	14, -1000, -1000, -1000, 97, 96, 95, 94, 92, 91,
+	-1000, -1000, -1000, -1000, -1000, -1000, -8, 3, 3, 3,
+	3, 3, 89, 78, -1000, 64, 63, 62, 61, 60,
+	59, 58, 57, 77, -1000, -1000, -1000, 76, 74, 73,
+	72, -1000, -8, 40, 40, 40, 40, 46, 46, 53,
+	6, 3, 3, 43, 7, -2, -1000, -1000, -1000, -1000,
+	52, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000,
+	-1000, -1000, 71, 70, 88, 87, 56, 69, 51, 5,
+	-1000, -1000, 82, 50, 68, 86, 67, 66, 49, -1000,
+	-5, 48, 85, 55, 80, -1000, 82, -1000, 84, -1000,
 }
 var exprPgo = [...]int{
 
-	0, 96, 95, 3, 2, 1, 94, 89, 93, 92,
-	87, 0, 91,
+	0, 110, 0, 4, 3, 2, 109, 104, 108, 107,
+	102, 1, 106,
 }
 var exprR1 = [...]int{
 
 	0, 1, 1, 10, 12, 12, 12, 12, 12, 12,
 	8, 8, 9, 9, 3, 3, 3, 3, 3, 3,
 	3, 3, 4, 4, 2, 5, 5, 6, 6, 7,
-	7, 7, 7, 11, 11, 11,
+	7, 7, 7, 7, 11, 11, 11,
 }
 var exprR2 = [...]int{
 
 	0, 1, 1, 4, 1, 1, 1, 1, 1, 1,
 	0, 1, 1, 3, 3, 3, 3, 3, 3, 3,
 	3, 3, 1, 1, 7, 1, 1, 1, 1, 10,
-	8, 6, 6, 1, 1, 1,
+	8, 6, 6, 12, 1, 1, 1,
 }
 var exprChk = [...]int{
 
-	-1000, -1, -10, -7, -12, 27, 28, 29, 30, 21,
-	22, 23, 24, 25, 26, 4, 4, 4, 4, 4,
-	-8, -9, -3, 13, 14, 15, 16, 17, 18, 19,
-	20, -11, -10, -7, 11, -11, -11, -11, 5, 8,
-	9, 9, 9, 9, 9, 9, 9, 9, 8, 8,
-	8, 8, -3, -4, -2, 12, 6, -4, -4, -4,
-	-5, 10, 11, -5, 10, -6, 10, 12, -11, -11,
-	12, 12, 10, 8, 8, 5, 5, 8, 10, 12,
-	10, 8, 5, 8, 10, 10, 5, 7,
+	-1000, -1, -10, -7, -12, 27, 28, 29, 30, 31,
+	21, 22, 23, 24, 25, 26, 4, 4, 4, 4,
+	4, 4, -8, -9, -3, 13, 14, 15, 16, 17,
+	18, 19, 20, -11, -10, -7, 11, -11, -11, -11,
+	-11, 5, 8, 9, 9, 9, 9, 9, 9, 9,
+	9, 8, 8, 8, 8, 8, -3, -4, -2, 12,
+	6, -4, -4, -4, -5, 10, 11, -5, 10, -6,
+	10, 12, -11, -11, 12, 12, 17, 10, 8, 8,
+	5, 5, 9, 8, 10, 12, -2, 10, 8, 5,
+	8, 8, 10, 18, 10, 5, 9, 7, -2, 5,
 }
 var exprDef = [...]int{
 
-	0, -2, 1, 2, 0, 0, 0, 0, 0, 4,
-	5, 6, 7, 8, 9, 10, 0, 0, 0, 0,
-	0, 11, 12, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 33, 34, 35, 0, 0, 0, 3, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 13, 14, 22, 23, 0, 15, 16, 17,
-	18, 25, 26, 19, 20, 21, 27, 28, 0, 0,
-	0, 0, 0, 0, 0, 31, 32, 0, 0, 0,
-	0, 0, 30, 0, 0, 0, 29, 24,
+	0, -2, 1, 2, 0, 0, 0, 0, 0, 0,
+	4, 5, 6, 7, 8, 9, 10, 0, 0, 0,
+	0, 0, 0, 11, 12, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 34, 35, 36, 0, 0, 0,
+	0, 3, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 13, 14, 22, 23,
+	0, 15, 16, 17, 18, 25, 26, 19, 20, 21,
+	27, 28, 0, 0, 0, 0, 0, 0, 0, 0,
+	31, 32, 0, 0, 0, 0, 0, 0, 0, 30,
+	0, 0, 0, 0, 0, 29, 0, 24, 0, 33,
 }
 var exprTok1 = [...]int{
 
@@ -386,7 +395,7 @@ var exprTok2 = [...]int{
 
 	2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
 	12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-	22, 23, 24, 25, 26, 27, 28, 29, 30,
+	22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
 }
 var exprTok3 = [...]int{
 	0,
@@ -731,19 +740,19 @@ exprdefault:
 
 	case 1:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:76
+		//line material_expr.y:77
 		{
 			exprlex.(*matExprLexer).parsedExpression = exprDollar[1].node
 		}
 	case 2:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:78
+		//line material_expr.y:79
 		{
 			exprlex.(*matExprLexer).parsedExpression = exprDollar[1].node
 		}
 	case 3:
 		exprDollar = exprS[exprpt-4 : exprpt+1]
-		//line material_expr.y:81
+		//line material_expr.y:82
 		{
 			exprVAL.node = BxdfNode{
 				Type:       bxdfTypeFromName(exprDollar[1].sVal),
@@ -752,109 +761,109 @@ exprdefault:
 		}
 	case 10:
 		exprDollar = exprS[exprpt-0 : exprpt+1]
-		//line material_expr.y:96
+		//line material_expr.y:97
 		{
 			exprVAL.node = make(BxdfParameterList, 0)
 		}
 	case 12:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:100
+		//line material_expr.y:101
 		{
 			exprVAL.node = BxdfParameterList{exprDollar[1].node.(BxdfParamNode)}
 		}
 	case 13:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
-		//line material_expr.y:102
+		//line material_expr.y:103
 		{
 			exprVAL.node = append(exprDollar[1].node.(BxdfParameterList), exprDollar[3].node.(BxdfParamNode))
 		}
 	case 14:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
-		//line material_expr.y:105
+		//line material_expr.y:106
 		{
 			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 15:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
-		//line material_expr.y:107
+		//line material_expr.y:108
 		{
 			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 16:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
-		//line material_expr.y:109
+		//line material_expr.y:110
 		{
 			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 17:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
-		//line material_expr.y:111
+		//line material_expr.y:112
 		{
 			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 18:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
-		//line material_expr.y:113
+		//line material_expr.y:114
 		{
 			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 19:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
-		//line material_expr.y:115
+		//line material_expr.y:116
 		{
 			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 20:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
-		//line material_expr.y:117
+		//line material_expr.y:118
 		{
 			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: FloatNode(exprDollar[3].fVal)}
 		}
 	case 21:
 		exprDollar = exprS[exprpt-3 : exprpt+1]
-		//line material_expr.y:119
+		//line material_expr.y:120
 		{
 			exprVAL.node = BxdfParamNode{Name: exprDollar[1].sVal, Value: exprDollar[3].node}
 		}
 	case 23:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:122
+		//line material_expr.y:123
 		{
 			exprVAL.node = TextureNode(exprDollar[1].sVal)
 		}
 	case 24:
 		exprDollar = exprS[exprpt-7 : exprpt+1]
-		//line material_expr.y:125
+		//line material_expr.y:126
 		{
 			exprVAL.node = Vec3Node{exprDollar[2].fVal, exprDollar[4].fVal, exprDollar[6].fVal}
 		}
 	case 25:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:127
+		//line material_expr.y:128
 		{
 			exprVAL.node = FloatNode(exprDollar[1].fVal)
 		}
 	case 26:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:128
+		//line material_expr.y:129
 		{
 			exprVAL.node = MaterialNameNode(exprDollar[1].sVal)
 		}
 	case 27:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:130
+		//line material_expr.y:131
 		{
 			exprVAL.node = FloatNode(exprDollar[1].fVal)
 		}
 	case 28:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:131
+		//line material_expr.y:132
 		{
 			exprVAL.node = TextureNode(exprDollar[1].sVal)
 		}
 	case 29:
 		exprDollar = exprS[exprpt-10 : exprpt+1]
-		//line material_expr.y:134
+		//line material_expr.y:135
 		{
 			exprVAL.node = MixNode{
 				Expressions: [2]ExprNode{exprDollar[3].node, exprDollar[5].node},
@@ -863,7 +872,7 @@ exprdefault:
 		}
 	case 30:
 		exprDollar = exprS[exprpt-8 : exprpt+1]
-		//line material_expr.y:141
+		//line material_expr.y:142
 		{
 			exprVAL.node = MixMapNode{
 				Expressions: [2]ExprNode{exprDollar[3].node, exprDollar[5].node},
@@ -872,7 +881,7 @@ exprdefault:
 		}
 	case 31:
 		exprDollar = exprS[exprpt-6 : exprpt+1]
-		//line material_expr.y:148
+		//line material_expr.y:149
 		{
 			exprVAL.node = BumpMapNode{
 				Expression: exprDollar[3].node,
@@ -881,16 +890,26 @@ exprdefault:
 		}
 	case 32:
 		exprDollar = exprS[exprpt-6 : exprpt+1]
-		//line material_expr.y:155
+		//line material_expr.y:156
 		{
 			exprVAL.node = NormalMapNode{
 				Expression: exprDollar[3].node,
 				Texture:    TextureNode(exprDollar[5].sVal),
 			}
 		}
-	case 35:
+	case 33:
+		exprDollar = exprS[exprpt-12 : exprpt+1]
+		//line material_expr.y:163
+		{
+			exprVAL.node = DisperseNode{
+				Expression: exprDollar[3].node,
+				IntIOR:     exprDollar[7].node.(Vec3Node),
+				ExtIOR:     exprDollar[11].node.(Vec3Node),
+			}
+		}
+	case 36:
 		exprDollar = exprS[exprpt-1 : exprpt+1]
-		//line material_expr.y:165
+		//line material_expr.y:174
 		{
 			exprVAL.node = MaterialRefNode(exprDollar[1].sVal)
 		}

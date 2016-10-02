@@ -28,7 +28,7 @@ void matSelectNode(__global Path *path, Surface *surface, float3 inRayDir, Mater
 			case MAT_OP_MIX: 
 				// Depending on the sample, follow left or right
 				sample = randomGetSample2f(rndState);
-				node = materialNodes + (sample.x < node->mixWeights.x ? node->leftChild : node->rightChild);
+				node = materialNodes + (sample.x < node->mixWeight ? node->leftChild : node->rightChild);
 				break;
 			case MAT_OP_MIX_MAP: 
 				// Sample weight from texture

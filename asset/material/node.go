@@ -77,7 +77,7 @@ type BxdfParameterList []BxdfParamNode
 
 type MixNode struct {
 	Expressions [2]ExprNode
-	Weights     [2]float32
+	Weight      float32
 }
 
 type BumpMapNode struct {
@@ -227,13 +227,10 @@ func (n MixNode) Validate() error {
 		if err != nil {
 			return fmt.Errorf("mix argument %d: %v", argIndex, err)
 		}
-		if n.Weights[argIndex] < 0 || n.Weights[argIndex] > 1.0 {
-			return fmt.Errorf("mix weight %d: value must be in the [0, 1] range", argIndex)
-		}
 	}
 
-	if n.Weights[0]+n.Weights[1] != 1.0 {
-		return fmt.Errorf("mix weight sum must be equal to 1.0")
+	if n.Weight < 0 || n.Weight > 1.0 {
+		return fmt.Errorf("Mix: mix weight must be in the [0, 1] range")
 	}
 
 	return nil

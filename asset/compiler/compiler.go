@@ -404,8 +404,7 @@ func (sc *sceneCompiler) generateMaterialTree(mat *input.Material, exprNode mate
 			return -1, err
 		}
 
-		node.Union2[0] = t.Weights[0]
-		node.Union2[1] = t.Weights[1]
+		node.Union2[0] = t.Weight
 	case material.MixMapNode:
 		node.Union1[0] = int32(material.OpMixMap)
 		node.Union1[1], err = sc.generateMaterialTree(mat, t.Expressions[0])

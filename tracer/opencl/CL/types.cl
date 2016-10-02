@@ -136,7 +136,7 @@ typedef struct {
 		float3 intDispersionIORs;
 
 		// mix node
-		float2 mixWeights;
+		float mixWeight;
 	};
 	
 	union {

@@ -131,11 +131,11 @@ float_or_name: tokFLOAT { $$ = FloatNode($1) }
 float_or_texture: tokFLOAT { $$ = FloatNode($1) }
 		| tokTEXTURE { $$ = TextureNode($1) }
 
-op_spec: tokMIX tokLPAREN bxdf_or_op_spec tokCOMMA bxdf_or_op_spec tokCOMMA tokFLOAT tokCOMMA tokFLOAT tokRPAREN
+op_spec: tokMIX tokLPAREN bxdf_or_op_spec tokCOMMA bxdf_or_op_spec tokCOMMA tokFLOAT tokRPAREN
 	  { 
 	  	$$ = MixNode{ 
 	  		Expressions: [2]ExprNode{$3, $5},
-			Weights: [2]float32{$7, $9},
+			Weight: $7,
 		}
 	  }
 	  | tokMIX_MAP tokLPAREN bxdf_or_op_spec tokCOMMA bxdf_or_op_spec tokCOMMA tokTEXTURE tokRPAREN

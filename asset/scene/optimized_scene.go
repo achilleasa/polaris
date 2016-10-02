@@ -90,7 +90,7 @@ type MaterialNode struct {
 	// Layout:
 	// [0-3] reflectance or specularity or radiance
 	// [0-3] RGB intIORs for dispersion
-	// [0-2] blend weights
+	// [0] mix weight
 	Union2 types.Vec4
 
 	// Layout:

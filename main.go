@@ -166,6 +166,11 @@ func main() {
 							Value: "",
 							Usage: "force a particular device name as the primary device",
 						},
+						cli.StringFlag{
+							Name:  "scheduler",
+							Value: "perfect",
+							Usage: "select a particular block scheduling algorithm; supported algorithms: naive, perfect",
+						},
 					},
 					Action: cmd.RenderInteractive,
 				},

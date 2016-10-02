@@ -122,6 +122,19 @@ func RenderInteractive(ctx *cli.Context) error {
 		opts.MinBouncesForRR = opts.NumBounces + 1
 	}
 
+	// Setup block scheduler
+	schedulerType := ctx.String("scheduler")
+	var scheduler tracer.BlockScheduler
+	switch schedulerType {
+	case "naive":
+		scheduler = tracer.NaiveScheduler()
+	case "perfect":
+		scheduler = tracer.PerfectScheduler()
+	default:
+		return fmt.Errorf("invalid scheduler algorithm %q; supported algorithms: naive, perfect", schedulerType)
+	}
+	logger.Noticef("using %q block scheduler", schedulerType)
+
 	// Load scene
 	if ctx.NArg() != 1 {
 		return errors.New("missing scene file argument")
@@ -141,7 +154,7 @@ func RenderInteractive(ctx *cli.Context) error {
 	pipeline := opencl.DefaultPipeline(opencl.NoDebug)
 
 	// Create renderer
-	r, err := renderer.NewInteractive(sc, tracer.PerfectScheduler(), pipeline, opts)
+	r, err := renderer.NewInteractive(sc, scheduler, pipeline, opts)
 	if err != nil {
 		return err
 	}

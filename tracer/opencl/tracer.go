@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/achilleasa/gopencl/v1.2/cl"
 	"github.com/achilleasa/polaris/asset/scene"
 	"github.com/achilleasa/polaris/log"
 	"github.com/achilleasa/polaris/tracer"
 	"github.com/achilleasa/polaris/tracer/opencl/device"
 	"github.com/achilleasa/polaris/types"
-	"github.com/achilleasa/gopencl/v1.2/cl"
 )
 
 type Tracer struct {
@@ -212,6 +212,11 @@ func (tr *Tracer) Trace(blockReq *tracer.BlockRequest) (time.Duration, error) {
 		}
 	}
 
+	_, err = tr.resources.ClearTraceAccumulator(blockReq)
+	if err != nil {
+		return time.Since(start), err
+	}
+
 	var sample uint32
 	for sample = 0; sample < blockReq.SamplesPerPixel; sample++ {
 		blockReq.Seed = rand.Uint32()
@@ -231,6 +236,8 @@ func (tr *Tracer) Trace(blockReq *tracer.BlockRequest) (time.Duration, error) {
 				return time.Since(start), err
 			}
 		}
+
+		blockReq.AccumulatedSamples++
 	}
 
 	tr.stats.BlockW = blockReq.BlockW

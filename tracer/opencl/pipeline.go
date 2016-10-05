@@ -101,11 +101,6 @@ func MonteCarloIntegrator(debugFlags DebugFlag) PipelineStage {
 
 		var activeRayBuf uint32 = 0
 
-		_, err = tr.resources.ClearTraceAccumulator(blockReq)
-		if err != nil {
-			return time.Since(start), err
-		}
-
 		// Intersect primary rays outside of the loop
 		// Use packet query intersector for GPUs as opencl forces CPU
 		// to use a local workgroup size equal to 1

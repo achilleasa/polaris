@@ -143,7 +143,6 @@ func (r *interactiveGLRenderer) Render() error {
 		// Render frame unless we have reached our target SPP
 		if r.options.SamplesPerPixel == 0 || (r.options.SamplesPerPixel != 0 && r.accumulatedSamples < r.defaultRenderer.options.SamplesPerPixel) {
 			err := r.renderFrame(r.accumulatedSamples)
-			r.accumulatedSamples++
 			if err != nil {
 				r.Unlock()
 				return err

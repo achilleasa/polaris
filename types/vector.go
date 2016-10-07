@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"math"
 
 	"golang.org/x/image/math/f32"
@@ -53,6 +54,10 @@ func (v Vec3) Mul(s float32) Vec3 {
 // Get 3 component vector length.
 func (v Vec3) Len() float32 {
 	return float32(math.Sqrt(float64(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])))
+}
+
+func (v Vec3) String() string {
+	return fmt.Sprintf("{%f, %f, %f}", v[0], v[1], v[2])
 }
 
 // Normalize 3 component vector.

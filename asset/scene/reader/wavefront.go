@@ -99,7 +99,7 @@ func (wf *wavefrontMaterial) GetExpression() string {
 			exprArgs = append(exprArgs, fmt.Sprintf("%s: %v", material.ParamRadiance, wf.Ke))
 		}
 
-		if wf.KeScaler != 1.0 {
+		if wf.KeScaler != 0 {
 			exprArgs = append(exprArgs, fmt.Sprintf("%s: %v", material.ParamScale, wf.KeScaler))
 		}
 	default:

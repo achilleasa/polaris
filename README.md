@@ -72,7 +72,7 @@ paths accordingly.
 Here are some example materials rendered by polaris. The mitsuba and cornell box 
 models were obtained from [McGuire2011](http://graphics.cs.williams.edu/data/meshes.xml).
 
-![example renders](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBMElvYWJRMnVHd00)
+![example renders](docs/montage.jpg)
 
 # License
 

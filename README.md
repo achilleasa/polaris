@@ -59,7 +59,7 @@ For the complete list of CLI commands type `polaris -h` or  check the [CLI docs]
 
 Here is an example of polaris running in interactive mode:
 
-![interactive rendering demo](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBVEY2aHB4bUwxQU0)
+![interactive rendering demo](docs/img/polaris-interactive-rendering.gif)
 
 # Example renders
 
@@ -72,7 +72,7 @@ paths accordingly.
 Here are some example materials rendered by polaris. The mitsuba and cornell box 
 models were obtained from [McGuire2011](http://graphics.cs.williams.edu/data/meshes.xml).
 
-![example renders](docs/montage.jpg)
+![example renders](docs/img/montage.jpg)
 
 # License
 

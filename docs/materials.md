@@ -90,8 +90,8 @@ Examples:
 
 | Expression                                                              | Output 
 |-------------------------------------------------------------------------|----------------
-| `diffuse(reflectance: {0.999, 0, 0})`                                   | ![diffuse red material](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBNXR2RV9SN19vd0U)
-| `diffuse(reflectance: "stones-d.png")`                                  | ![diffuse textured material](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBd2NONDl2UWp5RGM)
+| `diffuse(reflectance: {0.999, 0, 0})`                                   | ![diffuse red material](img/example-diffuse-red.png)
+| `diffuse(reflectance: "stones-d.png")`                                  | ![diffuse textured material](img/example-diffuse-textured.png)
 
 ### conductor
 
@@ -107,9 +107,9 @@ Examples:
 
 | Expression                                                               | Output 
 |--------------------------------------------------------------------------|----------------
-|`conductor(intIOR: "gold", specularity: {1.0, 0.766, 0.336})`             | ![gold conductor](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBVVdwUkVFTlhtUzA)
-|`conductor(intIOR: "silver", specularity: {0.971519, 0.959915, 0.91532})` | ![silver conductor](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBSjBNdnBhS0ppOFk)
-|`conductor(specularity: "checkerboard-bw.jpg")`                           | ![using a texture to modulate specularity](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBTHRjM1ljUWxieWM )
+|`conductor(intIOR: "gold", specularity: {1.0, 0.766, 0.336})`             | ![gold conductor](img/example-smooth-conductor-gold.png)
+|`conductor(intIOR: "silver", specularity: {0.971519, 0.959915, 0.91532})` | ![silver conductor](img/example-smooth-conductor-silver.png)
+|`conductor(specularity: "checkerboard-bw.jpg")`                           | ![using a texture to modulate specularity](img/example-smooth-conductor-textured.png)
 
 ### dielectric
 
@@ -129,10 +129,10 @@ Examples:
 
 | Expression                                                               | Output 
 |--------------------------------------------------------------------------|----------------
-|`dielectric(intIOR: "glass")`                                             | ![smooth glass dielectric](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBZ1BreW5jc0FYUDA)
-|`dielectric(intIOR: "glass", specularity: {0.04, 0.04, 0.04}, transmittance: {0.5, 0, 0.9})`  | ![smooth tinted glass](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBcGZXUW9HWmd0eWM)
-|`dielectric(intIOR: "glass", specularity: "checkerboard-blue.jpg")`       | ![smooth glass dielectric with specularity texture](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBekE1RUJjcmVOVDg)
-|`dielectric(intIOR: "glass", transmittance: "checkerboard-blue.jpg")`     | ![smooth glass dielectric with transmittance texture](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBR2NfTE13R2ZWVkk)
+|`dielectric(intIOR: "glass")`                                             | ![smooth glass dielectric](img/example-smooth-dielectric-glass.png)
+|`dielectric(intIOR: "glass", specularity: {0.04, 0.04, 0.04}, transmittance: {0.5, 0, 0.9})`  | ![smooth tinted glass](img/example-smooth-dielectric-tinted-glass.png)
+|`dielectric(intIOR: "glass", specularity: "checkerboard-blue.jpg")`       | ![smooth glass dielectric with specularity texture](img/example-dielectric-specular-texture.png)
+|`dielectric(intIOR: "glass", transmittance: "checkerboard-blue.jpg")`     | ![smooth glass dielectric with transmittance texture](img/example-dielectric-transmittance-texture.png)
 
 ### roughConductor
 
@@ -151,10 +151,10 @@ The following examples illustrate how the same material looks with different rou
 
 | Expression                                                                       | Output 
 |----------------------------------------------------------------------------------|----------------
-|`roughConductor(intIOR: "gold", specularity: {1.0, 0.766, 0.336}, roughness:0.1)` | ![rough conductor k=0.1](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBcVQwYzIwSjJQMVU)
-|`roughConductor(intIOR: "gold", specularity: {1.0, 0.766, 0.336}, roughness:0.25)`| ![rough conductor k=0.25](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBSUhscnhQSWJmdTA)
-|`roughConductor(intIOR: "gold", specularity: {1.0, 0.766, 0.336}, roughness:0.5)` | ![rough conductor k=0.5](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBclJFSFFKcjZ6YVk)
-|`roughConductor(intIOR: "gold", specularity: {1.0, 0.766, 0.336}, roughness:0.75)`| ![rough conductor k=0.75](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBckNmNHZjSzd4U1k)
+|`roughConductor(intIOR: "gold", specularity: {1.0, 0.766, 0.336}, roughness:0.1)` | ![rough conductor k=0.1](img/example-rough-conductor-gold-k01.png)
+|`roughConductor(intIOR: "gold", specularity: {1.0, 0.766, 0.336}, roughness:0.25)`| ![rough conductor k=0.25](img/example-rough-conductor-gold-k25.png)
+|`roughConductor(intIOR: "gold", specularity: {1.0, 0.766, 0.336}, roughness:0.5)` | ![rough conductor k=0.5](img/example-rough-conductor-gold-k50.png)
+|`roughConductor(intIOR: "gold", specularity: {1.0, 0.766, 0.336}, roughness:0.75)`| ![rough conductor k=0.75](img/example-rough-conductor-gold-k75.png)
 
 ### roughDielectric
 
@@ -174,8 +174,8 @@ This model supports the following parameters:
 
 | Expression                                                                       | Output 
 |----------------------------------------------------------------------------------|----------------
-|`roughDielectric(intIOR: "glass", specularity: {0.9, 0.9, 0.9}, roughness: 0.2)`  | ![rough dielectric k=0.2](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBUHdSbTNOaFcydEU)
-|`roughDielectric(intIOR: "glass", roughness: "earth-r.jpg")`                      | ![rough dielectric with roughness texture](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBZ2libi0xZXNmdnc)
+|`roughDielectric(intIOR: "glass", specularity: {0.9, 0.9, 0.9}, roughness: 0.2)`  | ![rough dielectric k=0.2](img/example-rough-dielectric-glass.png)
+|`roughDielectric(intIOR: "glass", roughness: "earth-r.jpg")`                      | ![rough dielectric with roughness texture](img/example-rough-dielectric-roughness-texture.png)
 
 ## emissive
 
@@ -216,8 +216,8 @@ Examples:
 
 | Example                                                                          | Output     
 |----------------------------------------------------------------------------------|------------
-| `mix(diffuse(reflectance: {0.999,0,0}), diffuse(reflectance: {0,0,0.999}), 0.5)` | ![mix two diffuse colors](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBZ0RPZ1lXbVdpemM)
-| `mix(diffuse(reflectance: "stones-d.jpg"), conductor(intIOR: "silver", specularity: {0.971519, 0.959915, 0.91532}), 0.6)` | ![mix a diffuse texture with a conductor for a polished surface](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBWG5mQ3EzOWZORGc)
+| `mix(diffuse(reflectance: {0.999,0,0}), diffuse(reflectance: {0,0,0.999}), 0.5)` | ![mix two diffuse colors](img/example-mix-diffuse-diffuse.png)
+| `mix(diffuse(reflectance: "stones-d.jpg"), conductor(intIOR: "silver", specularity: {0.971519, 0.959915, 0.91532}), 0.6)` | ![mix a diffuse texture with a conductor for a polished surface](img/example-mix-diffuse-conductor.png)
 
 ### mixMap
 
@@ -233,7 +233,7 @@ Examples:
 
 | Example                         | Output     |
 |---------------------------------|------------
-| `mix(conductor(intIOR: "gold", specularity: {1.0, 0.766, 0.336)), conductor(intIOR: "silver", specularity: {0.971519, 0.959915, 0.91532}), 0.6), "checkerboard-bw.jpg")`| ![mix two materials using a checkerboard texture](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBWGFwYl9vcGtxbEU)
+| `mix(conductor(intIOR: "gold", specularity: {1.0, 0.766, 0.336)), conductor(intIOR: "silver", specularity: {0.971519, 0.959915, 0.91532}), 0.6), "checkerboard-bw.jpg")`| ![mix two materials using a checkerboard texture](img/example-mix-map-conductor-conductor.png)
 
 ### bumpMap
 
@@ -246,7 +246,7 @@ is usually faster to use a [normal map](#normalmap) instead.
 
 | Example                                                         | Bump map | Output     
 |-----------------------------------------------------------------|----------|------------
-| `bumpMap(diffuse(reflectance: "stones-d.png"), "stones-b.png")` | ![bump map texture](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBa1FJVVVxaV9TZ3c) | ![with bumpMap operator](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBNkgxQVpPRVVMWFU)
+| `bumpMap(diffuse(reflectance: "stones-d.png"), "stones-b.png")` | ![bump map texture](img/stones-b.jpg) | ![with bumpMap operator](img/example-bump-map.png)
 
 ### normalMap
 
@@ -259,7 +259,7 @@ operator but it is a bit faster to evaluate.
 
 | Example                                                           | Normal map | Output     
 |-------------------------------------------------------------------|------------|----------
-| `normalMap(diffuse(reflectance: "stones-n.png"), "stones-b.png")` | ![normal map texture](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBTlhFdWVxM2kyOUk) | ![with normalMap operator](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBaUJTYV9NcHlUU0E)
+| `normalMap(diffuse(reflectance: "stones-n.png"), "stones-b.png")` | ![normal map texture](img/stones-n.jpg) | ![with normalMap operator](img/example-normal-map.png)
 
 ### disperse 
 The disperse operator is used to simulate [light dispersion](https://en.wikipedia.org/wiki/Dispersion_(optics))
@@ -291,7 +291,7 @@ image.
 
 | Example                                                           | Output     |
 |-------------------------------------------------------------------|------------
-| `disperse(dielectric(intIOR: "diamond"), intIOR: {2.40,2.43,2.46}, extIOR: {0,0,0})` |  ![simulated diamond "fire"](https://drive.google.com/uc?export=download&id=0Bz9Vk3E_v2HBdjZScnNsNTJvVU0)        
+| `disperse(dielectric(intIOR: "diamond"), intIOR: {2.40,2.43,2.46}, extIOR: {0,0,0})` |  ![simulated diamond "fire"](img/example-dispersion.png)        
 
 ## Reference
 
